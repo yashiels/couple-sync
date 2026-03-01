@@ -1,0 +1,12 @@
+reviews:
+  high_level_summary: true
+  path_filters:
+    - '!android/**'
+    - '!ios/**'
+    - '!**/*.png'
+    - '!**/*.pbxproj'
+    - '!pubspec.lock'
+    - '!.metadata'
+  auto_review:
+    enabled: true
+    incremental: true
