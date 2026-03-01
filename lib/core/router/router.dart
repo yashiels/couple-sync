@@ -8,6 +8,7 @@ import '../../features/pairing/pairing_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/calendar/calendar_screen.dart';
 import '../../features/blocks/blocks_screen.dart';
+import '../../features/blocks/block_form_screen.dart';
 import '../../features/overlap/overlap_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../shared/providers/auth_providers.dart';
@@ -63,6 +64,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/blocks',
         name: 'blocks',
         builder: (context, state) => const BlocksScreen(),
+        routes: [
+          GoRoute(
+            path: 'add',
+            name: 'blocks-add',
+            builder: (context, state) => const BlockFormScreen(),
+          ),
+          GoRoute(
+            path: 'edit/:id',
+            name: 'blocks-edit',
+            builder: (context, state) => BlockFormScreen(editingBlockId: state.pathParameters['id']),
+          ),
+        ],
       ),
       GoRoute(
         path: '/overlap',
