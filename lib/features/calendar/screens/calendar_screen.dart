@@ -17,8 +17,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
   static const Duration _partnerOffset = Duration(hours: 0);
 
   late DateTime _currentWeekStart;
-  TimeBlock? _selectedBlock; // used via setState to track tapped block
-  FreeWindow? _selectedWindow; // used via setState to track tapped window
 
   @override
   void initState() {
@@ -34,24 +32,18 @@ class _CalendarScreenState extends State<CalendarScreen> {
   void _previousWeek() {
     setState(() {
       _currentWeekStart = _currentWeekStart.subtract(const Duration(days: 7));
-      _selectedBlock = null;
-      _selectedWindow = null;
     });
   }
 
   void _nextWeek() {
     setState(() {
       _currentWeekStart = _currentWeekStart.add(const Duration(days: 7));
-      _selectedBlock = null;
-      _selectedWindow = null;
     });
   }
 
   void _goToToday() {
     setState(() {
       _currentWeekStart = _startOfWeek(DateTime.now());
-      _selectedBlock = null;
-      _selectedWindow = null;
     });
   }
 
@@ -90,20 +82,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   freeWindows: windows,
                   myUtcOffset: _myOffset,
                   partnerUtcOffset: _partnerOffset,
-                  onBlockTap: (block) {
-                    setState(() {
-                      _selectedBlock = block;
-                      _selectedWindow = null;
-                    });
-                    _showBlockSheet(block);
-                  },
-                  onWindowTap: (window) {
-                    setState(() {
-                      _selectedWindow = window;
-                      _selectedBlock = null;
-                    });
-                    _showWindowSheet(window);
-                  },
+                  onBlockTap: _showBlockSheet,
+                  onWindowTap: _showWindowSheet,
                 ),
               ),
             ),
