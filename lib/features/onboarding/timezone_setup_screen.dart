@@ -6,7 +6,6 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../../core/theme/app_theme.dart';
 import '../../shared/providers/auth_providers.dart';
-import '../../shared/services/auth_service.dart';
 
 class TimezoneSetupScreen extends ConsumerStatefulWidget {
   const TimezoneSetupScreen({super.key});

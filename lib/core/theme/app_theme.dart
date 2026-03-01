@@ -27,6 +27,15 @@ class AppColors {
   static const Color onSurfaceMuted = Color(0xFF8A7A9A);
   static const Color divider = Color(0xFFEDE0F5);
 
+  // Aliases used across screens
+  static const Color roseDeep = roseDark;
+  static const Color lavenderDeep = lavenderDark;
+  static const Color skyBlue = partnerB;
+  static const Color inputFill = Color(0xFFF5F0FA);
+  static const Color textPrimary = onSurface;
+  static const Color textSecondary = onSurfaceMuted;
+  static const Color textHint = Color(0xFFB0A3BF);
+  static const Color error = Color(0xFFE53935);
   static const LinearGradient heroGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,

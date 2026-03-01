@@ -36,6 +36,8 @@ dependencies:
 
   # Persistence
   shared_preferences: ^2.3.3
+  uuid: ^4.5.3
+  timezone: ^0.9.4
 
 dev_dependencies:
   flutter_test:

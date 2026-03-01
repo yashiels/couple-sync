@@ -183,15 +183,12 @@ class CalendarSyncService {
 
 /// Internal helper to represent a batch operation uniformly.
 class _BatchOp {
-  _BatchOp.delete(DocumentReference ref)
-      : ref = ref,
-        data = null,
+  _BatchOp.delete(this.ref)
+      : data = null,
         isDelete = true;
 
-  _BatchOp.set(DocumentReference ref, Map<String, dynamic> data)
-      : ref = ref,
-        data = data,
-        isDelete = false;
+  _BatchOp.set(this.ref, this.data)
+      : isDelete = false;
 
   final DocumentReference? ref;
   final Map<String, dynamic>? data;

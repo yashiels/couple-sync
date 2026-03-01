@@ -42,7 +42,7 @@ class _CalendarConnectionsSection extends ConsumerWidget {
         ...sourcesAsync.when(
           data: (sources) => sources.map((s) => _CalendarTile(source: s)).toList(),
           loading: () => [const _LoadingTile()],
-          error: (_, __) => [const _ErrorTile('Could not load calendars')],
+          error: (_, _) => [const _ErrorTile('Could not load calendars')],
         ),
         ListTile(
           leading: const Icon(Icons.add),
