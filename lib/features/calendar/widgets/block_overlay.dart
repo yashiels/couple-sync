@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../core/models/time_block.dart';
 import '../../../core/theme/app_theme.dart';
 
+/// A positioned, tappable coloured bar representing a [TimeBlock] in the
+/// week-view grid. Rose for the user's own blocks, sky-blue for the partner's.
 class BlockOverlay extends StatelessWidget {
   const BlockOverlay({
     super.key,

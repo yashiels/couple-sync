@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../../../core/models/time_block.dart';
 import '../../../core/theme/app_theme.dart';
 
+/// Card widget showing a single [FreeWindow] with both partners' local times.
 class WindowCard extends StatelessWidget {
   const WindowCard({
     super.key,

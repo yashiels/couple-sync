@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class NotificationPreferences {
   NotificationPreferences._(this._prefs);
 
+  /// Loads persisted preferences and returns an initialised instance.
   static Future<NotificationPreferences> create() async {
     final prefs = await SharedPreferences.getInstance();
     return NotificationPreferences._(prefs);

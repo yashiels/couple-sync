@@ -5,6 +5,8 @@ import 'package:uuid/uuid.dart';
 
 import '../models/couple_model.dart';
 
+/// Manages partner pairing via short invite codes and the resulting couple
+/// relationship in Firestore.
 class PairingService {
   final FirebaseFirestore _db;
   static const _codeChars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -97,12 +99,14 @@ class PairingService {
 
   // --- Fetching ---
 
+  /// Fetches the [CoupleModel] for the given [coupleId], or `null` if not found.
   Future<CoupleModel?> getCoupleById(String coupleId) async {
     final doc = await _db.collection('couples').doc(coupleId).get();
     if (!doc.exists) return null;
     return CoupleModel.fromFirestore(doc);
   }
 
+  /// Streams real-time updates for the couple document with [coupleId].
   Stream<CoupleModel?> watchCouple(String coupleId) {
     return _db
         .collection('couples')
@@ -113,6 +117,7 @@ class PairingService {
 
   // --- Unpairing ---
 
+  /// Removes the couple relationship and clears `coupleId` from both user docs.
   Future<void> unpair(CoupleModel couple) async {
     final batch = _db.batch();
     batch.delete(_db.collection('couples').doc(couple.coupleId));

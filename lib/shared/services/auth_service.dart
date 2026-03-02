@@ -4,6 +4,8 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import '../models/user_model.dart';
 
+/// Handles Firebase Auth operations and keeps the `users` Firestore collection
+/// in sync with authenticated users.
 class AuthService {
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
@@ -17,12 +19,15 @@ class AuthService {
         _firestore = firestore ?? FirebaseFirestore.instance,
         _googleSignIn = googleSignIn ?? GoogleSignIn();
 
+  /// Stream of Firebase [User] auth-state changes (null when signed out).
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
+  /// The currently signed-in Firebase [User], or `null` if not authenticated.
   User? get currentUser => _auth.currentUser;
 
   // --- Email / Password ---
 
+  /// Creates a new email/password account and saves the user to Firestore.
   Future<UserModel> signUpWithEmail({
     required String email,
     required String password,
@@ -37,6 +42,7 @@ class AuthService {
     return _createUserDocument(credential.user!, displayName: displayName, timezone: timezone);
   }
 
+  /// Signs in an existing user with email and password.
   Future<UserModel> signInWithEmail({
     required String email,
     required String password,
@@ -50,6 +56,7 @@ class AuthService {
 
   // --- Google ---
 
+  /// Initiates the Google OAuth flow and signs in the resulting user.
   Future<UserModel> signInWithGoogle() async {
     final googleUser = await _googleSignIn.signIn();
     if (googleUser == null) throw Exception('Google sign-in cancelled');
@@ -90,10 +97,12 @@ class AuthService {
     return model;
   }
 
+  /// Persists a new IANA [timezone] string for the given [uid].
   Future<void> updateTimezone(String uid, String timezone) async {
     await _firestore.collection('users').doc(uid).update({'timezone': timezone});
   }
 
+  /// Signs the user out of Firebase Auth and Google Sign-In.
   Future<void> signOut() async {
     await Future.wait([
       _auth.signOut(),
@@ -101,6 +110,7 @@ class AuthService {
     ]);
   }
 
+  /// Sends a password-reset email to the given [email] address.
   Future<void> sendPasswordReset(String email) =>
       _auth.sendPasswordResetEmail(email: email);
 }

@@ -6,6 +6,10 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/providers/pairing_providers.dart';
 
+/// Screen for connecting with a partner via a 6-character invite code.
+///
+/// Two tabs: "Share Code" generates and displays the user's own invite code,
+/// and "Enter Code" redeems a partner's code.
 class PairingScreen extends ConsumerStatefulWidget {
   const PairingScreen({super.key});
 

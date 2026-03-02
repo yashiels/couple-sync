@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/providers/auth_providers.dart';
 
+/// The login / sign-up screen shown to unauthenticated users.
 class AuthScreen extends ConsumerStatefulWidget {
   const AuthScreen({super.key});
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 
+/// The main landing screen with navigation cards to the app's key sections.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 

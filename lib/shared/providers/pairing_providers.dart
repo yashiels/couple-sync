@@ -3,30 +3,36 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/couple_model.dart';
 import '../services/pairing_service.dart';
 
+/// Singleton [PairingService] instance.
 final pairingServiceProvider = Provider<PairingService>((ref) => PairingService());
 
-// Current couple model
+/// The currently active [CoupleModel], or `null` before pairing.
 final currentCoupleProvider = StateProvider<CoupleModel?>((ref) => null);
 
-// Active invite code for the current user
+/// The active invite code for the given user UID, or `null` if none exists.
 final activeInviteCodeProvider = FutureProvider.family<String?, String>((ref, uid) async {
   final service = ref.watch(pairingServiceProvider);
   final invite = await service.getActiveInviteForUser(uid);
   return invite?.code;
 });
 
-// Pairing operation state
+/// Possible states of a pairing operation.
 enum PairingStatus { idle, loading, success, error }
 
+/// Manages invite-code generation and redemption, exposing [PairingStatus].
 class PairingNotifier extends StateNotifier<PairingStatus> {
   final PairingService _service;
   final StateController<CoupleModel?> _coupleController;
 
   PairingNotifier(this._service, this._coupleController) : super(PairingStatus.idle);
 
+  /// The last error message, populated on [PairingStatus.error].
   String? lastError;
+
+  /// The couple created after a successful code redemption.
   CoupleModel? lastCouple;
 
+  /// Generates a new invite code for [uid] and returns it.
   Future<String> generateCode(String uid) async {
     state = PairingStatus.loading;
     try {
@@ -40,6 +46,7 @@ class PairingNotifier extends StateNotifier<PairingStatus> {
     }
   }
 
+  /// Redeems [code] for [redeemerUid] and updates the couple state on success.
   Future<CoupleModel> redeemCode({
     required String code,
     required String redeemerUid,
@@ -59,6 +66,7 @@ class PairingNotifier extends StateNotifier<PairingStatus> {
   }
 }
 
+/// Provider that exposes [PairingNotifier] and its [PairingStatus].
 final pairingNotifierProvider = StateNotifierProvider<PairingNotifier, PairingStatus>((ref) {
   return PairingNotifier(
     ref.watch(pairingServiceProvider),

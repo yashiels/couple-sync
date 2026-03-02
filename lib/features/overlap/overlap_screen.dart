@@ -8,6 +8,8 @@ import '../../shared/providers/overlap_providers.dart';
 
 const _demoCoupleId = 'demo_couple';
 
+/// Displays the Firestore-computed free windows for the current couple,
+/// sorted by overlap score with the best match shown as a hero card.
 class OverlapScreen extends ConsumerWidget {
   const OverlapScreen({super.key});
 

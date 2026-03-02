@@ -11,6 +11,7 @@ import '../../shared/providers/block_providers.dart';
 const _demoCoupleId = 'demo_couple';
 const _demoUserId = 'demo_user';
 
+/// Lists the current user's custom time blocks with edit/delete actions.
 class BlocksScreen extends ConsumerWidget {
   const BlocksScreen({super.key});
 

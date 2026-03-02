@@ -6,13 +6,14 @@ import '../../core/theme/app_theme.dart';
 import '../../shared/models/user_model.dart';
 import '../../shared/providers/pairing_providers.dart';
 
-// Fetches partner user document from Firestore
+/// Fetches the partner's [UserModel] from Firestore by [partnerUid].
 final partnerProfileProvider = FutureProvider.family<UserModel?, String>((ref, partnerUid) async {
   final snap = await FirebaseFirestore.instance.collection('users').doc(partnerUid).get();
   if (!snap.exists) return null;
   return UserModel.fromFirestore(snap);
 });
 
+/// Displays the partner's profile information and provides an unlink option.
 class PartnerProfileScreen extends ConsumerWidget {
   final String partnerUid;
   const PartnerProfileScreen({super.key, required this.partnerUid});

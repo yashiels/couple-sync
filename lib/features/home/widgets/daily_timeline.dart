@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 import '../../../core/models/time_block.dart';
 import '../../../core/theme/app_theme.dart';
 
+/// Horizontally scrollable timeline showing today's blocks for both partners
+/// in [myUtcOffset]-local time.
 class DailyTimeline extends StatelessWidget {
   const DailyTimeline({
     super.key,

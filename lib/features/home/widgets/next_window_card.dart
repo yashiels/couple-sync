@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../../../core/models/time_block.dart';
 import '../../../core/theme/app_theme.dart';
 
+/// Hero card showing the soonest upcoming [FreeWindow] with a live countdown
+/// and dual-timezone time display.
 class NextWindowCard extends StatefulWidget {
   const NextWindowCard({
     super.key,

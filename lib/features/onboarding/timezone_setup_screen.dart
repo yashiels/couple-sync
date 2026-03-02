@@ -7,6 +7,7 @@ import 'package:timezone/timezone.dart' as tz;
 import '../../core/theme/app_theme.dart';
 import '../../shared/providers/auth_providers.dart';
 
+/// Screen that lets the user select their IANA timezone after onboarding.
 class TimezoneSetupScreen extends ConsumerStatefulWidget {
   const TimezoneSetupScreen({super.key});
 

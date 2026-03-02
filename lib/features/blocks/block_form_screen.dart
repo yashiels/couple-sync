@@ -10,6 +10,9 @@ const _demoCoupleId = 'demo_couple';
 const _demoUserId = 'demo_user';
 const _demoTimezone = 'UTC';
 
+/// Form screen for creating a new block or editing an existing one.
+///
+/// Pass [editingBlockId] to pre-fill the form with the existing block's data.
 class BlockFormScreen extends ConsumerStatefulWidget {
   final String? editingBlockId;
   const BlockFormScreen({super.key, this.editingBlockId});

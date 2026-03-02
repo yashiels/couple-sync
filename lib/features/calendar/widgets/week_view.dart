@@ -4,6 +4,8 @@ import '../../../core/models/time_block.dart';
 import '../../../core/theme/app_theme.dart';
 import 'block_overlay.dart';
 
+/// Scrollable week-view calendar widget displaying [blocks] and [freeWindows]
+/// for both partners, with configurable UTC offsets per partner.
 class WeekView extends StatelessWidget {
   const WeekView({
     super.key,

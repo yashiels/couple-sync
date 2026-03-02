@@ -5,6 +5,8 @@ import '../widgets/daily_timeline.dart';
 import '../widgets/next_window_card.dart';
 import '../widgets/timezone_clock.dart';
 
+/// Rich home screen showing dual timezone clocks, the next free window card,
+/// and today's horizontal timeline of both partners' blocks.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 

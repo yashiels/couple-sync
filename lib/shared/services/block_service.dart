@@ -3,7 +3,8 @@ import 'package:uuid/uuid.dart';
 
 import '../models/time_block_model.dart';
 
-/// Firestore path: `timeblocks/{coupleId}/blocks/{blockId}`
+/// CRUD service for time blocks stored at
+/// `timeblocks/{coupleId}/blocks/{blockId}` in Firestore.
 class BlockService {
   final FirebaseFirestore _db;
 
@@ -15,6 +16,7 @@ class BlockService {
 
   // --- CRUD ---
 
+  /// Creates a new manual block for [userId] within [coupleId] and persists it.
   Future<TimeBlock> createBlock({
     required String coupleId,
     required String userId,
@@ -47,10 +49,12 @@ class BlockService {
     return block;
   }
 
+  /// Overwrites an existing block document with the data in [block].
   Future<void> updateBlock(String coupleId, TimeBlock block) async {
     await _blocksRef(coupleId).doc(block.id).update(block.toFirestore());
   }
 
+  /// Permanently deletes the block identified by [blockId].
   Future<void> deleteBlock(String coupleId, String blockId) async {
     await _blocksRef(coupleId).doc(blockId).delete();
   }

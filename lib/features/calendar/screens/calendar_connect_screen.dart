@@ -323,6 +323,7 @@ class _GoogleLogoPainter extends CustomPainter {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/// Returns a human-readable relative time string for [dt] (e.g. `"5m ago"`).
 String _formatRelative(DateTime dt) {
   final diff = DateTime.now().toUtc().difference(dt);
   if (diff.inMinutes < 1) return 'just now';
@@ -331,6 +332,7 @@ String _formatRelative(DateTime dt) {
   return '${diff.inDays}d ago';
 }
 
+/// Shows a confirmation dialog before disconnecting [calendarName].
 Future<bool?> _showDisconnectDialog(
     BuildContext context, String calendarName) {
   return showDialog<bool>(

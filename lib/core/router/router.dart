@@ -13,6 +13,10 @@ import '../../features/overlap/overlap_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../shared/providers/auth_providers.dart';
 
+/// The app's [GoRouter] instance, rebuilt whenever the auth state changes.
+///
+/// Unauthenticated users are redirected to `/auth`; authenticated users
+/// landing on `/auth` are redirected to `/home`.
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(firebaseAuthStateProvider);
   final isLoggedIn = authState.valueOrNull != null;

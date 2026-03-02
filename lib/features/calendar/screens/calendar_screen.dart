@@ -5,6 +5,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/mock_data.dart';
 import '../widgets/week_view.dart';
 
+/// Full-featured week-view calendar showing both partners' blocks and overlap
+/// windows, navigated by swiping or tapping the chevron buttons.
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
 

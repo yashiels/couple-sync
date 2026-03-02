@@ -17,6 +17,7 @@ class InviteModel {
     required this.status,
   });
 
+  /// Deserialises an [InviteModel] from a Firestore [DocumentSnapshot].
   factory InviteModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return InviteModel(
@@ -30,6 +31,7 @@ class InviteModel {
     );
   }
 
+  /// Serialises this invite to a Firestore-compatible map.
   Map<String, dynamic> toFirestore() => {
         'createdByUid': createdByUid,
         'expiresAt': Timestamp.fromDate(expiresAt),
@@ -51,6 +53,7 @@ class CoupleModel {
     required this.pairedAt,
   });
 
+  /// Deserialises a [CoupleModel] from a Firestore [DocumentSnapshot].
   factory CoupleModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return CoupleModel(
@@ -61,6 +64,7 @@ class CoupleModel {
     );
   }
 
+  /// Serialises this couple to a Firestore-compatible map.
   Map<String, dynamic> toFirestore() => {
         'userAUid': userAUid,
         'userBUid': userBUid,

@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 
+/// Central colour palette for the app.
+///
+/// Follows the design spec: rose (#F4A0B5) for the user's own blocks, sky-blue
+/// (#9BC4F5) for the partner's blocks, and lavender-to-rose gradients for
+/// overlap/free windows.
 class AppColors {
   AppColors._();
 
@@ -36,18 +41,22 @@ class AppColors {
   static const Color textSecondary = onSurfaceMuted;
   static const Color textHint = Color(0xFFB0A3BF);
   static const Color error = Color(0xFFE53935);
+
+  /// Lavender-to-rose gradient used for hero cards and free-window highlights.
   static const LinearGradient heroGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [Color(0xFFCBA8EA), Color(0xFFF4A0B5)],
   );
 
+  /// Semi-transparent gradient used as a calendar overlap band.
   static const LinearGradient overlapGradient = LinearGradient(
     begin: Alignment.centerLeft,
     end: Alignment.centerRight,
     colors: [Color(0x60CBA8EA), Color(0x60F4A0B5)],
   );
 
+  /// Subtle vertical gradient applied to scaffold backgrounds.
   static const LinearGradient backgroundGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
@@ -55,9 +64,11 @@ class AppColors {
   );
 }
 
+/// Material 3 theme configuration for the app.
 class AppTheme {
   AppTheme._();
 
+  /// The default light [ThemeData] used by [MaterialApp].
   static ThemeData get light {
     return ThemeData(
       useMaterial3: true,

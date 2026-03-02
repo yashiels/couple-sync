@@ -6,6 +6,8 @@ import '../providers/settings_provider.dart';
 import '../widgets/settings_section.dart';
 import '../widgets/time_range_picker.dart';
 
+/// Full settings screen with calendar connections, privacy, notifications,
+/// scheduling, and account management sections.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 

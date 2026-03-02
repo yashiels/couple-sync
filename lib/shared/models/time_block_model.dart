@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// Coarse classification of a block: marks the partner busy or free.
 enum BlockType { busy, free }
 
+/// Lifestyle category used to group custom blocks.
 enum BlockCategory {
   commute,
   exercise,
@@ -12,10 +14,16 @@ enum BlockCategory {
   other,
 }
 
+/// The calendar platform that originated a block.
 enum CalendarSource { google, apple, outlook, manual }
 
+/// Controls which partners can see the full details of a block.
 enum TimeBlockVisibility { bothPartners, onlyMe }
 
+/// A custom time block created by a user in the app.
+///
+/// Stored at `timeblocks/{coupleId}/blocks/{blockId}` in Firestore.
+/// Times are always in UTC; use [timezone] (IANA id) to localise for display.
 class TimeBlock {
   final String id;
   final String userId;
@@ -47,8 +55,10 @@ class TimeBlock {
     required this.createdAt,
   });
 
+  /// Wall-clock length of the block.
   Duration get duration => endUtc.difference(startUtc);
 
+  /// Deserialises a [TimeBlock] from a Firestore [DocumentSnapshot].
   factory TimeBlock.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
     return TimeBlock(
@@ -68,6 +78,7 @@ class TimeBlock {
     );
   }
 
+  /// Serialises this block to a Firestore-compatible map.
   Map<String, dynamic> toFirestore() => {
         'userId': userId,
         'coupleId': coupleId,
@@ -83,6 +94,7 @@ class TimeBlock {
         'createdAt': Timestamp.fromDate(createdAt),
       };
 
+  /// Returns a copy of this block with the given fields replaced.
   TimeBlock copyWith({
     String? title,
     DateTime? startUtc,

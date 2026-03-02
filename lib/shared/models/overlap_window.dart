@@ -26,8 +26,10 @@ class OverlapWindow {
     required this.reasonableBoth,
   });
 
+  /// Wall-clock length of the window.
   Duration get duration => endUtc.difference(startUtc);
 
+  /// Deserialises an [OverlapWindow] from a Firestore array element map.
   factory OverlapWindow.fromMap(Map<String, dynamic> map) {
     return OverlapWindow(
       startUtc: DateTime.fromMillisecondsSinceEpoch(
@@ -44,6 +46,7 @@ class OverlapWindow {
     );
   }
 
+  /// Serialises this window to a plain map for Firestore array storage.
   Map<String, dynamic> toMap() => {
         'startUtc': startUtc.millisecondsSinceEpoch,
         'endUtc': endUtc.millisecondsSinceEpoch,
@@ -65,6 +68,7 @@ class OverlapResult {
     required this.computedAt,
   });
 
+  /// Deserialises an [OverlapResult] from a Firestore [DocumentSnapshot].
   factory OverlapResult.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     final rawWindows = data['windows'] as List<dynamic>? ?? [];

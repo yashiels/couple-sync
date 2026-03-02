@@ -9,6 +9,7 @@ class MockData {
   static final String partnerCity = 'London';
   static final String partnerTimezone = 'Europe/London';
 
+  /// Returns a set of mock [TimeBlock] entries spanning today in UTC.
   static List<TimeBlock> todayBlocks() {
     final now = DateTime.now().toUtc();
     final today = DateTime.utc(now.year, now.month, now.day);
@@ -67,6 +68,7 @@ class MockData {
     ];
   }
 
+  /// Returns a set of mock [FreeWindow] entries for the next four days.
   static List<FreeWindow> upcomingWindows() {
     final now = DateTime.now().toUtc();
     final today = DateTime.utc(now.year, now.month, now.day);

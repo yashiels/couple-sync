@@ -17,6 +17,7 @@ class CoupleSettings {
   /// Minimum free-slot duration shown to the partner (15/30/45/60 min).
   final int minSlotDurationMinutes;
 
+  /// Deserialises [CoupleSettings] from a Firestore data map.
   factory CoupleSettings.fromFirestore(Map<String, dynamic> data) {
     return CoupleSettings(
       showTitles: data['showTitles'] as bool? ?? true,
@@ -24,11 +25,13 @@ class CoupleSettings {
     );
   }
 
+  /// Serialises these settings to a Firestore-compatible map.
   Map<String, dynamic> toFirestore() => {
         'showTitles': showTitles,
         'minSlotDurationMinutes': minSlotDurationMinutes,
       };
 
+  /// Returns a copy of these settings with the given fields replaced.
   CoupleSettings copyWith({
     bool? showTitles,
     int? minSlotDurationMinutes,
@@ -72,6 +75,7 @@ final coupleSettingsNotifierProvider =
   CoupleSettingsNotifier.new,
 );
 
+/// Async notifier that exposes write operations on top of [coupleSettingsProvider].
 class CoupleSettingsNotifier
     extends AutoDisposeAsyncNotifier<CoupleSettings> {
   @override
@@ -79,8 +83,10 @@ class CoupleSettingsNotifier
     return ref.watch(coupleSettingsProvider.future);
   }
 
+  /// Toggles whether event titles are shown to the partner.
   Future<void> setShowTitles(bool value) => _update((s) => s.copyWith(showTitles: value));
 
+  /// Updates the minimum overlap slot duration (in minutes).
   Future<void> setMinSlotDuration(int minutes) =>
       _update((s) => s.copyWith(minSlotDurationMinutes: minutes));
 
@@ -102,8 +108,10 @@ class CoupleSettingsNotifier
 
 // ── Calendar source model ─────────────────────────────────────────────────────
 
+/// Supported external calendar platforms.
 enum CalendarSourceType { googleCalendar, appleCalendar, outlook }
 
+/// A connected calendar account belonging to a user.
 class CalendarSource {
   const CalendarSource({
     required this.id,
@@ -117,6 +125,7 @@ class CalendarSource {
   final String email;
   final String? displayName;
 
+  /// Deserialises a [CalendarSource] from a Firestore document.
   factory CalendarSource.fromFirestore(
       String id, Map<String, dynamic> data) {
     return CalendarSource(

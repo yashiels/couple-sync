@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// Represents an authenticated user stored at `users/{uid}` in Firestore.
 class UserModel {
   final String uid;
   final String email;
@@ -19,6 +20,7 @@ class UserModel {
     required this.createdAt,
   });
 
+  /// Deserialises a [UserModel] from a Firestore [DocumentSnapshot].
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return UserModel(
@@ -32,6 +34,7 @@ class UserModel {
     );
   }
 
+  /// Serialises this user to a Firestore-compatible map.
   Map<String, dynamic> toFirestore() => {
         'email': email,
         'displayName': displayName,
@@ -41,6 +44,7 @@ class UserModel {
         'createdAt': Timestamp.fromDate(createdAt),
       };
 
+  /// Returns a copy of this user with the given fields replaced.
   UserModel copyWith({
     String? displayName,
     String? photoUrl,

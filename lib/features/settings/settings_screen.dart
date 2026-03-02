@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 
+/// App settings screen with account, partner, and notification options.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 

@@ -5,7 +5,16 @@ import 'core/theme/app_theme.dart';
 import 'features/home/screens/home_screen.dart';
 import 'features/calendar/screens/calendar_screen.dart';
 import 'features/overlap/screens/free_windows_screen.dart';
+import 'features/blocks/blocks_screen.dart';
+import 'features/blocks/block_form_screen.dart';
+import 'features/settings/settings_screen.dart';
 
+/// Entry point for the Couple Schedule UI prototype.
+///
+/// Initialises Flutter bindings, sets a transparent status bar, and launches
+/// [CoupleScheduleApp]. This standalone entry point does not require Firebase
+/// or Riverpod — see [lib/core/router/router.dart] for the full production
+/// router that includes auth guards and Firestore integration.
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
@@ -33,11 +42,38 @@ final _router = GoRouter(
           path: '/windows',
           builder: (context, state) => const FreeWindowsScreen(),
         ),
+        GoRoute(
+          path: '/blocks',
+          builder: (context, state) => const BlocksScreen(),
+          routes: [
+            GoRoute(
+              path: 'add',
+              builder: (context, state) => const BlockFormScreen(),
+            ),
+            GoRoute(
+              path: 'edit/:id',
+              builder: (context, state) => BlockFormScreen(
+                editingBlockId: state.pathParameters['id'],
+              ),
+            ),
+          ],
+        ),
+        GoRoute(
+          path: '/overlap',
+          builder: (context, state) => const FreeWindowsScreen(),
+        ),
+        GoRoute(
+          path: '/settings',
+          builder: (context, state) => const SettingsScreen(),
+        ),
       ],
     ),
   ],
 );
 
+/// Root widget of the Couple Schedule UI prototype.
+///
+/// Configures [AppTheme.light] and delegates routing to [_router].
 class CoupleScheduleApp extends StatelessWidget {
   const CoupleScheduleApp({super.key});
 

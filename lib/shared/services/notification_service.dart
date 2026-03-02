@@ -12,8 +12,12 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('FCM background message: ${message.messageId}');
 }
 
+/// Singleton service that initialises FCM and local notifications, and saves
+/// the device token to Firestore for server-side push delivery.
 class NotificationService {
   NotificationService._();
+
+  /// The global [NotificationService] singleton.
   static final NotificationService instance = NotificationService._();
 
   final _messaging = FirebaseMessaging.instance;

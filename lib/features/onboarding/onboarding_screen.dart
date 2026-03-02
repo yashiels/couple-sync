@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 
+/// Three-page onboarding walkthrough shown after first sign-up.
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 

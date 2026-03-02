@@ -3,14 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/time_block_model.dart';
 import '../services/block_service.dart';
 
+/// Singleton [BlockService] instance.
 final blockServiceProvider = Provider<BlockService>((ref) => BlockService());
 
-// Stream of blocks for the current user
+/// Streams all blocks for a specific user within a couple.
 final userBlocksProvider = StreamProvider.family<List<TimeBlock>, ({String coupleId, String userId})>((ref, ids) {
   return ref.watch(blockServiceProvider).watchUserBlocks(ids.coupleId, ids.userId);
 });
 
-// Stream of all couple blocks in the next 14 days
+/// Streams all couple blocks for the next 14 days.
 final coupleBlocksProvider = StreamProvider.family<List<TimeBlock>, String>((ref, coupleId) {
   final now = DateTime.now().toUtc();
   return ref.watch(blockServiceProvider).watchBlocksInRange(
@@ -20,7 +21,7 @@ final coupleBlocksProvider = StreamProvider.family<List<TimeBlock>, String>((ref
       );
 });
 
-// Block form state for add/edit
+/// Ephemeral state for the add/edit block form.
 class BlockFormState {
   final String title;
   final BlockType type;
@@ -44,9 +45,11 @@ class BlockFormState {
     this.error,
   });
 
+  /// `true` when all required fields are filled and the time range is valid.
   bool get isValid =>
       title.isNotEmpty && startUtc != null && endUtc != null && endUtc!.isAfter(startUtc!);
 
+  /// Returns a copy of this state with the given fields replaced.
   BlockFormState copyWith({
     String? title,
     BlockType? type,
@@ -72,19 +75,35 @@ class BlockFormState {
   }
 }
 
+/// Manages the block creation / edit form, including persistence via
+/// [BlockService].
 class BlockFormNotifier extends StateNotifier<BlockFormState> {
   final BlockService _service;
 
   BlockFormNotifier(this._service) : super(const BlockFormState());
 
+  /// Updates the title field.
   void setTitle(String v) => state = state.copyWith(title: v);
+
+  /// Updates the block type.
   void setType(BlockType v) => state = state.copyWith(type: v);
+
+  /// Updates the block category.
   void setCategory(BlockCategory v) => state = state.copyWith(category: v);
+
+  /// Updates the start time.
   void setStart(DateTime v) => state = state.copyWith(startUtc: v);
+
+  /// Updates the end time.
   void setEnd(DateTime v) => state = state.copyWith(endUtc: v);
+
+  /// Updates the visibility setting.
   void setVisibility(TimeBlockVisibility v) => state = state.copyWith(visibility: v);
+
+  /// Updates the optional RFC 5545 recurrence rule.
   void setRecurrenceRule(String? v) => state = state.copyWith(recurrenceRule: v);
 
+  /// Pre-fills the form with data from an existing [block] for editing.
   void prefillFromBlock(TimeBlock block) {
     state = BlockFormState(
       title: block.title,
@@ -97,6 +116,9 @@ class BlockFormNotifier extends StateNotifier<BlockFormState> {
     );
   }
 
+  /// Persists the form as a new or updated block.
+  ///
+  /// Pass [editingBlockId] to update an existing block; omit to create.
   Future<void> save({
     required String coupleId,
     required String userId,
@@ -143,6 +165,7 @@ class BlockFormNotifier extends StateNotifier<BlockFormState> {
   }
 }
 
+/// Auto-disposed provider for the add/edit block form notifier.
 final blockFormProvider = StateNotifierProvider.autoDispose<BlockFormNotifier, BlockFormState>((ref) {
   return BlockFormNotifier(ref.watch(blockServiceProvider));
 });

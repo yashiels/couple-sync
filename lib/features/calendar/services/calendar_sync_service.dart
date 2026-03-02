@@ -1,6 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
+// The calendar feature intentionally uses lib/core/models/time_block.dart
+// (BlockType.calendarEvent / customBlock / recurring) instead of
+// lib/shared/models/time_block_model.dart (BlockType.busy / free).
+// Calendar-synced blocks are always written with type == 'calendarEvent' so
+// that _writeToFirestore can identify and replace them without touching
+// manually-created blocks (which use the shared BlockType.busy / free values).
 import '../../../core/models/time_block.dart';
 import 'apple_calendar_service.dart';
 import 'google_calendar_service.dart';

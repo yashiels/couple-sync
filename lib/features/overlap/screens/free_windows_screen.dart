@@ -5,6 +5,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/mock_data.dart';
 import '../widgets/window_card.dart';
 
+/// Lists upcoming free windows grouped by local date, with a min-duration
+/// filter and a detail bottom sheet on tap.
 class FreeWindowsScreen extends StatefulWidget {
   const FreeWindowsScreen({super.key});
 

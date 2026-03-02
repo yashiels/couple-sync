@@ -18,6 +18,7 @@ class OverlapWindow {
     this.seen = false,
   });
 
+  /// Wall-clock length of this free window.
   Duration get duration => Duration(minutes: durationMinutes);
 
   /// The top-level Firestore document stores a `windows` array; each element
@@ -39,6 +40,7 @@ class OverlapWindow {
     );
   }
 
+  /// Serialises this window to a plain map for Firestore array storage.
   Map<String, dynamic> toMap() => {
         'startUtc': startUtc.millisecondsSinceEpoch,
         'endUtc': endUtc.millisecondsSinceEpoch,
@@ -48,6 +50,7 @@ class OverlapWindow {
         'seen': seen,
       };
 
+  /// Returns a copy of this window with [seen] overridden.
   OverlapWindow copyWith({bool? seen}) => OverlapWindow(
         startUtc: startUtc,
         endUtc: endUtc,

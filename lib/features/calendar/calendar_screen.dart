@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 
+/// Placeholder screen for the calendar feature (route: `/calendar`).
 class CalendarScreen extends StatelessWidget {
   const CalendarScreen({super.key});
 

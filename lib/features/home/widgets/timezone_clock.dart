@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 
+/// Live clock card displaying the current time in a given UTC offset.
+///
+/// Ticks every second. Rose-tinted for the user's own clock, sky-blue for the
+/// partner's.
 class TimezoneClock extends StatefulWidget {
   const TimezoneClock({
     super.key,

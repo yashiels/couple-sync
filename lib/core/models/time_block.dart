@@ -1,13 +1,20 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// Which partner owns a given [TimeBlock].
 enum BlockOwner { me, partner }
 
+/// How a time block was created or classified.
 enum BlockType { calendarEvent, customBlock, recurring }
 
+/// The calendar platform that originated a block.
 enum CalendarSource { google, apple, outlook, manual }
 
+/// How visible a block's details are to the partner.
 enum TimeBlockVisibility { busy, free, tentative }
 
+/// A calendar event or manual block belonging to one partner in a couple.
+///
+/// Times are stored in UTC; use [timezone] (IANA id) to convert for display.
 class TimeBlock {
   final String id;
   final String? title;
@@ -35,8 +42,10 @@ class TimeBlock {
     this.visibility,
   });
 
+  /// Wall-clock length of the block.
   Duration get duration => endUtc.difference(startUtc);
 
+  /// Serialises this block to a Firestore-compatible map.
   Map<String, dynamic> toFirestore() {
     return {
       'userId': userId,
@@ -51,6 +60,7 @@ class TimeBlock {
     };
   }
 
+  /// Deserialises a [TimeBlock] from a raw Firestore document map and its [docId].
   factory TimeBlock.fromFirestore(Map<String, dynamic> data, String docId) {
     CalendarSource? source;
     if (data['source'] != null) {
@@ -93,6 +103,9 @@ class TimeBlock {
   }
 }
 
+/// A window in which both partners are simultaneously free.
+///
+/// Used by the calendar UI to highlight overlap periods.
 class FreeWindow {
   final String id;
   final DateTime startUtc;
@@ -114,8 +127,10 @@ class FreeWindow {
     this.suggestedActivity,
   });
 
+  /// Wall-clock length of the free window.
   Duration get duration => endUtc.difference(startUtc);
 
+  /// Human-readable duration string, e.g. `"2h 30m"`.
   String get durationLabel {
     final mins = duration.inMinutes;
     if (mins < 60) return '${mins}m';

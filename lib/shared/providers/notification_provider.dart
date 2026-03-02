@@ -6,12 +6,14 @@ import '../services/notification_service.dart';
 
 // ── Notification service ──────────────────────────────────────────────────────
 
+/// Singleton [NotificationService] instance.
 final notificationServiceProvider = Provider<NotificationService>(
   (_) => NotificationService.instance,
 );
 
 // ── Preferences (async initialisation) ───────────────────────────────────────
 
+/// Async loader for the persisted [NotificationPreferences].
 final notificationPreferencesProvider =
     FutureProvider<NotificationPreferences>(
   (_) => NotificationPreferences.create(),
