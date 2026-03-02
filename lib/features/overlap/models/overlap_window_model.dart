@@ -77,6 +77,8 @@ class OverlapWindowsDoc {
     this.computedAt,
   });
 
+  /// Deserialises from the Firestore document snapshot at
+  /// `overlaps/{coupleId}/windows/latest`.
   factory OverlapWindowsDoc.fromSnapshot(DocumentSnapshot<Map<String, dynamic>> snap) {
     final data = snap.data() ?? {};
     final rawWindows = (data['windows'] as List<dynamic>?) ?? [];

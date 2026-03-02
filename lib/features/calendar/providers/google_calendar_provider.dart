@@ -4,6 +4,7 @@ import '../services/google_calendar_service.dart';
 
 // ── Service ───────────────────────────────────────────────────────────────────
 
+/// Singleton [GoogleCalendarService] instance.
 final googleCalendarServiceProvider = Provider<GoogleCalendarService>(
   (_) => GoogleCalendarService(),
 );

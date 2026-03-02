@@ -16,6 +16,7 @@ class CalendarSourceModel {
     this.accountEmail,
   });
 
+  /// Serialises this model to a plain map for Firestore storage.
   Map<String, dynamic> toMap() {
     return {
       'provider': provider.name,
@@ -26,6 +27,7 @@ class CalendarSourceModel {
     };
   }
 
+  /// Deserialises a [CalendarSourceModel] from a plain Firestore map.
   factory CalendarSourceModel.fromMap(Map<String, dynamic> map) {
     DateTime? lastSync;
     if (map['lastSync'] is Timestamp) {
@@ -43,6 +45,7 @@ class CalendarSourceModel {
     );
   }
 
+  /// Returns a copy of this model with the given fields replaced.
   CalendarSourceModel copyWith({
     CalendarSource? provider,
     bool? connected,

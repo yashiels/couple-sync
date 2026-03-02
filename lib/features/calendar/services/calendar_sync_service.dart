@@ -23,6 +23,7 @@ class SyncResult {
     required this.syncedAt,
   });
 
+  /// `true` when [errors] is non-empty.
   bool get hasErrors => errors.isNotEmpty;
 
   @override

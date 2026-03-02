@@ -5,6 +5,7 @@ import '../services/apple_calendar_service.dart';
 
 // ── Service ───────────────────────────────────────────────────────────────────
 
+/// Singleton [AppleCalendarService] instance.
 final appleCalendarServiceProvider = Provider<AppleCalendarService>(
   (_) => AppleCalendarService(),
 );

@@ -18,8 +18,10 @@ class GoogleCalendarService {
 
   // ── Connection ────────────────────────────────────────────────────────────
 
+  /// Whether the user is currently signed in to Google Calendar.
   bool get isConnected => _googleSignIn.currentUser != null;
 
+  /// The email address of the connected Google account, or `null` if not connected.
   String? get connectedEmail => _googleSignIn.currentUser?.email;
 
   /// Signs in with Google and requests calendar read scope.
