@@ -98,7 +98,7 @@ class _WindowList extends StatelessWidget {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: windows.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, i) => _WindowCard(window: windows[i], isTop: i == 0),
     );
   }
