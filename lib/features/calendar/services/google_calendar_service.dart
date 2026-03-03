@@ -8,7 +8,10 @@ import '../../../shared/models/time_block_model.dart';
 
 /// Provides Google Calendar integration via OAuth 2.0 + CalendarApi freebusy.
 class GoogleCalendarService {
-  static const _scopes = [gcal.CalendarApi.calendarReadonlyScope];
+  static const _scopes = [
+    gcal.CalendarApi.calendarReadonlyScope,
+    gcal.CalendarApi.calendarEventsScope,
+  ];
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: _scopes);
   final FirebaseFirestore _firestore;
@@ -138,6 +141,60 @@ class GoogleCalendarService {
 
     await batch.commit();
     await _updateLastSync(userId);
+  }
+
+  // ── Meet event creation ───────────────────────────────────────────────────
+
+  /// Creates a Google Calendar event with an auto-generated Google Meet link.
+  /// Returns the Meet link URL, or null if creation failed.
+  Future<String?> createMeetEvent({
+    required String title,
+    required DateTime startUtc,
+    required DateTime endUtc,
+    required String timezone,
+    String? partnerEmail,
+  }) async {
+    final account = _googleSignIn.currentUser ??
+        await _googleSignIn.signInSilently();
+    if (account == null) throw Exception('Not signed in to Google Calendar');
+
+    final authHeaders = await account.authHeaders;
+    final client = _AuthClient(authHeaders);
+
+    try {
+      final calendarApi = gcal.CalendarApi(client);
+
+      final event = gcal.Event(
+        summary: title,
+        start: gcal.EventDateTime(dateTime: startUtc, timeZone: timezone),
+        end: gcal.EventDateTime(dateTime: endUtc, timeZone: timezone),
+        conferenceData: gcal.ConferenceData(
+          createRequest: gcal.CreateConferenceRequest(
+            requestId: DateTime.now().millisecondsSinceEpoch.toString(),
+            conferenceSolutionKey:
+                gcal.ConferenceSolutionKey(type: 'hangoutsMeet'),
+          ),
+        ),
+        attendees: partnerEmail != null
+            ? [gcal.EventAttendee(email: partnerEmail)]
+            : null,
+      );
+
+      final created = await calendarApi.events.insert(
+        event,
+        'primary',
+        conferenceDataVersion: 1,
+      );
+
+      return created.conferenceData?.entryPoints
+          ?.firstWhere(
+            (e) => e.entryPointType == 'video',
+            orElse: () => gcal.EntryPoint(),
+          )
+          .uri;
+    } finally {
+      client.close();
+    }
   }
 
   Future<void> _updateLastSync(String userId) async {
