@@ -5,11 +5,9 @@ import 'package:intl/intl.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../shared/models/time_block_model.dart';
+import '../../shared/providers/auth_providers.dart';
 import '../../shared/providers/block_providers.dart';
-
-// Demo ids — replace with real auth/pairing providers
-const _demoCoupleId = 'demo_couple';
-const _demoUserId = 'demo_user';
+import '../../shared/providers/pairing_providers.dart';
 
 /// Lists the current user's custom time blocks with edit/delete actions.
 class BlocksScreen extends ConsumerWidget {
@@ -17,8 +15,20 @@ class BlocksScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(currentUserProvider);
+    final couple = ref.watch(currentCoupleProvider);
+
+    final coupleId = couple?.coupleId;
+    final userId = user?.uid;
+
+    if (coupleId == null || userId == null) {
+      return const Scaffold(
+        body: Center(child: Text('Please complete pairing to view blocks.')),
+      );
+    }
+
     final blocksAsync = ref.watch(
-      userBlocksProvider((coupleId: _demoCoupleId, userId: _demoUserId)),
+      userBlocksProvider((coupleId: coupleId, userId: userId)),
     );
 
     return Scaffold(
@@ -31,7 +41,8 @@ class BlocksScreen extends ConsumerWidget {
         label: const Text('Add Block'),
       ),
       body: blocksAsync.when(
-        data: (blocks) => blocks.isEmpty ? _EmptyState() : _BlockList(blocks: blocks),
+        data: (blocks) =>
+            blocks.isEmpty ? _EmptyState() : _BlockList(blocks: blocks),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
       ),
@@ -53,10 +64,17 @@ class _EmptyState extends StatelessWidget {
               color: AppColors.rose.withAlpha(40),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.view_timeline_rounded, size: 40, color: AppColors.rose),
+            child: const Icon(
+              Icons.view_timeline_rounded,
+              size: 40,
+              color: AppColors.rose,
+            ),
           ),
           const SizedBox(height: 20),
-          Text('No blocks yet', style: Theme.of(context).textTheme.headlineMedium),
+          Text(
+            'No blocks yet',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
           const SizedBox(height: 8),
           Text(
             'Add time blocks to let your partner\nknow when you\'re busy.',
@@ -107,12 +125,16 @@ class _BlockCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final couple = ref.watch(currentCoupleProvider);
+    final coupleId = couple?.coupleId ?? '';
+
     final start = block.startUtc.toLocal();
     final end = block.endUtc.toLocal();
 
     return Card(
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: Container(
           width: 44,
           height: 44,
@@ -122,7 +144,10 @@ class _BlockCard extends ConsumerWidget {
           ),
           child: Icon(_categoryIcon, color: AppColors.roseDeep, size: 22),
         ),
-        title: Text(block.title, style: Theme.of(context).textTheme.titleMedium),
+        title: Text(
+          block.title,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -134,9 +159,16 @@ class _BlockCard extends ConsumerWidget {
             if (block.recurrenceRule != null)
               Row(
                 children: [
-                  const Icon(Icons.repeat_rounded, size: 12, color: AppColors.textHint),
+                  const Icon(
+                    Icons.repeat_rounded,
+                    size: 12,
+                    color: AppColors.textHint,
+                  ),
                   const SizedBox(width: 4),
-                  Text('Recurring', style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    'Recurring',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ],
               ),
           ],
@@ -147,7 +179,9 @@ class _BlockCard extends ConsumerWidget {
             if (action == 'edit') {
               context.push('/blocks/edit/${block.id}');
             } else if (action == 'delete') {
-              await ref.read(blockServiceProvider).deleteBlock(_demoCoupleId, block.id);
+              await ref
+                  .read(blockServiceProvider)
+                  .deleteBlock(coupleId, block.id);
             }
           },
           itemBuilder: (_) => const [

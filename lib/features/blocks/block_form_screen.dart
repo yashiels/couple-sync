@@ -4,11 +4,9 @@ import 'package:intl/intl.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../shared/models/time_block_model.dart';
+import '../../shared/providers/auth_providers.dart';
 import '../../shared/providers/block_providers.dart';
-
-const _demoCoupleId = 'demo_couple';
-const _demoUserId = 'demo_user';
-const _demoTimezone = 'UTC';
+import '../../shared/providers/pairing_providers.dart';
 
 /// Form screen for creating a new block or editing an existing one.
 ///
@@ -37,7 +35,9 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
     if (date == null || !mounted) return;
     final time = await _pickTime(initial: state.startUtc);
     if (time == null || !mounted) return;
-    final dt = DateTime(date.year, date.month, date.day, time.hour, time.minute).toUtc();
+    final dt =
+        DateTime(date.year, date.month, date.day, time.hour, time.minute)
+            .toUtc();
     ref.read(blockFormProvider.notifier).setStart(dt);
   }
 
@@ -48,7 +48,9 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
     if (date == null || !mounted) return;
     final time = await _pickTime(initial: initial);
     if (time == null || !mounted) return;
-    final dt = DateTime(date.year, date.month, date.day, time.hour, time.minute).toUtc();
+    final dt =
+        DateTime(date.year, date.month, date.day, time.hour, time.minute)
+            .toUtc();
     ref.read(blockFormProvider.notifier).setEnd(dt);
   }
 
@@ -64,17 +66,24 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
   Future<TimeOfDay?> _pickTime({DateTime? initial}) async {
     return showTimePicker(
       context: context,
-      initialTime: initial != null ? TimeOfDay.fromDateTime(initial.toLocal()) : TimeOfDay.now(),
+      initialTime: initial != null
+          ? TimeOfDay.fromDateTime(initial.toLocal())
+          : TimeOfDay.now(),
     );
   }
 
   Future<void> _save() async {
+    final user = ref.read(currentUserProvider);
+    final couple = ref.read(currentCoupleProvider);
+
+    if (user == null || couple == null) return;
+
     final notifier = ref.read(blockFormProvider.notifier);
     notifier.setTitle(_titleController.text);
     await notifier.save(
-      coupleId: _demoCoupleId,
-      userId: _demoUserId,
-      timezone: _demoTimezone,
+      coupleId: couple.coupleId,
+      userId: user.uid,
+      timezone: user.timezone,
       editingBlockId: widget.editingBlockId,
     );
     if (mounted && ref.read(blockFormProvider).error == null) {
@@ -82,16 +91,39 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
     }
   }
 
+  /// Pre-fills the form with a preset: sets title, category, and duration.
+  void _applyPreset({
+    required String title,
+    required BlockCategory category,
+    required Duration duration,
+  }) {
+    final notifier = ref.read(blockFormProvider.notifier);
+    notifier.setTitle(title);
+    notifier.setCategory(category);
+    _titleController.text = title;
+
+    // Pre-fill start to the next round hour and end based on duration.
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day, now.hour + 1).toUtc();
+    notifier.setStart(start);
+    notifier.setEnd(start.add(duration));
+  }
+
   @override
   Widget build(BuildContext context) {
     final formState = ref.watch(blockFormProvider);
+    final user = ref.watch(currentUserProvider);
+    final couple = ref.watch(currentCoupleProvider);
+
+    final canSave = user != null && couple != null;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.editingBlockId != null ? 'Edit Block' : 'Add Block'),
+        title: Text(
+            widget.editingBlockId != null ? 'Edit Block' : 'Add Block'),
         actions: [
           TextButton(
-            onPressed: formState.saving ? null : _save,
+            onPressed: (formState.saving || !canSave) ? null : _save,
             child: const Text('Save'),
           ),
         ],
@@ -101,6 +133,53 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Quick-add presets row
+            _Label(text: 'Quick Add'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _PresetChip(
+                  label: 'Study',
+                  icon: Icons.menu_book_rounded,
+                  onTap: () => _applyPreset(
+                    title: 'Study',
+                    category: BlockCategory.study,
+                    duration: const Duration(hours: 2),
+                  ),
+                ),
+                _PresetChip(
+                  label: 'Gym',
+                  icon: Icons.fitness_center_rounded,
+                  onTap: () => _applyPreset(
+                    title: 'Gym',
+                    category: BlockCategory.exercise,
+                    duration: const Duration(hours: 1),
+                  ),
+                ),
+                _PresetChip(
+                  label: 'Commute',
+                  icon: Icons.directions_car_rounded,
+                  onTap: () => _applyPreset(
+                    title: 'Commute',
+                    category: BlockCategory.commute,
+                    duration: const Duration(minutes: 30),
+                  ),
+                ),
+                _PresetChip(
+                  label: 'Work',
+                  icon: Icons.work_rounded,
+                  onTap: () => _applyPreset(
+                    title: 'Work',
+                    category: BlockCategory.work,
+                    duration: const Duration(hours: 8),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
             // Title
             TextField(
               controller: _titleController,
@@ -117,11 +196,20 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
             const SizedBox(height: 8),
             SegmentedButton<BlockType>(
               segments: const [
-                ButtonSegment(value: BlockType.busy, label: Text('Busy'), icon: Icon(Icons.block_rounded)),
-                ButtonSegment(value: BlockType.free, label: Text('Free'), icon: Icon(Icons.check_circle_outline_rounded)),
+                ButtonSegment(
+                  value: BlockType.busy,
+                  label: Text('Busy'),
+                  icon: Icon(Icons.block_rounded),
+                ),
+                ButtonSegment(
+                  value: BlockType.free,
+                  label: Text('Free'),
+                  icon: Icon(Icons.check_circle_outline_rounded),
+                ),
               ],
               selected: {formState.type},
-              onSelectionChanged: (s) => ref.read(blockFormProvider.notifier).setType(s.first),
+              onSelectionChanged: (s) =>
+                  ref.read(blockFormProvider.notifier).setType(s.first),
             ),
             const SizedBox(height: 20),
 
@@ -164,29 +252,45 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
             SegmentedButton<TimeBlockVisibility>(
               segments: const [
                 ButtonSegment(
-                    value: TimeBlockVisibility.bothPartners,
-                    label: Text('Both'),
-                    icon: Icon(Icons.people_rounded)),
+                  value: TimeBlockVisibility.bothPartners,
+                  label: Text('Both'),
+                  icon: Icon(Icons.people_rounded),
+                ),
                 ButtonSegment(
-                    value: TimeBlockVisibility.onlyMe,
-                    label: Text('Only Me'),
-                    icon: Icon(Icons.lock_rounded)),
+                  value: TimeBlockVisibility.onlyMe,
+                  label: Text('Only Me'),
+                  icon: Icon(Icons.lock_rounded),
+                ),
               ],
               selected: {formState.visibility},
-              onSelectionChanged: (s) => ref.read(blockFormProvider.notifier).setVisibility(s.first),
+              onSelectionChanged: (s) =>
+                  ref.read(blockFormProvider.notifier).setVisibility(s.first),
             ),
             const SizedBox(height: 32),
 
             if (formState.error != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
-                child: Text(formState.error!, style: const TextStyle(color: AppColors.error)),
+                child: Text(
+                  formState.error!,
+                  style: const TextStyle(color: AppColors.error),
+                ),
               ),
 
             ElevatedButton(
-              onPressed: (formState.saving || !formState.isValid) ? null : _save,
+              onPressed:
+                  (formState.saving || !formState.isValid || !canSave)
+                      ? null
+                      : _save,
               child: formState.saving
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
                   : const Text('Save Block'),
             ),
           ],
@@ -196,6 +300,8 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
   }
 }
 
+// ── Supporting widgets ────────────────────────────────────────────────────────
+
 class _Label extends StatelessWidget {
   final String text;
   const _Label({required this.text});
@@ -204,11 +310,43 @@ class _Label extends StatelessWidget {
       Text(text, style: Theme.of(context).textTheme.titleSmall);
 }
 
+class _PresetChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  const _PresetChip({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ActionChip(
+      avatar: Icon(icon, size: 16, color: AppColors.lavenderDeep),
+      label: Text(label),
+      onPressed: onTap,
+      backgroundColor: AppColors.lavender.withAlpha(60),
+      labelStyle: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w500,
+        color: AppColors.lavenderDeep,
+      ),
+      side: BorderSide(color: AppColors.lavenderDeep.withAlpha(80)),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    );
+  }
+}
+
 class _TimeTile extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  const _TimeTile({required this.icon, required this.label, required this.onTap});
+  const _TimeTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -263,21 +401,34 @@ class _CategoryPicker extends StatelessWidget {
             duration: const Duration(milliseconds: 150),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: isSelected ? AppColors.lavender.withAlpha(120) : AppColors.inputFill,
+              color: isSelected
+                  ? AppColors.lavender.withAlpha(120)
+                  : AppColors.inputFill,
               borderRadius: BorderRadius.circular(10),
-              border: isSelected ? Border.all(color: AppColors.lavenderDeep, width: 1.5) : null,
+              border: isSelected
+                  ? Border.all(color: AppColors.lavenderDeep, width: 1.5)
+                  : null,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 16, color: isSelected ? AppColors.lavenderDeep : AppColors.textSecondary),
+                Icon(
+                  icon,
+                  size: 16,
+                  color: isSelected
+                      ? AppColors.lavenderDeep
+                      : AppColors.textSecondary,
+                ),
                 const SizedBox(width: 6),
                 Text(
                   label,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                    color: isSelected ? AppColors.lavenderDeep : AppColors.textSecondary,
+                    fontWeight:
+                        isSelected ? FontWeight.w600 : FontWeight.w400,
+                    color: isSelected
+                        ? AppColors.lavenderDeep
+                        : AppColors.textSecondary,
                   ),
                 ),
               ],
