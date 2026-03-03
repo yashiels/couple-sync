@@ -2,70 +2,74 @@ import 'package:flutter/material.dart';
 
 /// Central colour palette for the app.
 ///
-/// Follows the design spec: rose (#F4A0B5) for the user's own blocks, sky-blue
-/// (#9BC4F5) for the partner's blocks, and lavender-to-rose gradients for
-/// overlap/free windows.
+/// Follows the design spec: rose (#E8849A) for the user's own blocks, sky-blue
+/// (#7AB4E8) for the partner's blocks, and lavender-to-rose gradients for
+/// overlap/free windows. Warm cream (#FFF8F5) scaffold background.
 class AppColors {
   AppColors._();
 
-  // Gradient primaries
-  static const Color roseLight = Color(0xFFF9C5D1);
-  static const Color rose = Color(0xFFF4A0B5);
-  static const Color roseDark = Color(0xFFE07898);
+  // Identity
+  static const Color rose = Color(0xFFE8849A);
+  static const Color roseLight = Color(0xFFFCEEF1);
+  static const Color roseDark = Color(0xFFD4627A);
 
+  static const Color partnerBlue = Color(0xFF7AB4E8);
+  static const Color partnerBlueLight = Color(0xFFEBF3FC);
+
+  // Keep lavender family
   static const Color lavenderLight = Color(0xFFE8D5F5);
   static const Color lavender = Color(0xFFCBA8EA);
   static const Color lavenderDark = Color(0xFFAA7DD0);
 
   // Partner color coding
-  static const Color partnerA = Color(0xFFF4A0B5); // rose
-  static const Color partnerB = Color(0xFF9BC4F5); // sky blue
+  static const Color partnerA = Color(0xFFE8849A); // rose
+  static const Color partnerB = Color(0xFF7AB4E8); // sky blue
 
-  // Overlap / free window accent
-  static const Color overlapStart = Color(0xFFC8A4E8);
-  static const Color overlapEnd = Color(0xFFF4A0B5);
+  // Overlap
+  static const Color overlapStart = Color(0xFFB794D6);
+  static const Color overlapEnd = Color(0xFFE8849A);
 
-  // Neutrals
-  static const Color surface = Color(0xFFFDF8FF);
+  // Surfaces — warm cream
+  static const Color surface = Color(0xFFFFF8F5);
   static const Color surfaceElevated = Color(0xFFFFFFFF);
-  static const Color onSurface = Color(0xFF2D1F3A);
-  static const Color onSurfaceMuted = Color(0xFF8A7A9A);
-  static const Color divider = Color(0xFFEDE0F5);
+  static const Color background = Color(0xFFFFF8F5);
+  static const Color onSurface = Color(0xFF2D2D3A);
+  static const Color onSurfaceMuted = Color(0xFF6B6B80);
+  static const Color divider = Color(0xFFF0E8F5);
 
-  // Aliases used across screens
+  // Semantic
+  static const Color success = Color(0xFF7BC47F);
+  static const Color warning = Color(0xFFF5C842);
+  static const Color error = Color(0xFFE85D5D);
+
+  // Aliases
   static const Color roseDeep = roseDark;
   static const Color lavenderDeep = lavenderDark;
   static const Color skyBlue = partnerB;
   static const Color inputFill = Color(0xFFF5F0FA);
   static const Color textPrimary = onSurface;
   static const Color textSecondary = onSurfaceMuted;
+  static const Color textTertiary = Color(0xFFA0A0B0);
   static const Color textHint = Color(0xFFB0A3BF);
-  static const Color error = Color(0xFFE53935);
-  static const Color success = Color(0xFF7BC47F);
-  static const Color warning = Color(0xFFF5C842);
-  static const Color background = Color(0xFFFFF8F5);
-  static const Color partnerBlueLight = Color(0xFFEBF3FC);
   static const Color roseLightBg = Color(0xFFFCEEF1);
 
-  /// Lavender-to-rose gradient used for hero cards and free-window highlights.
+  // Gradients
   static const LinearGradient heroGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFFCBA8EA), Color(0xFFF4A0B5)],
+    colors: [Color(0xFFB794D6), Color(0xFFE8849A)],
   );
 
-  /// Semi-transparent gradient used as a calendar overlap band.
   static const LinearGradient overlapGradient = LinearGradient(
     begin: Alignment.centerLeft,
     end: Alignment.centerRight,
-    colors: [Color(0x60CBA8EA), Color(0x60F4A0B5)],
+    colors: [Color(0x60B794D6), Color(0x60E8849A)],
   );
 
-  /// Subtle vertical gradient applied to scaffold backgrounds.
   static const LinearGradient backgroundGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0xFFF9F0FF), Color(0xFFFDF8FF)],
+    colors: [Color(0xFFFFF0EB), Color(0xFFFFF8F5)],
   );
 }
 
@@ -77,8 +81,7 @@ class AppTheme {
   static ThemeData get light {
     return ThemeData(
       useMaterial3: true,
-      fontFamily: 'SF Pro Display',
-      scaffoldBackgroundColor: AppColors.surface,
+      scaffoldBackgroundColor: AppColors.background,
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.lavender,
         brightness: Brightness.light,
@@ -100,7 +103,7 @@ class AppTheme {
         elevation: 0,
         color: AppColors.surfaceElevated,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
         ),
         shadowColor: const Color(0x14CBA8EA),
       ),
