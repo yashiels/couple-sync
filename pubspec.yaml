@@ -26,9 +26,6 @@ dependencies:
   googleapis: ^13.1.0
   http: ^1.2.2
 
-  # Apple / Device Calendar
-  device_calendar: ^4.3.1
-
   # Local notifications
   flutter_local_notifications: ^18.0.1
 

@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../shared/models/time_block_model.dart';
-import 'apple_calendar_service.dart';
 import 'google_calendar_service.dart';
 
 /// Result of a calendar sync operation.
@@ -34,27 +33,23 @@ class SyncResult {
 class CalendarSyncService {
   CalendarSyncService({
     required GoogleCalendarService googleService,
-    required AppleCalendarService appleService,
     FirebaseFirestore? firestore,
   })  : _google = googleService,
-        _apple = appleService,
         _firestore = firestore ?? FirebaseFirestore.instance;
 
   final GoogleCalendarService _google;
-  final AppleCalendarService _apple;
   final FirebaseFirestore _firestore;
 
   // ── Public API ────────────────────────────────────────────────────────────
 
   /// Syncs all connected calendar sources for [userId] in couple [coupleId].
   ///
-  /// Pass [syncGoogle] / [syncApple] as false to skip individual sources.
+  /// Pass [syncGoogle] as false to skip Google Calendar.
   /// Returns a [SyncResult] describing what was written and any errors.
   Future<SyncResult> sync({
     required String userId,
     required String coupleId,
     bool syncGoogle = true,
-    bool syncApple = true,
   }) async {
     final allBlocks = <TimeBlock>[];
     final errors = <String>[];
@@ -71,23 +66,6 @@ class CalendarSyncService {
       } catch (e, st) {
         debugPrint('CalendarSyncService Google error: $e\n$st');
         errors.add('Google Calendar: $e');
-      }
-    }
-
-    if (syncApple) {
-      try {
-        final blocks = await _apple.fetchEvents(
-          userId: userId,
-          coupleId: coupleId,
-        );
-        allBlocks.addAll(blocks);
-        if (blocks.isNotEmpty) {
-          await _persistLastSync(userId, BlockSource.manual);
-        }
-        debugPrint('CalendarSyncService: fetched ${blocks.length} Apple blocks');
-      } catch (e, st) {
-        debugPrint('CalendarSyncService Apple error: $e\n$st');
-        errors.add('Apple Calendar: $e');
       }
     }
 
