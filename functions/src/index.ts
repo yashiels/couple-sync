@@ -5,3 +5,4 @@ import { onOverlapWrite } from "./notifications";
 admin.initializeApp();
 
 export { onBlockWrite, onOverlapWrite };
+export { detectPatterns, detectPatternsManual } from "./patterns";
