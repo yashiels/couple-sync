@@ -1,6 +1,7 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { DateTime } from "luxon";
+import { suggestActivities } from "./gemini";
 
 const db = admin.firestore();
 
@@ -37,6 +38,7 @@ interface OverlapWindowDoc {
   durationMinutes: number;
   score: number;
   reasonableBoth: boolean;
+  suggestedActivity: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -125,13 +127,23 @@ async function runOverlapEngine(coupleId: string): Promise<OverlapWindowDoc[]> {
     .sort((a, b) => b.score - a.score)
     .slice(0, MAX_WINDOWS);
 
-  // 10. Persist top windows
-  const output: OverlapWindowDoc[] = ranked.map((w) => ({
+  // 10. Fetch Gemini activity suggestions for ranked windows
+  const suggestions = await suggestActivities(
+    ranked.map((w) => ({
+      startMs: w.startMs,
+      endMs: w.endMs,
+      durationMinutes: Math.floor((w.endMs - w.startMs) / 60_000),
+    }))
+  );
+
+  // 11. Persist top windows
+  const output: OverlapWindowDoc[] = ranked.map((w, i) => ({
     startUtc: w.startMs,
     endUtc: w.endMs,
     durationMinutes: Math.floor((w.endMs - w.startMs) / 60_000),
     score: w.score,
     reasonableBoth: w.reasonableBoth,
+    suggestedActivity: suggestions.get(i) || null,
   }));
 
   await db.collection("overlaps").doc(coupleId).collection("windows").doc("latest").set({
