@@ -224,9 +224,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               googleConnected: googleConnected,
               msConnected: msConnected,
               onConnectGoogle: () async {
-                await ref
-                    .read(googleCalendarConnectionProvider.notifier)
-                    .connect();
+                final user = ref.read(currentUserProvider);
+                if (user != null) {
+                  await ref
+                      .read(googleCalendarConnectionsProvider.notifier)
+                      .connectAccount(user.uid);
+                }
               },
               onConnectMicrosoft: () async {
                 await ref

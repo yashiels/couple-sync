@@ -92,14 +92,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           connected: googleConnected,
           lastSync: googleLastSync,
           onToggle: () async {
+            final currentUser = ref.read(currentUserProvider);
+            if (currentUser == null) return;
             if (googleConnected) {
-              await ref
-                  .read(googleCalendarConnectionProvider.notifier)
-                  .disconnect();
+              final connections =
+                  ref.read(googleCalendarConnectionsProvider);
+              if (connections.isNotEmpty) {
+                await ref
+                    .read(googleCalendarConnectionsProvider.notifier)
+                    .removeAccount(currentUser.uid, connections.first.id);
+              }
             } else {
               await ref
-                  .read(googleCalendarConnectionProvider.notifier)
-                  .connect();
+                  .read(googleCalendarConnectionsProvider.notifier)
+                  .connectAccount(currentUser.uid);
             }
           },
         ),

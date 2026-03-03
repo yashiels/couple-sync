@@ -27,15 +27,14 @@ class GoogleCalendarService {
   /// The email address of the connected Google account, or `null` if not connected.
   String? get connectedEmail => _googleSignIn.currentUser?.email;
 
-  /// Signs in with Google and requests calendar read scope.
-  /// Returns true when the user successfully grants access.
-  Future<bool> connect() async {
+  /// Initiates Google OAuth and returns the connected email, or null if cancelled.
+  Future<String?> connectAccount() async {
     try {
       final account = await _googleSignIn.signIn();
-      return account != null;
+      return account?.email;
     } catch (e) {
-      debugPrint('GoogleCalendarService.connect error: $e');
-      return false;
+      debugPrint('GoogleCalendarService.connectAccount error: $e');
+      return null;
     }
   }
 
@@ -112,9 +111,11 @@ class GoogleCalendarService {
 
   /// Fetches busy periods and writes them to Firestore, replacing any
   /// previously synced Google blocks for this user.
+  /// If [connectionId] is provided, updates that specific connection's lastSync.
   Future<void> syncToFirestore({
     required String userId,
     required String coupleId,
+    String? connectionId,
   }) async {
     final blocks = await fetchBusyPeriods(userId: userId, coupleId: coupleId);
 
@@ -125,10 +126,10 @@ class GoogleCalendarService {
 
     final batch = _firestore.batch();
 
-    // Remove stale Google blocks for this user.
+    // Delete stale Google blocks for this user.
     final stale = await blocksRef
-        .where('userId', isEqualTo: userId)
-        .where('source', isEqualTo: BlockSource.google.name)
+        .where('ownerUid', isEqualTo: userId)
+        .where('source', isEqualTo: 'google')
         .get();
     for (final doc in stale.docs) {
       batch.delete(doc.reference);
@@ -140,7 +141,10 @@ class GoogleCalendarService {
     }
 
     await batch.commit();
-    await _updateLastSync(userId);
+
+    if (connectionId != null) {
+      await _updateConnectionLastSync(userId, connectionId);
+    }
   }
 
   // ── Meet event creation ───────────────────────────────────────────────────
@@ -197,20 +201,24 @@ class GoogleCalendarService {
     }
   }
 
-  Future<void> _updateLastSync(String userId) async {
-    await _firestore.collection('users').doc(userId).set(
-      {
-        'calendarSources': {
-          'google': {
-            'provider': BlockSource.google.name,
-            'connected': true,
-            'lastSync': FieldValue.serverTimestamp(),
-            'accountEmail': connectedEmail,
-          }
-        }
-      },
-      SetOptions(merge: true),
-    );
+  /// Updates a specific connection's lastSync in the calendarConnections array.
+  Future<void> _updateConnectionLastSync(
+      String userId, String connectionId) async {
+    final userRef = _firestore.collection('users').doc(userId);
+    final doc = await userRef.get();
+    if (!doc.exists) return;
+
+    final connections =
+        (doc.data()?['calendarConnections'] as List<dynamic>?) ?? [];
+    final updated = connections.map((c) {
+      final map = Map<String, dynamic>.from(c as Map);
+      if (map['id'] == connectionId) {
+        map['lastSync'] = Timestamp.now();
+      }
+      return map;
+    }).toList();
+
+    await userRef.update({'calendarConnections': updated});
   }
 }
 
