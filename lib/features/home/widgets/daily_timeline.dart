@@ -11,11 +11,13 @@ class DailyTimeline extends StatelessWidget {
     required this.blocks,
     required this.myUtcOffset,
     required this.myCity,
+    required this.myUserId,
   });
 
   final List<TimeBlock> blocks;
   final Duration myUtcOffset;
   final String myCity;
+  final String myUserId;
 
   static const double _hourWidth = 72.0;
   static const double _trackHeight = 38.0;
@@ -79,7 +81,7 @@ class DailyTimeline extends StatelessWidget {
                   _BlockTrack(
                     label: 'You',
                     labelColor: AppColors.rose,
-                    blocks: blocks.where((b) => b.userId == 'me').toList(),
+                    blocks: blocks.where((b) => b.userId == myUserId).toList(),
                     color: AppColors.rose,
                     startHour: _startHour,
                     hourWidth: _hourWidth,
@@ -91,7 +93,7 @@ class DailyTimeline extends StatelessWidget {
                   _BlockTrack(
                     label: 'Partner',
                     labelColor: AppColors.partnerB,
-                    blocks: blocks.where((b) => b.userId != 'me').toList(),
+                    blocks: blocks.where((b) => b.userId != myUserId).toList(),
                     color: AppColors.partnerB,
                     startHour: _startHour,
                     hourWidth: _hourWidth,

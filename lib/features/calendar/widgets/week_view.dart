@@ -15,6 +15,7 @@ class WeekView extends StatelessWidget {
     required this.freeWindows,
     required this.myUtcOffset,
     required this.partnerUtcOffset,
+    required this.myUserId,
     this.onBlockTap,
     this.onWindowTap,
     this.onDayTap,
@@ -25,6 +26,7 @@ class WeekView extends StatelessWidget {
   final List<FreeWindow> freeWindows;
   final Duration myUtcOffset;
   final Duration partnerUtcOffset;
+  final String myUserId;
   final void Function(TimeBlock)? onBlockTap;
   final void Function(FreeWindow)? onWindowTap;
   final void Function(DateTime)? onDayTap;
@@ -119,7 +121,7 @@ class WeekView extends StatelessWidget {
     List<DateTime> days,
     double colWidth,
   ) {
-    final isMe = block.userId == 'me';
+    final isMe = block.userId == myUserId;
     final localOffset = isMe ? myUtcOffset : partnerUtcOffset;
     final localStart = block.startUtc.add(localOffset);
     final localEnd = block.endUtc.add(localOffset);
@@ -144,6 +146,7 @@ class WeekView extends StatelessWidget {
           height: h,
           left: left,
           width: width,
+          isMe: isMe,
           onTap: () => onBlockTap?.call(block),
         ));
       }

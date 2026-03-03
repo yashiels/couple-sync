@@ -19,24 +19,19 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  // Local notification toggle state (not persisted yet).
-  bool _newWindowAlerts = true;
-  bool _dailyDigest = false;
-  final bool _quietHoursEnabled = false;
-
-  // Local privacy toggle state.
-  bool _showEventTitles = true;
-
-  // Local scheduling state.
-  int _minSlotMinutes = 30;
-
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final connections = ref.watch(googleCalendarConnectionsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => context.go('/home'),
+        ),
+        title: const Text('Settings'),
+      ),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         children: [
@@ -47,23 +42,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const SizedBox(height: 16),
 
-          // 2. Notifications
-          _buildNotificationsSection(),
-          const SizedBox(height: 16),
-
-          // 3. Privacy
-          _buildPrivacySection(),
-          const SizedBox(height: 16),
-
-          // 4. Scheduling
-          _buildSchedulingSection(),
-          const SizedBox(height: 16),
-
-          // 5. Timezone
+          // 2. Timezone
           _buildTimezoneSection(user?.timezone ?? 'UTC'),
           const SizedBox(height: 16),
 
-          // 6. Account
+          // 3. Account
           _buildAccountSection(context),
           const SizedBox(height: 32),
         ],
@@ -134,154 +117,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // ── Section 2: Notifications ──────────────────────────────────────────────
-
-  Widget _buildNotificationsSection() {
-    return _SettingsSection(
-      icon: Icons.notifications_rounded,
-      title: 'Notifications',
-      children: [
-        SwitchListTile(
-          title: const Text(
-            'New window alerts',
-            style: TextStyle(
-              color: AppColors.onSurface,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          subtitle: const Text(
-            'Get notified when a new overlap window opens',
-            style: TextStyle(color: AppColors.onSurfaceMuted, fontSize: 12),
-          ),
-          value: _newWindowAlerts,
-          onChanged: (v) => setState(() => _newWindowAlerts = v),
-          activeThumbColor: AppColors.rose,
-          activeTrackColor: AppColors.roseLight,
-          inactiveTrackColor: AppColors.inputFill,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        ),
-        const Divider(height: 1, color: AppColors.divider),
-        SwitchListTile(
-          title: const Text(
-            'Daily digest',
-            style: TextStyle(
-              color: AppColors.onSurface,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          subtitle: const Text(
-            'Receive a summary of upcoming windows each morning',
-            style: TextStyle(color: AppColors.onSurfaceMuted, fontSize: 12),
-          ),
-          value: _dailyDigest,
-          onChanged: (v) => setState(() => _dailyDigest = v),
-          activeThumbColor: AppColors.rose,
-          activeTrackColor: AppColors.roseLight,
-          inactiveTrackColor: AppColors.inputFill,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        ),
-        const Divider(height: 1, color: AppColors.divider),
-        SwitchListTile(
-          title: const Text(
-            'Quiet hours',
-            style: TextStyle(
-              color: AppColors.onSurfaceMuted,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          subtitle: const Text(
-            'Coming soon',
-            style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
-          ),
-          value: _quietHoursEnabled,
-          onChanged: null,
-          activeThumbColor: AppColors.rose,
-          inactiveTrackColor: AppColors.inputFill,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        ),
-      ],
-    );
-  }
-
-  // ── Section 3: Privacy ────────────────────────────────────────────────────
-
-  Widget _buildPrivacySection() {
-    return _SettingsSection(
-      icon: Icons.lock_rounded,
-      title: 'Privacy',
-      children: [
-        SwitchListTile(
-          title: const Text(
-            'Show event titles to partner',
-            style: TextStyle(
-              color: AppColors.onSurface,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          subtitle: const Text(
-            'When off, your partner only sees busy/free status',
-            style: TextStyle(color: AppColors.onSurfaceMuted, fontSize: 12),
-          ),
-          value: _showEventTitles,
-          onChanged: (v) => setState(() => _showEventTitles = v),
-          activeThumbColor: AppColors.rose,
-          activeTrackColor: AppColors.roseLight,
-          inactiveTrackColor: AppColors.inputFill,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        ),
-      ],
-    );
-  }
-
-  // ── Section 4: Scheduling ─────────────────────────────────────────────────
-
-  Widget _buildSchedulingSection() {
-    return _SettingsSection(
-      icon: Icons.tune_rounded,
-      title: 'Scheduling',
-      children: [
-        ListTile(
-          title: const Text(
-            'Minimum slot duration',
-            style: TextStyle(
-              color: AppColors.onSurface,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          subtitle: const Text(
-            'Ignore overlap windows shorter than this',
-            style: TextStyle(color: AppColors.onSurfaceMuted, fontSize: 12),
-          ),
-          trailing: _DurationChipRow(
-            selectedMinutes: _minSlotMinutes,
-            onChanged: (v) => setState(() => _minSlotMinutes = v),
-          ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        ),
-        const Divider(height: 1, color: AppColors.divider),
-        ListTile(
-          title: const Text(
-            'Default couple calendar',
-            style: TextStyle(
-              color: AppColors.onSurfaceMuted,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          subtitle: const Text(
-            'Coming soon',
-            style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
-          ),
-          trailing: const Icon(
-            Icons.chevron_right_rounded,
-            color: AppColors.textHint,
-          ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        ),
-      ],
-    );
-  }
-
-  // ── Section 5: Timezone ───────────────────────────────────────────────────
+  // ── Section 2: Timezone ────────────────────────────────────────────────────
 
   Widget _buildTimezoneSection(String timezone) {
     return _SettingsSection(
@@ -317,9 +153,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // ── Section 6: Account ────────────────────────────────────────────────────
+  // ── Section 3: Account ────────────────────────────────────────────────────
 
   Widget _buildAccountSection(BuildContext context) {
+    final couple = ref.watch(currentCoupleProvider);
+
     return _SettingsSection(
       icon: Icons.person_rounded,
       title: 'Account',
@@ -336,19 +174,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onTap: () => _confirmSignOut(context),
           contentPadding: const EdgeInsets.symmetric(horizontal: 16),
         ),
-        const Divider(height: 1, color: AppColors.divider),
-        ListTile(
-          leading: const Icon(Icons.link_off_rounded, color: AppColors.error),
-          title: const Text(
-            'Unpair from partner',
-            style: TextStyle(
-              color: AppColors.error,
-              fontWeight: FontWeight.w600,
+        if (couple != null) ...[
+          const Divider(height: 1, color: AppColors.divider),
+          ListTile(
+            leading: const Icon(Icons.link_off_rounded, color: AppColors.error),
+            title: const Text(
+              'Unpair from partner',
+              style: TextStyle(
+                color: AppColors.error,
+                fontWeight: FontWeight.w600,
+              ),
             ),
+            onTap: () => _confirmUnpair(context),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
           ),
-          onTap: () => _confirmUnpair(context),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        ),
+        ],
       ],
     );
   }
@@ -529,51 +369,3 @@ class _GoogleAccountTile extends StatelessWidget {
   }
 }
 
-/// Compact chip row for selecting a minimum slot duration.
-class _DurationChipRow extends StatelessWidget {
-  final int selectedMinutes;
-  final ValueChanged<int> onChanged;
-
-  const _DurationChipRow({
-    required this.selectedMinutes,
-    required this.onChanged,
-  });
-
-  static const _options = [15, 30, 60];
-
-  String _label(int minutes) {
-    if (minutes >= 60) return '${minutes ~/ 60}hr';
-    return '${minutes}min';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: _options.map((mins) {
-        final selected = mins == selectedMinutes;
-        return Padding(
-          padding: const EdgeInsets.only(left: 4),
-          child: ChoiceChip(
-            label: Text(
-              _label(mins),
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: selected ? Colors.white : AppColors.onSurfaceMuted,
-              ),
-            ),
-            selected: selected,
-            onSelected: (_) => onChanged(mins),
-            selectedColor: AppColors.lavenderDark,
-            backgroundColor: AppColors.inputFill,
-            side: BorderSide.none,
-            padding: EdgeInsets.zero,
-            labelPadding: const EdgeInsets.symmetric(horizontal: 6),
-            visualDensity: VisualDensity.compact,
-          ),
-        );
-      }).toList(),
-    );
-  }
-}

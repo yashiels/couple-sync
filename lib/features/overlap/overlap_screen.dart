@@ -1,12 +1,9 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../shared/models/overlap_window.dart';
-import '../../shared/models/scheduling_request.dart';
-import '../../shared/providers/auth_providers.dart';
 import '../../shared/providers/overlap_providers.dart';
 import '../../shared/providers/pairing_providers.dart';
 
@@ -36,8 +33,7 @@ enum _DurationFilter {
 }
 
 /// Displays the Firestore-computed free windows for the current couple,
-/// sorted by overlap score with duration filtering, Gemini suggestions,
-/// and Schedule Call functionality.
+/// sorted by overlap score with duration filtering and Gemini suggestions.
 class OverlapScreen extends ConsumerStatefulWidget {
   const OverlapScreen({super.key});
 
@@ -124,7 +120,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
                 if (filtered.isEmpty) {
                   return _buildNoMatchState(context);
                 }
-                return _buildWindowList(context, filtered, coupleId);
+                return _buildWindowList(context, filtered);
               },
               loading: () =>
                   const Center(child: CircularProgressIndicator()),
@@ -234,31 +230,29 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
   Widget _buildWindowList(
     BuildContext context,
     List<OverlapWindow> windows,
-    String coupleId,
   ) {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: windows.length,
       separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, i) {
-        return _buildWindowCard(context, windows[i], coupleId, isTop: i == 0);
+        return _buildWindowCard(context, windows[i], isTop: i == 0);
       },
     );
   }
 
   /// Builds a single window card with time range, duration badge,
-  /// Gemini suggestion chip, and Schedule Call button.
+  /// and Gemini suggestion chip.
   Widget _buildWindowCard(
     BuildContext context,
-    OverlapWindow window,
-    String coupleId, {
+    OverlapWindow window, {
     required bool isTop,
   }) {
     final start = window.startUtc.toLocal();
     final end = window.endUtc.toLocal();
 
     if (isTop) {
-      return _buildHeroCard(context, window, coupleId, start, end);
+      return _buildHeroCard(context, window, start, end);
     }
 
     return Card(
@@ -318,25 +312,6 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
               const SizedBox(height: 12),
               _buildSuggestionChip(context, window.suggestedActivity!),
             ],
-            // Schedule Call button
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () =>
-                    _showScheduleSheet(context, window, coupleId),
-                icon: const Icon(Icons.videocam_rounded, size: 18),
-                label: const Text('Schedule Call'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.lavenderDark,
-                  side: const BorderSide(color: AppColors.lavender),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                ),
-              ),
-            ),
           ],
         ),
       ),
@@ -347,7 +322,6 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
   Widget _buildHeroCard(
     BuildContext context,
     OverlapWindow window,
-    String coupleId,
     DateTime start,
     DateTime end,
   ) {
@@ -425,26 +399,6 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
               ),
             ),
           ],
-          // Schedule Call button on hero card
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () =>
-                  _showScheduleSheet(context, window, coupleId),
-              icon: const Icon(Icons.videocam_rounded, size: 18),
-              label: const Text('Schedule Call'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: AppColors.lavenderDark,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                elevation: 0,
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -500,200 +454,4 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
     );
   }
 
-  /// Shows the Schedule Call confirmation bottom sheet.
-  void _showScheduleSheet(
-    BuildContext context,
-    OverlapWindow window,
-    String coupleId,
-  ) {
-    final start = window.startUtc.toLocal();
-    final end = window.endUtc.toLocal();
-    final titleController = TextEditingController(
-      text: window.suggestedActivity ?? 'Couple Call',
-    );
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 24,
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Handle bar
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Schedule Call',
-                style: Theme.of(sheetContext).textTheme.headlineMedium,
-              ),
-              const SizedBox(height: 20),
-              // Window time info
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.lavenderLight.withAlpha(100),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.access_time_rounded,
-                        color: AppColors.lavenderDark, size: 20),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _dateFmt.format(start),
-                            style: Theme.of(sheetContext)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${_timeFmt.format(start)} – ${_timeFmt.format(end)}  (${_formatDuration(window.durationMinutes)})',
-                            style:
-                                Theme.of(sheetContext).textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              // Editable title field
-              Text('Event title',
-                  style: Theme.of(sheetContext).textTheme.titleMedium),
-              const SizedBox(height: 8),
-              TextField(
-                controller: titleController,
-                decoration: InputDecoration(
-                  hintText: 'Enter event title',
-                  filled: true,
-                  fillColor: AppColors.inputFill,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
-                ),
-              ),
-              const SizedBox(height: 24),
-              // Create Google Meet Event button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    Navigator.of(sheetContext).pop();
-                    await _createSchedulingRequest(
-                      coupleId: coupleId,
-                      window: window,
-                      title: titleController.text.trim().isEmpty
-                          ? 'Couple Call'
-                          : titleController.text.trim(),
-                    );
-                  },
-                  icon: const Icon(Icons.videocam_rounded, size: 20),
-                  label: const Text('Create Google Meet Event'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.lavenderDark,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    elevation: 0,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  /// Writes a [SchedulingRequest] document to Firestore and shows a
-  /// success snackbar. Full Meet event creation requires OAuth, so for
-  /// now we only persist the request.
-  Future<void> _createSchedulingRequest({
-    required String coupleId,
-    required OverlapWindow window,
-    required String title,
-  }) async {
-    final user = ref.read(currentUserProvider);
-    if (user == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('You must be signed in to schedule.')),
-        );
-      }
-      return;
-    }
-
-    try {
-      final docRef = FirebaseFirestore.instance
-          .collection('scheduling_requests')
-          .doc();
-
-      final request = SchedulingRequest(
-        id: docRef.id,
-        coupleId: coupleId,
-        requestedByUid: user.uid,
-        windowStartUtc: window.startUtc,
-        windowEndUtc: window.endUtc,
-        title: title,
-        status: 'pending',
-        createdAt: DateTime.now().toUtc(),
-      );
-
-      await docRef.set(request.toFirestore());
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Call scheduled! Your partner will be notified.'),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to schedule: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    }
-  }
 }

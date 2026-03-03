@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../../core/theme/app_theme.dart';
+import '../../shared/models/couple_model.dart';
 import '../../shared/models/overlap_window.dart';
 import '../../shared/models/recurring_window.dart';
 import '../../shared/providers/auth_providers.dart';
@@ -78,7 +81,7 @@ class HomeScreen extends ConsumerWidget {
 
 // ── Timezone section ──────────────────────────────────────────────────────────
 
-class _TimezoneSection extends StatelessWidget {
+class _TimezoneSection extends ConsumerWidget {
   const _TimezoneSection({required this.userTimezone});
 
   final String userTimezone;
@@ -89,9 +92,11 @@ class _TimezoneSection extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final userCity = _cityFromTimezone(userTimezone);
     final userOffset = DateTime.now().timeZoneOffset;
+    final couple = ref.watch(currentCoupleProvider);
+    final user = ref.watch(currentUserProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -99,17 +104,133 @@ class _TimezoneSection extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: Text(
-            'Your time',
+            'Time zones',
             style: Theme.of(context).textTheme.titleLarge,
           ),
         ),
-        TimezoneClock(
-          city: userCity,
-          utcOffset: userOffset,
-          isMe: true,
-          label: 'You',
+        Row(
+          children: [
+            Expanded(
+              child: TimezoneClock(
+                city: userCity,
+                utcOffset: userOffset,
+                isMe: true,
+                label: 'You',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: couple != null && user != null
+                  ? _PartnerClock(
+                      couple: couple,
+                      currentUserUid: user.uid,
+                    )
+                  : _EmptyPartnerClock(),
+            ),
+          ],
         ),
       ],
+    );
+  }
+}
+
+class _PartnerClock extends ConsumerWidget {
+  const _PartnerClock({
+    required this.couple,
+    required this.currentUserUid,
+  });
+
+  final CoupleModel couple;
+  final String currentUserUid;
+
+  String _cityFromTimezone(String tz) {
+    final parts = tz.split('/');
+    return parts.length > 1 ? parts.last.replaceAll('_', ' ') : tz;
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final partnerUid = couple.partnerUid(currentUserUid);
+
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance.collection('users').doc(partnerUid).get(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return _EmptyPartnerClock();
+        }
+
+        final data = snapshot.data!.data() as Map<String, dynamic>;
+        final partnerTz = data['timezone'] as String? ?? 'UTC';
+        final partnerCity = _cityFromTimezone(partnerTz);
+
+        return TimezoneClock(
+          city: partnerCity,
+          // TODO: resolve partner's actual UTC offset from IANA timezone
+          utcOffset: DateTime.now().timeZoneOffset,
+          isMe: false,
+          label: data['displayName'] as String? ?? 'Partner',
+        );
+      },
+    );
+  }
+}
+
+class _EmptyPartnerClock extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: AppColors.partnerB,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                'Partner',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF5A9FE0),
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Not paired yet',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: AppColors.onSurfaceMuted,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Pair to see their time',
+            style: TextStyle(
+              fontSize: 11,
+              color: AppColors.onSurfaceMuted,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -9,7 +9,6 @@ import '../../shared/providers/auth_providers.dart';
 import '../../shared/providers/block_providers.dart';
 import '../../shared/providers/pairing_providers.dart';
 import 'providers/google_calendar_provider.dart';
-import 'providers/microsoft_calendar_provider.dart';
 import 'widgets/week_view.dart';
 
 /// Full week-view calendar screen showing partner blocks, overlap highlights,
@@ -66,16 +65,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     if (user == null || couple == null) return;
 
     final googleConnected = ref.read(googleCalendarConnectionProvider);
-    final msConnected = ref.read(microsoftCalendarConnectionProvider);
-
     if (googleConnected) {
       await ref.read(googleCalendarSyncProvider.notifier).sync(
-            userId: user.uid,
-            coupleId: couple.coupleId,
-          );
-    }
-    if (msConnected) {
-      await ref.read(microsoftCalendarSyncProvider.notifier).sync(
             userId: user.uid,
             coupleId: couple.coupleId,
           );
@@ -180,8 +171,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final couple = ref.watch(currentCoupleProvider);
-    final googleConnected = ref.watch(googleCalendarConnectionProvider);
-    final msConnected = ref.watch(microsoftCalendarConnectionProvider);
 
     final coupleId = couple?.coupleId;
     final blocks = coupleId != null
@@ -218,26 +207,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       ),
       body: Column(
         children: [
-          // Calendar connection banners
-          if (!googleConnected || !msConnected)
-            _ConnectionBanners(
-              googleConnected: googleConnected,
-              msConnected: msConnected,
-              onConnectGoogle: () async {
-                final user = ref.read(currentUserProvider);
-                if (user != null) {
-                  await ref
-                      .read(googleCalendarConnectionsProvider.notifier)
-                      .connectAccount(user.uid);
-                }
-              },
-              onConnectMicrosoft: () async {
-                await ref
-                    .read(microsoftCalendarConnectionProvider.notifier)
-                    .connect();
-              },
-            ),
-
           // Week navigation header
           _WeekNavHeader(
             label: _weekLabel(weekStart),
@@ -280,6 +249,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   freeWindows: freeWindows,
                   myUtcOffset: DateTime.now().timeZoneOffset,
                   partnerUtcOffset: DateTime.now().timeZoneOffset,
+                  myUserId: ref.read(currentUserProvider)?.uid ?? '',
                   onBlockTap: _showBlockDetail,
                 );
               },
@@ -294,98 +264,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 // ---------------------------------------------------------------------------
 // Supporting widgets
 // ---------------------------------------------------------------------------
-
-/// Banners prompting the user to connect Google and/or Microsoft calendars.
-class _ConnectionBanners extends StatelessWidget {
-  const _ConnectionBanners({
-    required this.googleConnected,
-    required this.msConnected,
-    required this.onConnectGoogle,
-    required this.onConnectMicrosoft,
-  });
-
-  final bool googleConnected;
-  final bool msConnected;
-  final VoidCallback onConnectGoogle;
-  final VoidCallback onConnectMicrosoft;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceElevated,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Column(
-        children: [
-          if (!googleConnected)
-            _ConnectTile(
-              icon: Icons.event_rounded,
-              label: 'Google Calendar',
-              color: const Color(0xFF4285F4),
-              onConnect: onConnectGoogle,
-            ),
-          if (!googleConnected && !msConnected) const SizedBox(height: 8),
-          if (!msConnected)
-            _ConnectTile(
-              icon: Icons.calendar_today_rounded,
-              label: 'Microsoft Calendar',
-              color: const Color(0xFF00A4EF),
-              onConnect: onConnectMicrosoft,
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-/// A single row inside [_ConnectionBanners] for one calendar provider.
-class _ConnectTile extends StatelessWidget {
-  const _ConnectTile({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onConnect,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onConnect;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onConnect,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-        child: Row(
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Connect $label',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
-                    ),
-              ),
-            ),
-            const Icon(
-              Icons.add_circle_outline_rounded,
-              color: AppColors.lavenderDark,
-              size: 20,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 /// Chevron-arrow week navigation header with a centred label.
 class _WeekNavHeader extends StatelessWidget {

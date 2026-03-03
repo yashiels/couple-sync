@@ -12,6 +12,7 @@ class BlockOverlay extends StatelessWidget {
     required this.height,
     required this.left,
     required this.width,
+    required this.isMe,
     this.onTap,
   });
 
@@ -20,9 +21,10 @@ class BlockOverlay extends StatelessWidget {
   final double height;
   final double left;
   final double width;
+  final bool isMe;
   final VoidCallback? onTap;
 
-  bool get _isMe => block.userId == 'me';
+  bool get _isMe => isMe;
 
   Color get _blockColor =>
       _isMe ? AppColors.rose : AppColors.partnerB;
