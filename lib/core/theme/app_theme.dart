@@ -41,6 +41,11 @@ class AppColors {
   static const Color textSecondary = onSurfaceMuted;
   static const Color textHint = Color(0xFFB0A3BF);
   static const Color error = Color(0xFFE53935);
+  static const Color success = Color(0xFF7BC47F);
+  static const Color warning = Color(0xFFF5C842);
+  static const Color background = Color(0xFFFFF8F5);
+  static const Color partnerBlueLight = Color(0xFFEBF3FC);
+  static const Color roseLightBg = Color(0xFFFCEEF1);
 
   /// Lavender-to-rose gradient used for hero cards and free-window highlights.
   static const LinearGradient heroGradient = LinearGradient(

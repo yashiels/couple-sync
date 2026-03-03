@@ -6,8 +6,10 @@ import '../models/overlap_window.dart';
 /// Streams the pre-computed overlap result document for a couple.
 final overlapResultProvider = StreamProvider.family<OverlapResult?, String>((ref, coupleId) {
   return FirebaseFirestore.instance
-      .collection('overlapWindows')
+      .collection('overlaps')
       .doc(coupleId)
+      .collection('windows')
+      .doc('latest')
       .snapshots()
       .map((snap) => snap.exists ? OverlapResult.fromFirestore(snap) : null);
 });
