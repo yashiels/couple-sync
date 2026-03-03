@@ -10,6 +10,12 @@ class UserModel {
   final String? coupleId;
   final DateTime createdAt;
 
+  // ── Calendar connection fields ─────────────────────────────────────────────
+  final bool googleConnected;
+  final bool microsoftConnected;
+  final String? microsoftEmail;
+  final String? defaultCoupleCalendarId;
+
   const UserModel({
     required this.uid,
     required this.email,
@@ -18,6 +24,10 @@ class UserModel {
     required this.timezone,
     this.coupleId,
     required this.createdAt,
+    this.googleConnected = false,
+    this.microsoftConnected = false,
+    this.microsoftEmail,
+    this.defaultCoupleCalendarId,
   });
 
   /// Deserialises a [UserModel] from a Firestore [DocumentSnapshot].
@@ -31,6 +41,10 @@ class UserModel {
       timezone: data['timezone'] as String? ?? 'UTC',
       coupleId: data['coupleId'] as String?,
       createdAt: (data['createdAt'] as Timestamp).toDate(),
+      googleConnected: data['googleConnected'] as bool? ?? false,
+      microsoftConnected: data['microsoftConnected'] as bool? ?? false,
+      microsoftEmail: data['microsoftEmail'] as String?,
+      defaultCoupleCalendarId: data['defaultCoupleCalendarId'] as String?,
     );
   }
 
@@ -42,6 +56,10 @@ class UserModel {
         'timezone': timezone,
         'coupleId': coupleId,
         'createdAt': Timestamp.fromDate(createdAt),
+        'googleConnected': googleConnected,
+        'microsoftConnected': microsoftConnected,
+        'microsoftEmail': microsoftEmail,
+        'defaultCoupleCalendarId': defaultCoupleCalendarId,
       };
 
   /// Returns a copy of this user with the given fields replaced.
@@ -50,6 +68,10 @@ class UserModel {
     String? photoUrl,
     String? timezone,
     String? coupleId,
+    bool? googleConnected,
+    bool? microsoftConnected,
+    String? microsoftEmail,
+    String? defaultCoupleCalendarId,
   }) {
     return UserModel(
       uid: uid,
@@ -59,6 +81,11 @@ class UserModel {
       timezone: timezone ?? this.timezone,
       coupleId: coupleId ?? this.coupleId,
       createdAt: createdAt,
+      googleConnected: googleConnected ?? this.googleConnected,
+      microsoftConnected: microsoftConnected ?? this.microsoftConnected,
+      microsoftEmail: microsoftEmail ?? this.microsoftEmail,
+      defaultCoupleCalendarId:
+          defaultCoupleCalendarId ?? this.defaultCoupleCalendarId,
     );
   }
 }
