@@ -7,6 +7,35 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:612024885391:android:5264f30d47fce06d7790fa",
+        "android_client_info": {
+          "package_name": "com.nexiontech.couple_schedule"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "612024885391-uej9s1ibfephpich8emf927j3ccscm6e.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDZxp6dr-a_0tSufbF5C2egEki03iQhBrU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "612024885391-qrn5t5iqigqo53rfianmprdg3526p6i8.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:612024885391:android:2117f4a0a01ec0597790fa",
         "android_client_info": {
           "package_name": "com.skynergroup.stokvelmanager.stokvel_manager"
@@ -14,7 +43,7 @@
       },
       "oauth_client": [
         {
-          "client_id": "612024885391-qrn5t5iqigqo53rfianmprdg3526p6i8.apps.googleusercontent.com",
+          "client_id": "612024885391-uej9s1ibfephpich8emf927j3ccscm6e.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
@@ -43,7 +72,7 @@
       },
       "oauth_client": [
         {
-          "client_id": "612024885391-qrn5t5iqigqo53rfianmprdg3526p6i8.apps.googleusercontent.com",
+          "client_id": "612024885391-uej9s1ibfephpich8emf927j3ccscm6e.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
@@ -72,7 +101,7 @@
       },
       "oauth_client": [
         {
-          "client_id": "612024885391-qrn5t5iqigqo53rfianmprdg3526p6i8.apps.googleusercontent.com",
+          "client_id": "612024885391-uej9s1ibfephpich8emf927j3ccscm6e.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
@@ -101,7 +130,7 @@
       },
       "oauth_client": [
         {
-          "client_id": "612024885391-qrn5t5iqigqo53rfianmprdg3526p6i8.apps.googleusercontent.com",
+          "client_id": "612024885391-uej9s1ibfephpich8emf927j3ccscm6e.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
