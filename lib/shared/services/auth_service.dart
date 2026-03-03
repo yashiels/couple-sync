@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../models/user_model.dart';
@@ -9,7 +10,11 @@ import '../models/user_model.dart';
 class AuthService {
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
-  final GoogleSignIn _googleSignIn;
+
+  // GoogleSignIn is only used on mobile. On web we use Firebase Auth's
+  // signInWithPopup which handles OAuth natively without needing a
+  // separate web client ID.
+  final GoogleSignIn? _googleSignIn;
 
   AuthService({
     FirebaseAuth? auth,
@@ -17,7 +22,7 @@ class AuthService {
     GoogleSignIn? googleSignIn,
   })  : _auth = auth ?? FirebaseAuth.instance,
         _firestore = firestore ?? FirebaseFirestore.instance,
-        _googleSignIn = googleSignIn ?? GoogleSignIn();
+        _googleSignIn = kIsWeb ? null : (googleSignIn ?? GoogleSignIn());
 
   /// Stream of Firebase [User] auth-state changes (null when signed out).
   Stream<User?> get authStateChanges => _auth.authStateChanges();
@@ -28,8 +33,24 @@ class AuthService {
   // --- Google ---
 
   /// Initiates the Google OAuth flow and signs in the resulting user.
+  ///
+  /// On web, uses Firebase Auth's `signInWithPopup` (no separate OAuth client
+  /// needed). On mobile, uses the `google_sign_in` package.
   Future<UserModel> signInWithGoogle() async {
-    final googleUser = await _googleSignIn.signIn();
+    if (kIsWeb) {
+      return _signInWithGoogleWeb();
+    }
+    return _signInWithGoogleMobile();
+  }
+
+  Future<UserModel> _signInWithGoogleWeb() async {
+    final provider = GoogleAuthProvider();
+    final userCred = await _auth.signInWithPopup(provider);
+    return _fetchOrCreateUser(userCred.user!);
+  }
+
+  Future<UserModel> _signInWithGoogleMobile() async {
+    final googleUser = await _googleSignIn!.signIn();
     if (googleUser == null) throw Exception('Google sign-in cancelled');
     final googleAuth = await googleUser.authentication;
     final credential = GoogleAuthProvider.credential(
@@ -82,9 +103,9 @@ class AuthService {
 
   /// Signs the user out of Firebase Auth and Google Sign-In.
   Future<void> signOut() async {
-    await Future.wait([
-      _auth.signOut(),
-      _googleSignIn.signOut(),
-    ]);
+    await _auth.signOut();
+    if (!kIsWeb) {
+      await _googleSignIn?.signOut();
+    }
   }
 }
