@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/models/calendar_connection.dart';
+import '../../../shared/providers/auth_providers.dart';
 import '../services/google_calendar_service.dart';
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -31,7 +32,12 @@ class GoogleCalendarConnectionNotifier
   }
 
   /// Connects a new Google account and persists it.
+  /// Disconnects the current Google session first to force the account picker,
+  /// allowing the user to select a different account.
   Future<bool> connectAccount(String userId) async {
+    // Disconnect first so Google shows the account picker instead of
+    // silently reusing the current session.
+    await _service.disconnect();
     final email = await _service.connectAccount();
     if (email == null) return false;
 
@@ -65,11 +71,20 @@ class GoogleCalendarConnectionNotifier
 }
 
 /// Provider for the list of connected Google Calendar accounts.
+/// Automatically loads connections from the current user's Firestore data.
 final googleCalendarConnectionsProvider = StateNotifierProvider<
     GoogleCalendarConnectionNotifier, List<CalendarConnection>>((ref) {
-  return GoogleCalendarConnectionNotifier(
+  final notifier = GoogleCalendarConnectionNotifier(
     ref.watch(googleCalendarServiceProvider),
   );
+
+  // Auto-load connections from the current user's Firestore data.
+  final user = ref.watch(currentUserProvider);
+  if (user != null) {
+    notifier.loadConnections(user.calendarConnections);
+  }
+
+  return notifier;
 });
 
 // ── Backward-compatible boolean provider ─────────────────────────────────────
