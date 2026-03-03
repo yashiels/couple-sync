@@ -39,17 +39,27 @@ class _CoupleScheduleAppState extends ConsumerState<CoupleScheduleApp> {
   }
 
   Future<void> _hydrateSession() async {
-    final authService = ref.read(authServiceProvider);
-    final firebaseUser = authService.currentUser;
-    if (firebaseUser != null) {
-      final userModel = await authService.fetchUserModel(firebaseUser.uid);
-      if (userModel != null) {
-        ref.read(currentUserProvider.notifier).state = userModel;
-        if (userModel.coupleId != null) {
-          final couple = await authService.fetchCoupleForUser(firebaseUser.uid);
-          ref.read(currentCoupleProvider.notifier).state = couple;
+    try {
+      final authService = ref.read(authServiceProvider);
+      final firebaseUser = authService.currentUser;
+      if (firebaseUser != null) {
+        final userModel = await authService.fetchUserModel(firebaseUser.uid);
+        if (!mounted || authService.currentUser?.uid != firebaseUser.uid) return;
+        if (userModel != null) {
+          ref.read(currentUserProvider.notifier).state = userModel;
+          if (userModel.coupleId != null) {
+            final couple = await authService.fetchCoupleForUser(firebaseUser.uid);
+            if (mounted) {
+              ref.read(currentCoupleProvider.notifier).state = couple;
+            }
+          }
         }
+      } else {
+        ref.read(currentUserProvider.notifier).state = null;
+        ref.read(currentCoupleProvider.notifier).state = null;
       }
+    } catch (e) {
+      debugPrint('Session hydration failed: $e');
     }
   }
 
