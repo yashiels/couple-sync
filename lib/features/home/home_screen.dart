@@ -42,7 +42,7 @@ class HomeScreen extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_rounded),
-            onPressed: () => context.go('/settings'),
+            onPressed: () => context.push('/settings'),
           ),
         ],
       ),
@@ -487,7 +487,7 @@ class _NoCoupleCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: () => context.go('/pairing'),
+            onPressed: () => context.push('/pairing'),
             icon: const Icon(Icons.link_rounded, size: 18),
             label: const Text('Pair now'),
             style: FilledButton.styleFrom(
@@ -694,7 +694,7 @@ class _QuickActionsRowState extends ConsumerState<_QuickActionsRow> {
             _ActionChip(
               icon: Icons.add_rounded,
               label: 'Add Block',
-              onTap: () => context.go('/blocks/add'),
+              onTap: () => context.push('/blocks/add'),
             ),
             const SizedBox(width: 10),
             _ActionChip(
