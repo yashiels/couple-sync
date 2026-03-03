@@ -82,7 +82,7 @@ class CalendarSyncService {
         );
         allBlocks.addAll(blocks);
         if (blocks.isNotEmpty) {
-          await _persistLastSync(userId, BlockSource.google);
+          await _persistLastSync(userId, BlockSource.manual);
         }
         debugPrint('CalendarSyncService: fetched ${blocks.length} Apple blocks');
       } catch (e, st) {

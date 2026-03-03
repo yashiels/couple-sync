@@ -238,12 +238,14 @@ class _CategoryPicker extends StatelessWidget {
   const _CategoryPicker({required this.selected, required this.onSelect});
 
   static const _items = [
+    (BlockCategory.work, Icons.work_rounded, 'Work'),
+    (BlockCategory.study, Icons.menu_book_rounded, 'Study'),
     (BlockCategory.commute, Icons.directions_car_rounded, 'Commute'),
     (BlockCategory.exercise, Icons.fitness_center_rounded, 'Exercise'),
+    (BlockCategory.social, Icons.people_rounded, 'Social'),
     (BlockCategory.meals, Icons.restaurant_rounded, 'Meals'),
     (BlockCategory.sleep, Icons.nightlight_round, 'Sleep'),
     (BlockCategory.personal, Icons.person_rounded, 'Personal'),
-    (BlockCategory.work, Icons.work_rounded, 'Work'),
     (BlockCategory.other, Icons.more_horiz_rounded, 'Other'),
   ];
 

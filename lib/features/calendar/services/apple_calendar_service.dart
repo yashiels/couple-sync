@@ -110,7 +110,7 @@ class AppleCalendarService {
             endUtc: end.toUtc(),
             type: BlockType.busy,
             timezone: 'UTC',
-            source: BlockSource.google,
+            source: BlockSource.manual,
             visibility: TimeBlockVisibility.bothPartners,
             category: BlockCategory.other,
             createdAt: DateTime.now().toUtc(),
