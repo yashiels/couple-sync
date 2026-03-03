@@ -1,13 +1,13 @@
 import 'package:device_calendar/device_calendar.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../../core/models/time_block.dart';
+import '../../../shared/models/time_block_model.dart';
 
 /// Provides Apple / device calendar integration via the device_calendar plugin.
 ///
 /// On iOS this reads from EventKit (Apple Calendar).
 /// On Android this reads from the system calendar store.
-/// Permission denial is handled gracefully — callers receive an empty list.
+/// Permission denial is handled gracefully -- callers receive an empty list.
 class AppleCalendarService {
   AppleCalendarService({DeviceCalendarPlugin? plugin})
       : _plugin = plugin ?? DeviceCalendarPlugin();
@@ -67,7 +67,7 @@ class AppleCalendarService {
   // ── Event fetch ───────────────────────────────────────────────────────────
 
   /// Reads all events from all device calendars for the next [days] days and
-  /// converts them to [TimeBlock] models (source = apple, visibility = busy).
+  /// converts them to [TimeBlock] models (source = google, type = busy).
   ///
   /// Events with null start or end times are skipped.
   /// Returns an empty list when permission is denied.
@@ -103,15 +103,17 @@ class AppleCalendarService {
 
           blocks.add(TimeBlock(
             id: '',
-            startUtc: start.toUtc(),
-            endUtc: end.toUtc(),
-            owner: BlockOwner.me,
-            type: BlockType.calendarEvent,
-            timezone: 'UTC',
             userId: userId,
             coupleId: coupleId,
-            source: CalendarSource.apple,
-            visibility: TimeBlockVisibility.busy,
+            title: event.title ?? 'Busy',
+            startUtc: start.toUtc(),
+            endUtc: end.toUtc(),
+            type: BlockType.busy,
+            timezone: 'UTC',
+            source: BlockSource.google,
+            visibility: TimeBlockVisibility.bothPartners,
+            category: BlockCategory.other,
+            createdAt: DateTime.now().toUtc(),
           ));
         }
       } catch (e) {

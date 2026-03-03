@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../../core/models/time_block.dart';
+import '../../../shared/models/free_window.dart';
+import '../../../shared/models/time_block_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/mock_data.dart';
 import '../widgets/week_view.dart';
@@ -287,9 +288,11 @@ class _BlockDetailSheet extends StatelessWidget {
   final Duration myOffset;
   final Duration partnerOffset;
 
+  bool get _isMe => block.userId == 'me';
+
   @override
   Widget build(BuildContext context) {
-    final offset = block.owner == BlockOwner.me ? myOffset : partnerOffset;
+    final offset = _isMe ? myOffset : partnerOffset;
     final localStart = block.startUtc.add(offset);
     final localEnd = block.endUtc.add(offset);
     final timeRange =
@@ -306,7 +309,7 @@ class _BlockDetailSheet extends StatelessWidget {
                 width: 10,
                 height: 10,
                 decoration: BoxDecoration(
-                  color: block.owner == BlockOwner.me
+                  color: _isMe
                       ? AppColors.rose
                       : AppColors.partnerB,
                   shape: BoxShape.circle,
@@ -314,7 +317,7 @@ class _BlockDetailSheet extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                block.owner == BlockOwner.me ? 'Your block' : 'Partner\'s block',
+                _isMe ? 'Your block' : 'Partner\'s block',
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -325,7 +328,7 @@ class _BlockDetailSheet extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            block.title ?? 'Busy',
+            block.title,
             style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w700,

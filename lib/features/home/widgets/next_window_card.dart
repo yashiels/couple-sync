@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../../core/models/time_block.dart';
+import '../../../shared/models/free_window.dart';
 import '../../../core/theme/app_theme.dart';
 
 /// Hero card showing the soonest upcoming [FreeWindow] with a live countdown

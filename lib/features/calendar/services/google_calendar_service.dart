@@ -4,7 +4,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 import 'package:http/http.dart' as http;
 
-import '../../../core/models/time_block.dart';
+import '../../../shared/models/time_block_model.dart';
 
 /// Provides Google Calendar integration via OAuth 2.0 + CalendarApi freebusy.
 class GoogleCalendarService {
@@ -87,15 +87,17 @@ class GoogleCalendarService {
       return (primaryCal.busy ?? []).map((period) {
         return TimeBlock(
           id: '',
-          startUtc: period.start!.toUtc(),
-          endUtc: period.end!.toUtc(),
-          owner: BlockOwner.me,
-          type: BlockType.calendarEvent,
-          timezone: 'UTC',
           userId: userId,
           coupleId: coupleId,
-          source: CalendarSource.google,
-          visibility: TimeBlockVisibility.busy,
+          title: 'Busy',
+          startUtc: period.start!.toUtc(),
+          endUtc: period.end!.toUtc(),
+          type: BlockType.busy,
+          timezone: 'UTC',
+          source: BlockSource.google,
+          visibility: TimeBlockVisibility.bothPartners,
+          category: BlockCategory.other,
+          createdAt: DateTime.now().toUtc(),
         );
       }).toList();
     } finally {
@@ -123,7 +125,7 @@ class GoogleCalendarService {
     // Remove stale Google blocks for this user.
     final stale = await blocksRef
         .where('userId', isEqualTo: userId)
-        .where('source', isEqualTo: CalendarSource.google.name)
+        .where('source', isEqualTo: BlockSource.google.name)
         .get();
     for (final doc in stale.docs) {
       batch.delete(doc.reference);
@@ -143,7 +145,7 @@ class GoogleCalendarService {
       {
         'calendarSources': {
           'google': {
-            'provider': CalendarSource.google.name,
+            'provider': BlockSource.google.name,
             'connected': true,
             'lastSync': FieldValue.serverTimestamp(),
             'accountEmail': connectedEmail,

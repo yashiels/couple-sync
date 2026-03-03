@@ -1,21 +1,23 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Coarse classification of a block: marks the partner busy or free.
-enum BlockType { busy, free }
+/// Coarse classification of a block: marks the partner busy, free, or tentative.
+enum BlockType { busy, free, tentative }
 
 /// Lifestyle category used to group custom blocks.
 enum BlockCategory {
+  work,
+  study,
   commute,
   exercise,
+  social,
   meals,
   sleep,
   personal,
-  work,
   other,
 }
 
 /// The calendar platform that originated a block.
-enum CalendarSource { google, apple, outlook, manual }
+enum BlockSource { google, microsoft, manual }
 
 /// Controls which partners can see the full details of a block.
 enum TimeBlockVisibility { bothPartners, onlyMe }
@@ -34,7 +36,7 @@ class TimeBlock {
   final DateTime endUtc;
   final String timezone;       // IANA id of the block's local timezone
   final String? recurrenceRule; // RFC 5545 RRULE string, null = no recurrence
-  final CalendarSource source;
+  final BlockSource source;
   final TimeBlockVisibility visibility;
   final BlockCategory category;
   final DateTime createdAt;
@@ -71,7 +73,7 @@ class TimeBlock {
       endUtc: (d['endUtc'] as Timestamp).toDate().toUtc(),
       timezone: d['timezone'] as String? ?? 'UTC',
       recurrenceRule: d['recurrenceRule'] as String?,
-      source: CalendarSource.values.firstWhere((e) => e.name == d['source'], orElse: () => CalendarSource.manual),
+      source: BlockSource.values.firstWhere((e) => e.name == d['source'], orElse: () => BlockSource.manual),
       visibility: TimeBlockVisibility.values.firstWhere((e) => e.name == d['visibility'], orElse: () => TimeBlockVisibility.bothPartners),
       category: BlockCategory.values.firstWhere((e) => e.name == d['category'], orElse: () => BlockCategory.other),
       createdAt: (d['createdAt'] as Timestamp).toDate().toUtc(),
@@ -102,7 +104,7 @@ class TimeBlock {
     String? timezone,
     String? recurrenceRule,
     BlockType? type,
-    CalendarSource? source,
+    BlockSource? source,
     TimeBlockVisibility? visibility,
     BlockCategory? category,
   }) {

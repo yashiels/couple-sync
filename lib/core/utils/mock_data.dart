@@ -1,4 +1,5 @@
-import '../models/time_block.dart';
+import '../../shared/models/free_window.dart';
+import '../../shared/models/time_block_model.dart';
 
 /// Design-time mock data for UI development.
 class MockData {
@@ -16,54 +17,81 @@ class MockData {
     return [
       TimeBlock(
         id: '1',
+        userId: 'me',
         title: 'Team standup',
         startUtc: today.add(const Duration(hours: 14)), // 9am EST
         endUtc: today.add(const Duration(hours: 14, minutes: 30)),
-        owner: BlockOwner.me,
-        type: BlockType.calendarEvent,
+        type: BlockType.busy,
         timezone: myTimezone,
+        source: BlockSource.google,
+        visibility: TimeBlockVisibility.bothPartners,
+        category: BlockCategory.work,
+        createdAt: DateTime.now().toUtc(),
       ),
       TimeBlock(
         id: '2',
+        userId: 'me',
         title: 'Commute',
         startUtc: today.add(const Duration(hours: 12)), // 7am EST
         endUtc: today.add(const Duration(hours: 13)),
-        owner: BlockOwner.me,
-        type: BlockType.recurring,
+        type: BlockType.busy,
         timezone: myTimezone,
+        source: BlockSource.manual,
+        visibility: TimeBlockVisibility.bothPartners,
+        category: BlockCategory.commute,
+        createdAt: DateTime.now().toUtc(),
       ),
       TimeBlock(
         id: '3',
+        userId: 'me',
         title: 'Gym',
         startUtc: today.add(const Duration(hours: 23)), // 6pm EST
         endUtc: today.add(const Duration(hours: 24)),
-        owner: BlockOwner.me,
-        type: BlockType.recurring,
+        type: BlockType.busy,
         timezone: myTimezone,
+        source: BlockSource.manual,
+        visibility: TimeBlockVisibility.bothPartners,
+        category: BlockCategory.exercise,
+        createdAt: DateTime.now().toUtc(),
       ),
       TimeBlock(
         id: '4',
+        userId: 'partner',
+        title: 'Busy',
         startUtc: today.add(const Duration(hours: 9)), // 9am GMT
         endUtc: today.add(const Duration(hours: 10)),
-        owner: BlockOwner.partner,
-        type: BlockType.calendarEvent,
+        type: BlockType.busy,
         timezone: partnerTimezone,
+        source: BlockSource.google,
+        visibility: TimeBlockVisibility.bothPartners,
+        category: BlockCategory.other,
+        createdAt: DateTime.now().toUtc(),
       ),
       TimeBlock(
         id: '5',
+        userId: 'partner',
+        title: 'Busy',
         startUtc: today.add(const Duration(hours: 13)), // 1pm GMT
         endUtc: today.add(const Duration(hours: 14)),
-        owner: BlockOwner.partner,
-        type: BlockType.calendarEvent,
+        type: BlockType.busy,
         timezone: partnerTimezone,
+        source: BlockSource.google,
+        visibility: TimeBlockVisibility.bothPartners,
+        category: BlockCategory.other,
+        createdAt: DateTime.now().toUtc(),
       ),
       TimeBlock(
         id: '6',
+        userId: 'partner',
+        title: 'Busy',
         startUtc: today.add(const Duration(hours: 18)), // 6pm GMT
         endUtc: today.add(const Duration(hours: 19)),
-        owner: BlockOwner.partner,
-        type: BlockType.recurring,
+        type: BlockType.busy,
         timezone: partnerTimezone,
+        source: BlockSource.manual,
+        visibility: TimeBlockVisibility.bothPartners,
+        category: BlockCategory.other,
+        createdAt: DateTime.now().toUtc(),
       ),
     ];
   }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../../core/models/time_block.dart';
+import '../../../shared/models/time_block_model.dart';
 import '../../../core/theme/app_theme.dart';
 
 /// Horizontally scrollable timeline showing today's blocks for both partners
@@ -79,7 +79,7 @@ class DailyTimeline extends StatelessWidget {
                   _BlockTrack(
                     label: 'You',
                     labelColor: AppColors.rose,
-                    blocks: blocks.where((b) => b.owner == BlockOwner.me).toList(),
+                    blocks: blocks.where((b) => b.userId == 'me').toList(),
                     color: AppColors.rose,
                     startHour: _startHour,
                     hourWidth: _hourWidth,
@@ -91,7 +91,7 @@ class DailyTimeline extends StatelessWidget {
                   _BlockTrack(
                     label: 'Partner',
                     labelColor: AppColors.partnerB,
-                    blocks: blocks.where((b) => b.owner == BlockOwner.partner).toList(),
+                    blocks: blocks.where((b) => b.userId != 'me').toList(),
                     color: AppColors.partnerB,
                     startHour: _startHour,
                     hourWidth: _hourWidth,
@@ -243,7 +243,7 @@ class _BlockTrack extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 6),
         child: width > 30
             ? Text(
-                block.title ?? (block.owner == BlockOwner.me ? 'Busy' : 'Busy'),
+                block.title.isNotEmpty ? block.title : 'Busy',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(

@@ -1,13 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
-// The calendar feature intentionally uses lib/core/models/time_block.dart
-// (BlockType.calendarEvent / customBlock / recurring) instead of
-// lib/shared/models/time_block_model.dart (BlockType.busy / free).
-// Calendar-synced blocks are always written with type == 'calendarEvent' so
-// that _writeToFirestore can identify and replace them without touching
-// manually-created blocks (which use the shared BlockType.busy / free values).
-import '../../../core/models/time_block.dart';
+import '../../../shared/models/time_block_model.dart';
 import 'apple_calendar_service.dart';
 import 'google_calendar_service.dart';
 
@@ -72,7 +66,7 @@ class CalendarSyncService {
           coupleId: coupleId,
         );
         allBlocks.addAll(blocks);
-        await _persistLastSync(userId, CalendarSource.google);
+        await _persistLastSync(userId, BlockSource.google);
         debugPrint('CalendarSyncService: fetched ${blocks.length} Google blocks');
       } catch (e, st) {
         debugPrint('CalendarSyncService Google error: $e\n$st');
@@ -88,7 +82,7 @@ class CalendarSyncService {
         );
         allBlocks.addAll(blocks);
         if (blocks.isNotEmpty) {
-          await _persistLastSync(userId, CalendarSource.apple);
+          await _persistLastSync(userId, BlockSource.google);
         }
         debugPrint('CalendarSyncService: fetched ${blocks.length} Apple blocks');
       } catch (e, st) {
@@ -119,7 +113,7 @@ class CalendarSyncService {
     final seen = <String>{};
     return blocks.where((b) {
       final key =
-          '${b.source?.name ?? 'none'}_${b.startUtc.millisecondsSinceEpoch}_'
+          '${b.source.name}_${b.startUtc.millisecondsSinceEpoch}_'
           '${b.endUtc.millisecondsSinceEpoch}';
       return seen.add(key);
     }).toList();
@@ -141,7 +135,7 @@ class CalendarSyncService {
     // blocks and re-insert fresh ones. Split into chunks if needed.
     final stale = await blocksRef
         .where('userId', isEqualTo: userId)
-        .where('type', isEqualTo: BlockType.calendarEvent.name)
+        .where('source', whereIn: [BlockSource.google.name, BlockSource.microsoft.name])
         .get();
 
     final toDelete = stale.docs.map((d) => d.reference).toList();
@@ -172,7 +166,7 @@ class CalendarSyncService {
     }
   }
 
-  Future<void> _persistLastSync(String userId, CalendarSource source) async {
+  Future<void> _persistLastSync(String userId, BlockSource source) async {
     await _firestore.collection('users').doc(userId).set(
       {
         'calendarSources': {

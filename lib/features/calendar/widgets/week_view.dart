@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../../core/models/time_block.dart';
+import '../../../shared/models/free_window.dart';
+import '../../../shared/models/time_block_model.dart';
 import '../../../core/theme/app_theme.dart';
 import 'block_overlay.dart';
 
@@ -118,8 +119,8 @@ class WeekView extends StatelessWidget {
     List<DateTime> days,
     double colWidth,
   ) {
-    final localOffset =
-        block.owner == BlockOwner.me ? myUtcOffset : partnerUtcOffset;
+    final isMe = block.userId == 'me';
+    final localOffset = isMe ? myUtcOffset : partnerUtcOffset;
     final localStart = block.startUtc.add(localOffset);
     final localEnd = block.endUtc.add(localOffset);
 
@@ -134,7 +135,6 @@ class WeekView extends StatelessWidget {
         final h = (bottom - top).clamp(12.0, double.infinity);
 
         // Split column: me on left half, partner on right half
-        final isMe = block.owner == BlockOwner.me;
         final left = i * colWidth + (isMe ? 1 : colWidth / 2);
         final width = colWidth / 2 - 2;
 

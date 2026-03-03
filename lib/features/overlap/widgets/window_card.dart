@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../../core/models/time_block.dart';
+import '../../../shared/models/free_window.dart';
 import '../../../core/theme/app_theme.dart';
 
 /// Card widget showing a single [FreeWindow] with both partners' local times.

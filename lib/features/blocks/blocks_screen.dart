@@ -99,6 +99,8 @@ class _BlockCard extends ConsumerWidget {
       BlockCategory.sleep => Icons.nightlight_round,
       BlockCategory.personal => Icons.person_rounded,
       BlockCategory.work => Icons.work_rounded,
+      BlockCategory.study => Icons.school_rounded,
+      BlockCategory.social => Icons.groups_rounded,
       BlockCategory.other => Icons.block_rounded,
     };
   }

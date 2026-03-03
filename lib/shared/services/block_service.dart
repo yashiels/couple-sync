@@ -40,7 +40,7 @@ class BlockService {
       endUtc: endUtc.toUtc(),
       timezone: timezone,
       recurrenceRule: recurrenceRule,
-      source: CalendarSource.manual,
+      source: BlockSource.manual,
       visibility: visibility,
       category: category,
       createdAt: DateTime.now().toUtc(),

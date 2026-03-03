@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../core/models/time_block.dart';
+import '../../../shared/models/time_block_model.dart';
 import '../../../core/theme/app_theme.dart';
 
 /// A positioned, tappable coloured bar representing a [TimeBlock] in the
@@ -22,8 +22,10 @@ class BlockOverlay extends StatelessWidget {
   final double width;
   final VoidCallback? onTap;
 
+  bool get _isMe => block.userId == 'me';
+
   Color get _blockColor =>
-      block.owner == BlockOwner.me ? AppColors.rose : AppColors.partnerB;
+      _isMe ? AppColors.rose : AppColors.partnerB;
 
   @override
   Widget build(BuildContext context) {
@@ -56,8 +58,9 @@ class BlockOverlay extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      block.title ??
-                          (block.owner == BlockOwner.me ? 'Busy' : 'Partner busy'),
+                      block.title.isNotEmpty
+                          ? block.title
+                          : (_isMe ? 'Busy' : 'Partner busy'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -69,7 +72,7 @@ class BlockOverlay extends StatelessWidget {
                     ),
                     if (height > 40)
                       Text(
-                        block.owner == BlockOwner.me ? 'You' : 'Partner',
+                        _isMe ? 'You' : 'Partner',
                         style: const TextStyle(
                           fontSize: 9,
                           color: Colors.white70,
@@ -83,7 +86,7 @@ class BlockOverlay extends StatelessWidget {
   }
 }
 
-/// Overlap highlight — a translucent gradient band on the calendar.
+/// Overlap highlight -- a translucent gradient band on the calendar.
 class OverlapOverlay extends StatelessWidget {
   const OverlapOverlay({
     super.key,

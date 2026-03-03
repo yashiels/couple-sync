@@ -1,10 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../../core/models/time_block.dart';
+import '../../../shared/models/time_block_model.dart';
 
 /// Represents a connected calendar source for a user.
 class CalendarSourceModel {
-  final CalendarSource provider;
+  final BlockSource provider;
   final bool connected;
   final DateTime? lastSync;
   final String? accountEmail;
@@ -35,9 +35,9 @@ class CalendarSourceModel {
     }
 
     return CalendarSourceModel(
-      provider: CalendarSource.values.firstWhere(
+      provider: BlockSource.values.firstWhere(
         (e) => e.name == map['provider'],
-        orElse: () => CalendarSource.manual,
+        orElse: () => BlockSource.manual,
       ),
       connected: map['connected'] as bool? ?? false,
       lastSync: lastSync,
@@ -47,7 +47,7 @@ class CalendarSourceModel {
 
   /// Returns a copy of this model with the given fields replaced.
   CalendarSourceModel copyWith({
-    CalendarSource? provider,
+    BlockSource? provider,
     bool? connected,
     DateTime? lastSync,
     String? accountEmail,
