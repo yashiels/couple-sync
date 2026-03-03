@@ -49,6 +49,10 @@ class MicrosoftCalendarService {
   /// Returns `true` when the user successfully grants access, `false` if the
   /// flow is cancelled or fails.
   Future<bool> connect() async {
+    if (_clientId == 'YOUR_MS_CLIENT_ID') {
+      debugPrint('Microsoft Calendar: client ID not configured');
+      return false;
+    }
     try {
       final result = await _appAuth.authorizeAndExchangeCode(
         AuthorizationTokenRequest(
