@@ -1,27 +1,17 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../../shared/models/couple_model.dart';
 import '../../shared/models/overlap_window.dart';
 import '../../shared/models/recurring_window.dart';
-import '../../shared/models/user_model.dart';
 import '../../shared/providers/auth_providers.dart';
 import '../../shared/providers/overlap_providers.dart';
 import '../../shared/providers/pairing_providers.dart';
 import '../../shared/providers/pattern_providers.dart';
 import '../calendar/providers/google_calendar_provider.dart';
 import 'widgets/timezone_clock.dart';
-
-/// Fetches partner UserModel from Firestore.
-final _partnerProvider = FutureProvider.family<UserModel?, String>((ref, uid) async {
-  final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-  if (!doc.exists) return null;
-  return UserModel.fromFirestore(doc);
-});
 
 /// The main home screen with timezone clocks, hero window card, patterns
 /// section, and quick-action chips. All data is Firestore-backed via Riverpod.
@@ -58,12 +48,7 @@ class HomeScreen extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           children: [
             // ── Timezone clock section ──────────────────────────────────
-            _TimezoneSection(
-              userTimezone: user.timezone,
-              coupleId: coupleId,
-              couple: couple,
-              currentUid: user.uid,
-            ),
+            _TimezoneSection(userTimezone: user.timezone),
 
             const SizedBox(height: 20),
 
@@ -93,44 +78,20 @@ class HomeScreen extends ConsumerWidget {
 
 // ── Timezone section ──────────────────────────────────────────────────────────
 
-class _TimezoneSection extends ConsumerWidget {
-  const _TimezoneSection({
-    required this.userTimezone,
-    required this.coupleId,
-    required this.couple,
-    required this.currentUid,
-  });
+class _TimezoneSection extends StatelessWidget {
+  const _TimezoneSection({required this.userTimezone});
 
   final String userTimezone;
-  final String? coupleId;
-  final CoupleModel? couple;
-  final String currentUid;
 
-  /// Extracts a presentable city name from an IANA timezone id.
-  static String _cityFromTimezone(String tz) {
+  String _cityFromTimezone(String tz) {
     final parts = tz.split('/');
-    return parts.length > 1
-        ? parts.last.replaceAll('_', ' ')
-        : tz;
-  }
-
-  /// Estimates the UTC offset for a timezone by its IANA name.
-  ///
-  /// For a production app this should use a real timezone library; this
-  /// simplified version uses the device's local offset for the user's own
-  /// timezone and returns [Duration.zero] for unknown zones.
-  static Duration _estimateOffset(String tz) {
-    // Use device local offset as a reasonable estimate for the current user's
-    // timezone. For partner timezones we would need a proper tz database.
-    return DateTime.now().timeZoneOffset;
+    return parts.length > 1 ? parts.last.replaceAll('_', ' ') : tz;
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final userCity = _cityFromTimezone(userTimezone);
-    final userOffset = _estimateOffset(userTimezone);
-
-    final partnerUid = couple?.partnerUid(currentUid);
+    final userOffset = DateTime.now().timeZoneOffset;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -138,57 +99,17 @@ class _TimezoneSection extends ConsumerWidget {
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: Text(
-            'Time zones',
+            'Your time',
             style: Theme.of(context).textTheme.titleLarge,
           ),
         ),
-        Row(
-          children: [
-            Expanded(
-              child: TimezoneClock(
-                city: userCity,
-                utcOffset: userOffset,
-                isMe: true,
-                label: 'You',
-              ),
-            ),
-            if (partnerUid != null) ...[
-              const SizedBox(width: 12),
-              Expanded(
-                child: _PartnerClock(partnerUid: partnerUid),
-              ),
-            ],
-          ],
+        TimezoneClock(
+          city: userCity,
+          utcOffset: userOffset,
+          isMe: true,
+          label: 'You',
         ),
       ],
-    );
-  }
-}
-
-class _PartnerClock extends ConsumerWidget {
-  const _PartnerClock({required this.partnerUid});
-  final String partnerUid;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final partnerAsync = ref.watch(_partnerProvider(partnerUid));
-    return partnerAsync.when(
-      data: (partner) {
-        if (partner == null) return const SizedBox.shrink();
-        final city = _TimezoneSection._cityFromTimezone(partner.timezone);
-        final offset = _TimezoneSection._estimateOffset(partner.timezone);
-        return TimezoneClock(
-          city: city,
-          utcOffset: offset,
-          isMe: false,
-          label: partner.displayName.split(' ').first,
-        );
-      },
-      loading: () => const SizedBox(
-        height: 80,
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-      ),
-      error: (_, _) => const SizedBox.shrink(),
     );
   }
 }
