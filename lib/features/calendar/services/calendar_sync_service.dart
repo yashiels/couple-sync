@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../shared/models/time_block_model.dart';
 import 'google_calendar_service.dart';
+import 'microsoft_calendar_service.dart';
 
 /// Result of a calendar sync operation.
 class SyncResult {
@@ -33,23 +34,27 @@ class SyncResult {
 class CalendarSyncService {
   CalendarSyncService({
     required GoogleCalendarService googleService,
+    required MicrosoftCalendarService microsoftService,
     FirebaseFirestore? firestore,
   })  : _google = googleService,
+        _microsoft = microsoftService,
         _firestore = firestore ?? FirebaseFirestore.instance;
 
   final GoogleCalendarService _google;
+  final MicrosoftCalendarService _microsoft;
   final FirebaseFirestore _firestore;
 
   // ── Public API ────────────────────────────────────────────────────────────
 
   /// Syncs all connected calendar sources for [userId] in couple [coupleId].
   ///
-  /// Pass [syncGoogle] as false to skip Google Calendar.
+  /// Pass [syncGoogle] or [syncMicrosoft] as `false` to skip that source.
   /// Returns a [SyncResult] describing what was written and any errors.
   Future<SyncResult> sync({
     required String userId,
     required String coupleId,
     bool syncGoogle = true,
+    bool syncMicrosoft = true,
   }) async {
     final allBlocks = <TimeBlock>[];
     final errors = <String>[];
@@ -66,6 +71,23 @@ class CalendarSyncService {
       } catch (e, st) {
         debugPrint('CalendarSyncService Google error: $e\n$st');
         errors.add('Google Calendar: $e');
+      }
+    }
+
+    if (syncMicrosoft && _microsoft.isConnected) {
+      try {
+        final blocks = await _microsoft.fetchBusyPeriods(
+          userId: userId,
+          coupleId: coupleId,
+        );
+        allBlocks.addAll(blocks);
+        await _persistLastSync(userId, BlockSource.microsoft);
+        debugPrint(
+          'CalendarSyncService: fetched ${blocks.length} Microsoft blocks',
+        );
+      } catch (e, st) {
+        debugPrint('CalendarSyncService Microsoft error: $e\n$st');
+        errors.add('Microsoft Calendar: $e');
       }
     }
 
