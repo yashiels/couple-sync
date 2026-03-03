@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../shared/models/calendar_connection.dart';
 import '../../shared/providers/auth_providers.dart';
+import '../../shared/providers/pairing_providers.dart';
 import '../calendar/providers/google_calendar_provider.dart';
 
 /// Full settings screen with calendar connections, notifications, privacy,
@@ -385,8 +387,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Unpair from partner?'),
         content: const Text(
-          'This will remove the connection with your partner. '
-          'You can pair again later with a new code.',
+          'This will disconnect your calendars and remove the pairing. '
+          'You can pair again later with a new invite code.',
         ),
         actions: [
           TextButton(
@@ -402,7 +404,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ),
     );
     if (confirmed == true && mounted) {
-      // TODO: Implement unpair logic via a dedicated service.
+      final couple = ref.read(currentCoupleProvider);
+      if (couple != null) {
+        await ref.read(pairingServiceProvider).unpair(couple);
+        ref.read(currentCoupleProvider.notifier).state = null;
+      }
+      if (context.mounted) {
+        context.go('/pairing');
+      }
     }
   }
 }
