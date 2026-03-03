@@ -3,7 +3,7 @@ import * as admin from "firebase-admin";
 import { DateTime } from "luxon";
 import { suggestActivities } from "./gemini";
 
-const db = admin.firestore();
+const getDb = () => admin.firestore();
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -58,7 +58,7 @@ export const onBlockWrite = functions.firestore
 
 async function runOverlapEngine(coupleId: string): Promise<OverlapWindowDoc[]> {
   // 1. Fetch couple document
-  const coupleDoc = await db.collection("couples").doc(coupleId).get();
+  const coupleDoc = await getDb().collection("couples").doc(coupleId).get();
   if (!coupleDoc.exists) {
     functions.logger.warn(`Couple ${coupleId} not found`);
     return [];
@@ -67,8 +67,8 @@ async function runOverlapEngine(coupleId: string): Promise<OverlapWindowDoc[]> {
 
   // 2. Fetch user timezones
   const [userADoc, userBDoc] = await Promise.all([
-    db.collection("users").doc(userAUid).get(),
-    db.collection("users").doc(userBUid).get(),
+    getDb().collection("users").doc(userAUid).get(),
+    getDb().collection("users").doc(userBUid).get(),
   ]);
 
   const tzA: string = (userADoc.exists && userADoc.data()?.timezone) ? userADoc.data()!.timezone : "UTC";
@@ -79,7 +79,7 @@ async function runOverlapEngine(coupleId: string): Promise<OverlapWindowDoc[]> {
   const toMs = fromMs + LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000;
 
   // 4. Fetch all blocks within the horizon
-  const blocksSnap = await db
+  const blocksSnap = await getDb()
     .collection("timeblocks")
     .doc(coupleId)
     .collection("blocks")
@@ -146,7 +146,7 @@ async function runOverlapEngine(coupleId: string): Promise<OverlapWindowDoc[]> {
     suggestedActivity: suggestions.get(i) || null,
   }));
 
-  await db.collection("overlaps").doc(coupleId).collection("windows").doc("latest").set({
+  await getDb().collection("overlaps").doc(coupleId).collection("windows").doc("latest").set({
     windows: output,
     computedAt: admin.firestore.FieldValue.serverTimestamp(),
     coupleId,

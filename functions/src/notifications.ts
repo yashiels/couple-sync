@@ -1,7 +1,7 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 
-const db = admin.firestore();
+const getDb = () => admin.firestore();
 
 interface OverlapWindowDoc {
   startUtc: number;
@@ -39,7 +39,7 @@ export const onOverlapWrite = functions.firestore
     }
 
     // Fetch couple to get user UIDs
-    const coupleDoc = await db.collection("couples").doc(coupleId).get();
+    const coupleDoc = await getDb().collection("couples").doc(coupleId).get();
     if (!coupleDoc.exists) return;
     const { userAUid, userBUid } = coupleDoc.data() as { userAUid: string; userBUid: string };
 
@@ -108,7 +108,7 @@ export const onOverlapWrite = functions.firestore
 async function collectFcmTokens(uids: string[]): Promise<string[]> {
   const tokens: string[] = [];
   for (const uid of uids) {
-    const userDoc = await db.collection("users").doc(uid).get();
+    const userDoc = await getDb().collection("users").doc(uid).get();
     if (userDoc.exists) {
       const token: string | undefined = userDoc.data()?.fcmToken;
       if (token) tokens.push(token);
@@ -122,7 +122,7 @@ async function pruneStaleTokens(
   tokens: string[],
   uids: string[]
 ): Promise<void> {
-  const batch = db.batch();
+  const batch = getDb().batch();
   let pruned = false;
 
   for (let i = 0; i < result.responses.length; i++) {
@@ -130,9 +130,9 @@ async function pruneStaleTokens(
     if (!resp.success && resp.error?.code === "messaging/registration-token-not-registered") {
       // Find which user held this token and clear it
       for (const uid of uids) {
-        const userDoc = await db.collection("users").doc(uid).get();
+        const userDoc = await getDb().collection("users").doc(uid).get();
         if (userDoc.exists && userDoc.data()?.fcmToken === tokens[i]) {
-          batch.update(db.collection("users").doc(uid), { fcmToken: admin.firestore.FieldValue.delete() });
+          batch.update(getDb().collection("users").doc(uid), { fcmToken: admin.firestore.FieldValue.delete() });
           pruned = true;
         }
       }

@@ -3,7 +3,7 @@ import * as admin from "firebase-admin";
 import { DateTime } from "luxon";
 import { suggestActivities } from "./gemini";
 
-const db = admin.firestore();
+const getDb = () => admin.firestore();
 
 interface RecurringWindow {
   dayOfWeek: string;
@@ -19,7 +19,7 @@ export const detectPatterns = functions.pubsub
   .schedule("every sunday 00:00")
   .timeZone("UTC")
   .onRun(async () => {
-    const couplesSnap = await db.collection("couples").get();
+    const couplesSnap = await getDb().collection("couples").get();
     for (const coupleDoc of couplesSnap.docs) {
       await analyzePatterns(coupleDoc.id);
     }
@@ -34,7 +34,7 @@ export const detectPatternsManual = functions.firestore
 async function analyzePatterns(coupleId: string): Promise<void> {
   const days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
-  const windowsDoc = await db
+  const windowsDoc = await getDb()
     .collection("overlaps")
     .doc(coupleId)
     .collection("windows")
@@ -105,8 +105,8 @@ async function analyzePatterns(coupleId: string): Promise<void> {
     patterns[i].suggestedActivity = suggestions.get(i) || null;
   }
 
-  const batch = db.batch();
-  const patternsRef = db.collection("couples").doc(coupleId).collection("recurringWindows");
+  const batch = getDb().batch();
+  const patternsRef = getDb().collection("couples").doc(coupleId).collection("recurringWindows");
 
   const oldPatterns = await patternsRef.where("confirmed", "==", false).get();
   for (const doc of oldPatterns.docs) {
