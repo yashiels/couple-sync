@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../models/couple_model.dart';
 import '../models/user_model.dart';
 
 /// Handles Firebase Auth operations and keeps the `users` Firestore collection
@@ -29,6 +30,34 @@ class AuthService {
 
   /// The currently signed-in Firebase [User], or `null` if not authenticated.
   User? get currentUser => _auth.currentUser;
+
+  /// Fetches the [UserModel] for [uid] from Firestore, or `null` if missing.
+  Future<UserModel?> fetchUserModel(String uid) async {
+    final doc = await _firestore.collection('users').doc(uid).get();
+    if (!doc.exists) return null;
+    return UserModel.fromFirestore(doc);
+  }
+
+  /// Fetches the [CoupleModel] where [uid] is userA or userB, or `null`.
+  Future<CoupleModel?> fetchCoupleForUser(String uid) async {
+    // Check userA
+    var query = await _firestore
+        .collection('couples')
+        .where('userAUid', isEqualTo: uid)
+        .limit(1)
+        .get();
+    if (query.docs.isNotEmpty) return CoupleModel.fromFirestore(query.docs.first);
+
+    // Check userB
+    query = await _firestore
+        .collection('couples')
+        .where('userBUid', isEqualTo: uid)
+        .limit(1)
+        .get();
+    if (query.docs.isNotEmpty) return CoupleModel.fromFirestore(query.docs.first);
+
+    return null;
+  }
 
   // --- Google ---
 
