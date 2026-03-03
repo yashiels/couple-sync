@@ -1,30 +1,472 @@
 import 'package:flutter/material.dart';
-import '../../core/theme/app_theme.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
-/// Placeholder screen for the calendar feature (route: `/calendar`).
-class CalendarScreen extends StatelessWidget {
+import '../../core/theme/app_theme.dart';
+import '../../shared/models/free_window.dart';
+import '../../shared/models/time_block_model.dart';
+import '../../shared/providers/auth_providers.dart';
+import '../../shared/providers/block_providers.dart';
+import '../../shared/providers/pairing_providers.dart';
+import 'providers/google_calendar_provider.dart';
+import 'providers/microsoft_calendar_provider.dart';
+import 'widgets/week_view.dart';
+
+/// Full week-view calendar screen showing partner blocks, overlap highlights,
+/// calendar connection banners, and sync controls.
+class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Calendar')),
-      body: Center(
+  ConsumerState<CalendarScreen> createState() => _CalendarScreenState();
+}
+
+class _CalendarScreenState extends ConsumerState<CalendarScreen> {
+  late final PageController _pageController;
+  static const _initialPage = 52; // center page = current week
+  int _currentPage = _initialPage;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(initialPage: _initialPage);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  /// Returns the Monday [DateTime] for the given [page] index, relative to
+  /// the current week at [_initialPage].
+  DateTime _weekStartForPage(int page) {
+    final now = DateTime.now();
+    final currentWeekStart = now.subtract(Duration(days: now.weekday - 1));
+    final startOfDay = DateTime(
+      currentWeekStart.year,
+      currentWeekStart.month,
+      currentWeekStart.day,
+    );
+    return startOfDay.add(Duration(days: (page - _initialPage) * 7));
+  }
+
+  /// Formats a week range label, e.g. "3 Mar - 9 Mar".
+  String _weekLabel(DateTime weekStart) {
+    final weekEnd = weekStart.add(const Duration(days: 6));
+    final startFmt = DateFormat('d MMM').format(weekStart);
+    final endFmt = DateFormat('d MMM').format(weekEnd);
+    return '$startFmt \u2013 $endFmt';
+  }
+
+  /// Triggers a sync for all connected calendar providers.
+  Future<void> _syncAll() async {
+    final user = ref.read(currentUserProvider);
+    final couple = ref.read(currentCoupleProvider);
+    if (user == null || couple == null) return;
+
+    final googleConnected = ref.read(googleCalendarConnectionProvider);
+    final msConnected = ref.read(microsoftCalendarConnectionProvider);
+
+    if (googleConnected) {
+      await ref.read(googleCalendarSyncProvider.notifier).sync(
+            userId: user.uid,
+            coupleId: couple.coupleId,
+          );
+    }
+    if (msConnected) {
+      await ref.read(microsoftCalendarSyncProvider.notifier).sync(
+            userId: user.uid,
+            coupleId: couple.coupleId,
+          );
+    }
+  }
+
+  /// Shows a bottom sheet with details for the tapped [block].
+  void _showBlockDetail(TimeBlock block) {
+    final user = ref.read(currentUserProvider);
+    final isMe = block.userId == user?.uid;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surfaceElevated,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.calendar_month_rounded, size: 64, color: AppColors.skyBlue),
+            // Drag handle
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Title row with color dot
+            Row(
+              children: [
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: isMe ? AppColors.rose : AppColors.partnerBlue,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    block.title.isNotEmpty
+                        ? block.title
+                        : (isMe ? 'Busy' : 'Partner busy'),
+                    style: Theme.of(ctx).textTheme.headlineSmall,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 16),
-            Text('Calendar', style: Theme.of(context).textTheme.headlineMedium),
+            _DetailRow(
+              icon: Icons.schedule_rounded,
+              label:
+                  '${DateFormat('EEE d MMM, HH:mm').format(block.startUtc.toLocal())}'
+                  ' \u2013 '
+                  '${DateFormat('HH:mm').format(block.endUtc.toLocal())}',
+            ),
             const SizedBox(height: 8),
-            Text(
-              'Connect your calendar to see\nboth schedules in one view.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
+            _DetailRow(
+              icon: Icons.category_rounded,
+              label: block.category.name[0].toUpperCase() +
+                  block.category.name.substring(1),
+            ),
+            const SizedBox(height: 8),
+            _DetailRow(
+              icon: Icons.person_rounded,
+              label: isMe ? 'You' : 'Partner',
+            ),
+            const SizedBox(height: 8),
+            _DetailRow(
+              icon: _sourceIcon(block.source),
+              label: block.source.name[0].toUpperCase() +
+                  block.source.name.substring(1),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Returns an appropriate icon for the block's [source].
+  IconData _sourceIcon(BlockSource source) {
+    switch (source) {
+      case BlockSource.google:
+        return Icons.event_rounded;
+      case BlockSource.microsoft:
+        return Icons.calendar_today_rounded;
+      case BlockSource.manual:
+        return Icons.edit_rounded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final couple = ref.watch(currentCoupleProvider);
+    final googleConnected = ref.watch(googleCalendarConnectionProvider);
+    final msConnected = ref.watch(microsoftCalendarConnectionProvider);
+
+    final coupleId = couple?.coupleId;
+    final blocks = coupleId != null
+        ? ref.watch(coupleBlocksProvider(coupleId)).valueOrNull ?? []
+        : <TimeBlock>[];
+
+    // WeekView expects FreeWindow list; overlap rendering is handled
+    // separately via block overlays, so pass an empty list for now.
+    final freeWindows = <FreeWindow>[];
+
+    final weekStart = _weekStartForPage(_currentPage);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Calendar'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.today_rounded),
+            tooltip: 'Today',
+            onPressed: () {
+              _pageController.animateToPage(
+                _initialPage,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.sync_rounded),
+            tooltip: 'Sync calendars',
+            onPressed: _syncAll,
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Calendar connection banners
+          if (!googleConnected || !msConnected)
+            _ConnectionBanners(
+              googleConnected: googleConnected,
+              msConnected: msConnected,
+              onConnectGoogle: () async {
+                await ref
+                    .read(googleCalendarConnectionProvider.notifier)
+                    .connect();
+              },
+              onConnectMicrosoft: () async {
+                await ref
+                    .read(microsoftCalendarConnectionProvider.notifier)
+                    .connect();
+              },
+            ),
+
+          // Week navigation header
+          _WeekNavHeader(
+            label: _weekLabel(weekStart),
+            onPrev: () => _pageController.previousPage(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+            ),
+            onNext: () => _pageController.nextPage(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+            ),
+          ),
+
+          // Legend
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Row(
+              children: const [
+                _LegendDot(color: AppColors.rose, label: 'You'),
+                SizedBox(width: 16),
+                _LegendDot(color: AppColors.partnerBlue, label: 'Partner'),
+                SizedBox(width: 16),
+                _LegendDot(color: AppColors.lavender, label: 'Free together'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+
+          // Week view pages
+          Expanded(
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: _initialPage * 2 + 1, // 52 weeks back + current + 52 forward
+              onPageChanged: (page) => setState(() => _currentPage = page),
+              itemBuilder: (context, page) {
+                final ws = _weekStartForPage(page);
+                return WeekView(
+                  weekStart: ws,
+                  blocks: blocks,
+                  freeWindows: freeWindows,
+                  myUtcOffset: DateTime.now().timeZoneOffset,
+                  partnerUtcOffset: DateTime.now().timeZoneOffset,
+                  onBlockTap: _showBlockDetail,
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Supporting widgets
+// ---------------------------------------------------------------------------
+
+/// Banners prompting the user to connect Google and/or Microsoft calendars.
+class _ConnectionBanners extends StatelessWidget {
+  const _ConnectionBanners({
+    required this.googleConnected,
+    required this.msConnected,
+    required this.onConnectGoogle,
+    required this.onConnectMicrosoft,
+  });
+
+  final bool googleConnected;
+  final bool msConnected;
+  final VoidCallback onConnectGoogle;
+  final VoidCallback onConnectMicrosoft;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        children: [
+          if (!googleConnected)
+            _ConnectTile(
+              icon: Icons.event_rounded,
+              label: 'Google Calendar',
+              color: const Color(0xFF4285F4),
+              onConnect: onConnectGoogle,
+            ),
+          if (!googleConnected && !msConnected) const SizedBox(height: 8),
+          if (!msConnected)
+            _ConnectTile(
+              icon: Icons.calendar_today_rounded,
+              label: 'Microsoft Calendar',
+              color: const Color(0xFF00A4EF),
+              onConnect: onConnectMicrosoft,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A single row inside [_ConnectionBanners] for one calendar provider.
+class _ConnectTile extends StatelessWidget {
+  const _ConnectTile({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onConnect,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onConnect;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onConnect,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Connect $label',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+            ),
+            const Icon(
+              Icons.add_circle_outline_rounded,
+              color: AppColors.lavenderDark,
+              size: 20,
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Chevron-arrow week navigation header with a centred label.
+class _WeekNavHeader extends StatelessWidget {
+  const _WeekNavHeader({
+    required this.label,
+    required this.onPrev,
+    required this.onNext,
+  });
+
+  final String label;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left_rounded),
+            onPressed: onPrev,
+            color: AppColors.onSurface,
+          ),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right_rounded),
+            onPressed: onNext,
+            color: AppColors.onSurface,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Small coloured dot with a text label, used in the calendar legend row.
+class _LegendDot extends StatelessWidget {
+  const _LegendDot({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+      ],
+    );
+  }
+}
+
+/// Icon + label row used inside the block detail bottom sheet.
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: AppColors.onSurfaceMuted),
+        const SizedBox(width: 10),
+        Text(label, style: Theme.of(context).textTheme.bodyMedium),
+      ],
     );
   }
 }

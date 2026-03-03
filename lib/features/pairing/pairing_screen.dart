@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../shared/providers/auth_providers.dart';
 import '../../shared/providers/pairing_providers.dart';
 
 /// Screen for connecting with a partner via a 6-character invite code.
@@ -76,13 +77,17 @@ class _ShareCodeTabState extends ConsumerState<_ShareCodeTab> {
   bool _loading = false;
   bool _copied = false;
 
-  // In a real app we'd get the uid from auth providers
-  static const _demoUid = 'demo_uid';
-
   Future<void> _generateCode() async {
+    final uid = ref.read(currentUserProvider)?.uid;
+    if (uid == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You must be signed in to generate a code.')),
+      );
+      return;
+    }
     setState(() => _loading = true);
     try {
-      final code = await ref.read(pairingNotifierProvider.notifier).generateCode(_demoUid);
+      final code = await ref.read(pairingNotifierProvider.notifier).generateCode(uid);
       setState(() => _code = code);
     } catch (e) {
       if (mounted) {
@@ -184,8 +189,6 @@ class _EnterCodeTabState extends ConsumerState<_EnterCodeTab> {
   final _controller = TextEditingController();
   String? _error;
 
-  static const _demoRedeemerUid = 'demo_redeemer_uid';
-
   @override
   void dispose() {
     _controller.dispose();
@@ -193,6 +196,11 @@ class _EnterCodeTabState extends ConsumerState<_EnterCodeTab> {
   }
 
   Future<void> _connect() async {
+    final uid = ref.read(currentUserProvider)?.uid;
+    if (uid == null) {
+      setState(() => _error = 'You must be signed in to connect.');
+      return;
+    }
     final code = _controller.text.trim().toUpperCase();
     if (code.length != 6) {
       setState(() => _error = 'Code must be 6 characters.');
@@ -202,7 +210,7 @@ class _EnterCodeTabState extends ConsumerState<_EnterCodeTab> {
     try {
       await ref.read(pairingNotifierProvider.notifier).redeemCode(
             code: code,
-            redeemerUid: _demoRedeemerUid,
+            redeemerUid: uid,
           );
       if (mounted) context.go('/home');
     } catch (e) {
