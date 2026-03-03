@@ -10,6 +10,7 @@ import '../../shared/providers/auth_providers.dart';
 import '../../shared/providers/overlap_providers.dart';
 import '../../shared/providers/pairing_providers.dart';
 import '../../shared/providers/pattern_providers.dart';
+import '../calendar/providers/google_calendar_provider.dart';
 import 'widgets/timezone_clock.dart';
 
 /// The main home screen with timezone clocks, hero window card, patterns
@@ -551,12 +552,12 @@ class _PatternCard extends StatelessWidget {
 
 // ── Quick actions row ─────────────────────────────────────────────────────────
 
-class _QuickActionsRow extends StatelessWidget {
+class _QuickActionsRow extends ConsumerWidget {
   const _QuickActionsRow({required this.coupleId});
   final String? coupleId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -576,13 +577,30 @@ class _QuickActionsRow extends StatelessWidget {
             _ActionChip(
               icon: Icons.sync_rounded,
               label: 'Sync Calendars',
-              onTap: () {
+              onTap: () async {
+                final user = ref.read(currentUserProvider);
+                if (user == null || coupleId == null) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Calendar sync coming soon'),
-                    duration: Duration(seconds: 2),
-                  ),
+                  const SnackBar(content: Text('Syncing calendars...')),
                 );
+                try {
+                  final service = ref.read(googleCalendarServiceProvider);
+                  await service.syncToFirestore(
+                    userId: user.uid,
+                    coupleId: coupleId!,
+                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Calendars synced!')),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Sync failed: $e')),
+                    );
+                  }
+                }
               },
             ),
             const SizedBox(width: 10),
