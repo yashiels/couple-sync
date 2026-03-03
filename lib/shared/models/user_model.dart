@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'calendar_connection.dart';
+
 /// Represents an authenticated user stored at `users/{uid}` in Firestore.
 class UserModel {
   final String uid;
@@ -11,10 +13,7 @@ class UserModel {
   final DateTime createdAt;
 
   // ── Calendar connection fields ─────────────────────────────────────────────
-  final bool googleConnected;
-  final bool microsoftConnected;
-  final String? microsoftEmail;
-  final String? defaultCoupleCalendarId;
+  final List<CalendarConnection> calendarConnections;
 
   const UserModel({
     required this.uid,
@@ -24,11 +23,18 @@ class UserModel {
     required this.timezone,
     this.coupleId,
     required this.createdAt,
-    this.googleConnected = false,
-    this.microsoftConnected = false,
-    this.microsoftEmail,
-    this.defaultCoupleCalendarId,
+    this.calendarConnections = const [],
   });
+
+  // ── Convenience getters (backward-compatible) ─────────────────────────────
+  bool get googleConnected =>
+      calendarConnections.any((c) => c.provider == CalendarProvider.google);
+  bool get microsoftConnected =>
+      calendarConnections.any((c) => c.provider == CalendarProvider.microsoft);
+  List<String> get googleEmails => calendarConnections
+      .where((c) => c.provider == CalendarProvider.google)
+      .map((c) => c.email)
+      .toList();
 
   /// Deserialises a [UserModel] from a Firestore [DocumentSnapshot].
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
@@ -41,10 +47,9 @@ class UserModel {
       timezone: data['timezone'] as String? ?? 'UTC',
       coupleId: data['coupleId'] as String?,
       createdAt: (data['createdAt'] as Timestamp).toDate(),
-      googleConnected: data['googleConnected'] as bool? ?? false,
-      microsoftConnected: data['microsoftConnected'] as bool? ?? false,
-      microsoftEmail: data['microsoftEmail'] as String?,
-      defaultCoupleCalendarId: data['defaultCoupleCalendarId'] as String?,
+      calendarConnections: (data['calendarConnections'] as List<dynamic>?)
+          ?.map((e) => CalendarConnection.fromMap(e as Map<String, dynamic>))
+          .toList() ?? [],
     );
   }
 
@@ -56,10 +61,7 @@ class UserModel {
         'timezone': timezone,
         'coupleId': coupleId,
         'createdAt': Timestamp.fromDate(createdAt),
-        'googleConnected': googleConnected,
-        'microsoftConnected': microsoftConnected,
-        'microsoftEmail': microsoftEmail,
-        'defaultCoupleCalendarId': defaultCoupleCalendarId,
+        'calendarConnections': calendarConnections.map((c) => c.toMap()).toList(),
       };
 
   /// Returns a copy of this user with the given fields replaced.
@@ -68,10 +70,7 @@ class UserModel {
     String? photoUrl,
     String? timezone,
     String? coupleId,
-    bool? googleConnected,
-    bool? microsoftConnected,
-    String? microsoftEmail,
-    String? defaultCoupleCalendarId,
+    List<CalendarConnection>? calendarConnections,
   }) {
     return UserModel(
       uid: uid,
@@ -81,11 +80,7 @@ class UserModel {
       timezone: timezone ?? this.timezone,
       coupleId: coupleId ?? this.coupleId,
       createdAt: createdAt,
-      googleConnected: googleConnected ?? this.googleConnected,
-      microsoftConnected: microsoftConnected ?? this.microsoftConnected,
-      microsoftEmail: microsoftEmail ?? this.microsoftEmail,
-      defaultCoupleCalendarId:
-          defaultCoupleCalendarId ?? this.defaultCoupleCalendarId,
+      calendarConnections: calendarConnections ?? this.calendarConnections,
     );
   }
 }
