@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -53,22 +56,24 @@ class AuthScreen extends ConsumerWidget {
                   label: const Text('Continue with Google', style: TextStyle(fontSize: 16)),
                 ),
               ),
-              const SizedBox(height: 12),
-              // Apple Sign In
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton.icon(
-                  onPressed: isLoading ? null : () => _signInWithApple(context, ref),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              // Apple Sign In — only shown on iOS, macOS, and web
+              if (kIsWeb || Platform.isIOS || Platform.isMacOS) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton.icon(
+                    onPressed: isLoading ? null : () => _signInWithApple(context, ref),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.black,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    icon: const Icon(Icons.apple_rounded, size: 28),
+                    label: const Text('Continue with Apple', style: TextStyle(fontSize: 16)),
                   ),
-                  icon: const Icon(Icons.apple_rounded, size: 28),
-                  label: const Text('Continue with Apple', style: TextStyle(fontSize: 16)),
                 ),
-              ),
+              ],
               const SizedBox(height: 32),
               if (isLoading)
                 const CircularProgressIndicator(),
@@ -84,13 +89,25 @@ class AuthScreen extends ConsumerWidget {
     try {
       await ref.read(authNotifierProvider.notifier).signInWithGoogle();
       if (context.mounted) context.go('/home');
-    } catch (_) {}
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Google sign-in failed. Please try again.')),
+        );
+      }
+    }
   }
 
   Future<void> _signInWithApple(BuildContext context, WidgetRef ref) async {
     try {
       await ref.read(authNotifierProvider.notifier).signInWithApple();
       if (context.mounted) context.go('/home');
-    } catch (_) {}
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Apple sign-in failed. Please try again.')),
+        );
+      }
+    }
   }
 }

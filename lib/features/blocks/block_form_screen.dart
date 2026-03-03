@@ -22,6 +22,35 @@ class BlockFormScreen extends ConsumerStatefulWidget {
 class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
   final _titleController = TextEditingController();
   static final _timeFmt = DateFormat('EEE d MMM, HH:mm');
+  bool _loadingBlock = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.editingBlockId != null) {
+      _loadExistingBlock();
+    }
+  }
+
+  Future<void> _loadExistingBlock() async {
+    final couple = ref.read(currentCoupleProvider);
+    if (couple == null || widget.editingBlockId == null) return;
+
+    setState(() => _loadingBlock = true);
+    try {
+      final block = await ref
+          .read(blockServiceProvider)
+          .getBlock(couple.coupleId, widget.editingBlockId!);
+      if (block != null && mounted) {
+        ref.read(blockFormProvider.notifier).prefillFromBlock(block);
+        _titleController.text = block.title;
+      }
+    } catch (_) {
+      // Block fetch failed — form stays empty
+    } finally {
+      if (mounted) setState(() => _loadingBlock = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -116,6 +145,13 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
     final couple = ref.watch(currentCoupleProvider);
 
     final canSave = user != null && couple != null;
+
+    if (_loadingBlock) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Edit Block')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(

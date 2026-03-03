@@ -108,23 +108,28 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
           const Divider(height: 1),
           // Window list
           Expanded(
-            child: overlapAsync.when(
-              data: (result) {
-                if (result == null || result.windows.isEmpty) {
-                  return _buildEmptyState(context);
-                }
-                final filtered = result.windows
-                    .where((w) =>
-                        w.durationMinutes >= _selectedFilter.minMinutes)
-                    .toList();
-                if (filtered.isEmpty) {
-                  return _buildNoMatchState(context);
-                }
-                return _buildWindowList(context, filtered);
+            child: RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(overlapResultProvider(coupleId));
               },
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Error: $e')),
+              child: overlapAsync.when(
+                data: (result) {
+                  if (result == null || result.windows.isEmpty) {
+                    return _buildEmptyState(context);
+                  }
+                  final filtered = result.windows
+                      .where((w) =>
+                          w.durationMinutes >= _selectedFilter.minMinutes)
+                      .toList();
+                  if (filtered.isEmpty) {
+                    return _buildNoMatchState(context);
+                  }
+                  return _buildWindowList(context, filtered);
+                },
+                loading: () =>
+                    const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Center(child: Text('Error: $e')),
+              ),
             ),
           ),
         ],
@@ -170,59 +175,65 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
 
   /// Empty state shown when there are no overlap windows at all.
   Widget _buildEmptyState(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 96,
-              height: 96,
-              decoration: const BoxDecoration(
-                gradient: AppColors.heroGradient,
-                shape: BoxShape.circle,
+    return ListView(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 48),
+              Container(
+                width: 96,
+                height: 96,
+                decoration: const BoxDecoration(
+                  gradient: AppColors.heroGradient,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.favorite_rounded,
+                    size: 48, color: Colors.white),
               ),
-              child: const Icon(Icons.favorite_rounded,
-                  size: 48, color: Colors.white),
-            ),
-            const SizedBox(height: 24),
-            Text('No free windows yet',
-                style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: 10),
-            Text(
-              'Add your schedules and we\'ll find moments when you\'re both free.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ],
+              const SizedBox(height: 24),
+              Text('No free windows yet',
+                  style: Theme.of(context).textTheme.headlineMedium),
+              const SizedBox(height: 10),
+              Text(
+                'Add your schedules and we\'ll find moments when you\'re both free.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
   /// State shown when the filter excludes all available windows.
   Widget _buildNoMatchState(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.filter_list_off_rounded,
-                size: 48, color: AppColors.onSurfaceMuted),
-            const SizedBox(height: 16),
-            Text('No windows match this filter',
-                style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: 10),
-            Text(
-              'Try a shorter minimum duration to see more results.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ],
+    return ListView(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 48),
+              const Icon(Icons.filter_list_off_rounded,
+                  size: 48, color: AppColors.onSurfaceMuted),
+              const SizedBox(height: 16),
+              Text('No windows match this filter',
+                  style: Theme.of(context).textTheme.headlineMedium),
+              const SizedBox(height: 10),
+              Text(
+                'Try a shorter minimum duration to see more results.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
+          ),
         ),
-      ),
+      ],
     );
   }
 

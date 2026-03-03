@@ -179,9 +179,33 @@ class _BlockCard extends ConsumerWidget {
             if (action == 'edit') {
               context.push('/blocks/edit/${block.id}');
             } else if (action == 'delete') {
-              await ref
-                  .read(blockServiceProvider)
-                  .deleteBlock(coupleId, block.id);
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Delete block?'),
+                  content: Text(
+                    'Are you sure you want to delete "${block.title}"? This cannot be undone.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(true),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.error,
+                      ),
+                      child: const Text('Delete'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirmed == true) {
+                await ref
+                    .read(blockServiceProvider)
+                    .deleteBlock(coupleId, block.id);
+              }
             }
           },
           itemBuilder: (_) => const [

@@ -267,7 +267,7 @@ class _HeroWindowCard extends ConsumerWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Add more blocks so we can find overlap',
+              'Connect a calendar and add blocks to find overlap.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
@@ -481,7 +481,7 @@ class _NoCoupleCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Use an invite code to connect and find free time together',
+            'Use an invite code to pair and find free time together',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall,
           ),
@@ -637,12 +637,50 @@ class _PatternCard extends StatelessWidget {
 
 // ── Quick actions row ─────────────────────────────────────────────────────────
 
-class _QuickActionsRow extends ConsumerWidget {
+class _QuickActionsRow extends ConsumerStatefulWidget {
   const _QuickActionsRow({required this.coupleId});
   final String? coupleId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_QuickActionsRow> createState() => _QuickActionsRowState();
+}
+
+class _QuickActionsRowState extends ConsumerState<_QuickActionsRow> {
+  bool _syncing = false;
+
+  Future<void> _syncCalendars() async {
+    if (_syncing) return;
+    final user = ref.read(currentUserProvider);
+    if (user == null || widget.coupleId == null) return;
+
+    setState(() => _syncing = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Syncing calendars...')),
+    );
+    try {
+      final service = ref.read(googleCalendarServiceProvider);
+      await service.syncToFirestore(
+        userId: user.uid,
+        coupleId: widget.coupleId!,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Calendars synced!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sync failed. Please try again.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -660,33 +698,9 @@ class _QuickActionsRow extends ConsumerWidget {
             ),
             const SizedBox(width: 10),
             _ActionChip(
-              icon: Icons.sync_rounded,
+              icon: _syncing ? Icons.hourglass_top_rounded : Icons.sync_rounded,
               label: 'Sync Calendars',
-              onTap: () async {
-                final user = ref.read(currentUserProvider);
-                if (user == null || coupleId == null) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Syncing calendars...')),
-                );
-                try {
-                  final service = ref.read(googleCalendarServiceProvider);
-                  await service.syncToFirestore(
-                    userId: user.uid,
-                    coupleId: coupleId!,
-                  );
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Calendars synced!')),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Sync failed: $e')),
-                    );
-                  }
-                }
-              },
+              onTap: _syncing ? () {} : _syncCalendars,
             ),
             const SizedBox(width: 10),
             _ActionChip(

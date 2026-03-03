@@ -28,7 +28,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.go('/home'),
+          onPressed: () => context.pop(),
         ),
         title: const Text('Settings'),
       ),
@@ -140,12 +140,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               fontSize: 13,
             ),
           ),
-          trailing: const Chip(
-            label: Text('Auto', style: TextStyle(fontSize: 11)),
+          trailing: Chip(
+            label: Text(
+              DateTime.now().timeZoneName,
+              style: const TextStyle(fontSize: 11),
+            ),
             backgroundColor: AppColors.inputFill,
             side: BorderSide.none,
             padding: EdgeInsets.zero,
-            labelPadding: EdgeInsets.symmetric(horizontal: 8),
+            labelPadding: const EdgeInsets.symmetric(horizontal: 8),
           ),
           contentPadding: const EdgeInsets.symmetric(horizontal: 16),
         ),
@@ -227,7 +230,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Unpair from partner?'),
         content: const Text(
-          'This will disconnect your calendars and remove the pairing. '
+          'This will remove the pairing and unlink your calendars. '
           'You can pair again later with a new invite code.',
         ),
         actions: [

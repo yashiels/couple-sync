@@ -65,11 +65,31 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     if (user == null || couple == null) return;
 
     final googleConnected = ref.read(googleCalendarConnectionProvider);
-    if (googleConnected) {
+    if (!googleConnected) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No calendars connected. Add one in Settings.')),
+        );
+      }
+      return;
+    }
+
+    try {
       await ref.read(googleCalendarSyncProvider.notifier).sync(
             userId: user.uid,
             coupleId: couple.coupleId,
           );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Calendars synced successfully.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sync failed. Please try again.')),
+        );
+      }
     }
   }
 
@@ -228,8 +248,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 _LegendDot(color: AppColors.rose, label: 'You'),
                 SizedBox(width: 16),
                 _LegendDot(color: AppColors.partnerBlue, label: 'Partner'),
-                SizedBox(width: 16),
-                _LegendDot(color: AppColors.lavender, label: 'Free together'),
               ],
             ),
           ),

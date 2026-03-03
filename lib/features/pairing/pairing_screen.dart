@@ -38,7 +38,7 @@ class _PairingScreenState extends ConsumerState<PairingScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Connect with Partner'),
+        title: const Text('Pair with Partner'),
         bottom: TabBar(
           controller: _tab,
           labelColor: AppColors.roseDeep,
@@ -123,7 +123,7 @@ class _ShareCodeTabState extends ConsumerState<_ShareCodeTab> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Give this code to your partner so they can connect with you.',
+            'Give this code to your partner so they can pair with you.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
@@ -148,7 +148,7 @@ class _ShareCodeTabState extends ConsumerState<_ShareCodeTab> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Expires in 48 hours',
+              'Generated just now \u2014 valid for 48 hours',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
             ),
@@ -198,7 +198,7 @@ class _EnterCodeTabState extends ConsumerState<_EnterCodeTab> {
   Future<void> _connect() async {
     final uid = ref.read(currentUserProvider)?.uid;
     if (uid == null) {
-      setState(() => _error = 'You must be signed in to connect.');
+      setState(() => _error = 'You must be signed in to pair.');
       return;
     }
     final code = _controller.text.trim().toUpperCase();
@@ -265,7 +265,7 @@ class _EnterCodeTabState extends ConsumerState<_EnterCodeTab> {
             onPressed: loading ? null : _connect,
             child: loading
                 ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Text('Connect'),
+                : const Text('Pair'),
           ),
         ],
       ),
