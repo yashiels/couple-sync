@@ -25,35 +25,6 @@ class AuthService {
   /// The currently signed-in Firebase [User], or `null` if not authenticated.
   User? get currentUser => _auth.currentUser;
 
-  // --- Email / Password ---
-
-  /// Creates a new email/password account and saves the user to Firestore.
-  Future<UserModel> signUpWithEmail({
-    required String email,
-    required String password,
-    required String displayName,
-    required String timezone,
-  }) async {
-    final credential = await _auth.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-    await credential.user!.updateDisplayName(displayName);
-    return _createUserDocument(credential.user!, displayName: displayName, timezone: timezone);
-  }
-
-  /// Signs in an existing user with email and password.
-  Future<UserModel> signInWithEmail({
-    required String email,
-    required String password,
-  }) async {
-    final credential = await _auth.signInWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-    return _fetchOrCreateUser(credential.user!);
-  }
-
   // --- Google ---
 
   /// Initiates the Google OAuth flow and signs in the resulting user.
@@ -70,7 +41,15 @@ class AuthService {
   }
 
   // --- Apple ---
-  // Apple sign-in handled via firebase_auth's signInWithProvider on real devices.
+
+  /// Initiates Apple Sign-In via Firebase Auth's provider flow.
+  Future<UserModel> signInWithApple() async {
+    final appleProvider = AppleAuthProvider()
+      ..addScope('email')
+      ..addScope('name');
+    final userCred = await _auth.signInWithProvider(appleProvider);
+    return _fetchOrCreateUser(userCred.user!);
+  }
 
   // --- Helpers ---
 
@@ -83,14 +62,13 @@ class AuthService {
   Future<UserModel> _createUserDocument(
     User user, {
     String? displayName,
-    String? timezone,
   }) async {
     final model = UserModel(
       uid: user.uid,
       email: user.email ?? '',
       displayName: displayName ?? user.displayName ?? user.email?.split('@').first ?? 'User',
       photoUrl: user.photoURL,
-      timezone: timezone ?? 'UTC',
+      timezone: DateTime.now().timeZoneName,
       createdAt: DateTime.now().toUtc(),
     );
     await _firestore.collection('users').doc(user.uid).set(model.toFirestore());
@@ -109,8 +87,4 @@ class AuthService {
       _googleSignIn.signOut(),
     ]);
   }
-
-  /// Sends a password-reset email to the given [email] address.
-  Future<void> sendPasswordReset(String email) =>
-      _auth.sendPasswordResetEmail(email: email);
 }

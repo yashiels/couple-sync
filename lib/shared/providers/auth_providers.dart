@@ -23,57 +23,31 @@ final currentUserProvider = StateProvider<UserModel?>((ref) => null);
 /// Possible states of the authentication flow.
 enum AuthStatus { initial, loading, authenticated, unauthenticated, error }
 
-/// Manages sign-up, sign-in, and sign-out operations, driving [AuthStatus].
+/// Manages sign-in and sign-out operations, driving [AuthStatus].
 class AuthNotifier extends StateNotifier<AuthStatus> {
   final AuthService _service;
   final StateController<UserModel?> _userController;
 
   AuthNotifier(this._service, this._userController) : super(AuthStatus.initial);
 
-  /// Creates a new account with email/password and updates the user state.
-  Future<void> signUpWithEmail({
-    required String email,
-    required String password,
-    required String displayName,
-    required String timezone,
-  }) async {
-    state = AuthStatus.loading;
-    try {
-      final user = await _service.signUpWithEmail(
-        email: email,
-        password: password,
-        displayName: displayName,
-        timezone: timezone,
-      );
-      _userController.state = user;
-      state = AuthStatus.authenticated;
-    } catch (_) {
-      state = AuthStatus.error;
-      rethrow;
-    }
-  }
-
-  /// Signs in an existing user with email/password.
-  Future<void> signInWithEmail({
-    required String email,
-    required String password,
-  }) async {
-    state = AuthStatus.loading;
-    try {
-      final user = await _service.signInWithEmail(email: email, password: password);
-      _userController.state = user;
-      state = AuthStatus.authenticated;
-    } catch (_) {
-      state = AuthStatus.error;
-      rethrow;
-    }
-  }
-
   /// Initiates the Google OAuth flow and signs in the resulting user.
   Future<void> signInWithGoogle() async {
     state = AuthStatus.loading;
     try {
       final user = await _service.signInWithGoogle();
+      _userController.state = user;
+      state = AuthStatus.authenticated;
+    } catch (_) {
+      state = AuthStatus.error;
+      rethrow;
+    }
+  }
+
+  /// Initiates Apple Sign-In via Firebase Auth's provider flow.
+  Future<void> signInWithApple() async {
+    state = AuthStatus.loading;
+    try {
+      final user = await _service.signInWithApple();
       _userController.state = user;
       state = AuthStatus.authenticated;
     } catch (_) {
