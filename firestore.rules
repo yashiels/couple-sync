@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can read/write their own document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Partners can read each other's data
+      allow read: if request.auth != null;
+    }
+
+    // Couple members can read/write couple data
+    match /couples/{coupleId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Time blocks scoped to couple
+    match /timeblocks/{coupleId}/blocks/{blockId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Overlap windows scoped to couple
+    match /overlaps/{coupleId}/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if false; // Only Cloud Functions write
+    }
+
+    // Invite codes
+    match /invites/{code} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Recurring windows
+    match /couples/{coupleId}/recurringWindows/{windowId} {
+      allow read: if request.auth != null;
+      allow write: if false; // Only Cloud Functions write
+    }
+
+    // Pattern requests (trigger for manual detection)
+    match /couples/{coupleId}/patternRequests/{requestId} {
+      allow create: if request.auth != null;
+    }
+  }
+}
