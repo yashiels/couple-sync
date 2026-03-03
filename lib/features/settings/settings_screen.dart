@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../shared/models/calendar_connection.dart';
 import '../../shared/providers/auth_providers.dart';
 import '../calendar/providers/google_calendar_provider.dart';
-import '../calendar/providers/microsoft_calendar_provider.dart';
 
 /// Full settings screen with calendar connections, notifications, privacy,
 /// scheduling, timezone, and account sections.
@@ -31,10 +31,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
-    final googleConnected = ref.watch(googleCalendarConnectionProvider);
-    final microsoftConnected = ref.watch(microsoftCalendarConnectionProvider);
-    final googleLastSync = ref.watch(googleCalendarLastSyncProvider);
-    final microsoftLastSync = ref.watch(microsoftCalendarLastSyncProvider);
+    final connections = ref.watch(googleCalendarConnectionsProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -43,10 +40,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         children: [
           // 1. Calendar Connections
           _buildCalendarConnectionsSection(
-            googleConnected: googleConnected,
-            microsoftConnected: microsoftConnected,
-            googleLastSync: googleLastSync,
-            microsoftLastSync: microsoftLastSync,
+            connections: connections,
+            userId: user?.uid,
           ),
           const SizedBox(height: 16),
 
@@ -77,55 +72,61 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // ── Section 1: Calendar Connections ────────────────────────────────────────
 
   Widget _buildCalendarConnectionsSection({
-    required bool googleConnected,
-    required bool microsoftConnected,
-    required DateTime? googleLastSync,
-    required DateTime? microsoftLastSync,
+    required List<CalendarConnection> connections,
+    required String? userId,
   }) {
     return _SettingsSection(
       icon: Icons.calendar_month_rounded,
       title: 'Calendar Connections',
       children: [
-        _CalendarConnectionTile(
-          icon: Icons.g_mobiledata_rounded,
-          label: 'Google Calendar',
-          connected: googleConnected,
-          lastSync: googleLastSync,
-          onToggle: () async {
-            final currentUser = ref.read(currentUserProvider);
-            if (currentUser == null) return;
-            if (googleConnected) {
-              final connections =
-                  ref.read(googleCalendarConnectionsProvider);
-              if (connections.isNotEmpty) {
-                await ref
-                    .read(googleCalendarConnectionsProvider.notifier)
-                    .removeAccount(currentUser.uid, connections.first.id);
-              }
-            } else {
+        // Connected account tiles
+        for (int i = 0; i < connections.length; i++) ...[
+          if (i > 0) const Divider(height: 1, color: AppColors.divider),
+          _GoogleAccountTile(
+            connection: connections[i],
+            onRemove: () async {
+              if (userId == null) return;
               await ref
                   .read(googleCalendarConnectionsProvider.notifier)
-                  .connectAccount(currentUser.uid);
-            }
+                  .removeAccount(userId, connections[i].id);
+            },
+          ),
+        ],
+        if (connections.isNotEmpty)
+          const Divider(height: 1, color: AppColors.divider),
+        // Add account tile
+        ListTile(
+          leading: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.inputFill,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.add_rounded,
+              size: 20,
+              color: AppColors.lavenderDark,
+            ),
+          ),
+          title: const Text(
+            'Add Google Account',
+            style: TextStyle(
+              color: AppColors.lavenderDark,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          subtitle: const Text(
+            'Connect another Google Calendar',
+            style: TextStyle(color: AppColors.onSurfaceMuted, fontSize: 12),
+          ),
+          onTap: () async {
+            if (userId == null) return;
+            await ref
+                .read(googleCalendarConnectionsProvider.notifier)
+                .connectAccount(userId);
           },
-        ),
-        const Divider(height: 1, color: AppColors.divider),
-        _CalendarConnectionTile(
-          icon: Icons.window_rounded,
-          label: 'Microsoft Calendar',
-          connected: microsoftConnected,
-          lastSync: microsoftLastSync,
-          onToggle: () async {
-            if (microsoftConnected) {
-              await ref
-                  .read(microsoftCalendarConnectionProvider.notifier)
-                  .disconnect();
-            } else {
-              await ref
-                  .read(microsoftCalendarConnectionProvider.notifier)
-                  .connect();
-            }
-          },
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
         ),
       ],
     );
@@ -462,84 +463,57 @@ class _SettingsSection extends StatelessWidget {
   }
 }
 
-/// A tile showing a calendar provider's connection status and toggle button.
-class _CalendarConnectionTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool connected;
-  final DateTime? lastSync;
-  final VoidCallback onToggle;
+/// A tile showing a connected Google account with email, last sync, and remove.
+class _GoogleAccountTile extends StatelessWidget {
+  final CalendarConnection connection;
+  final VoidCallback onRemove;
 
-  const _CalendarConnectionTile({
-    required this.icon,
-    required this.label,
-    required this.connected,
-    required this.lastSync,
-    required this.onToggle,
+  const _GoogleAccountTile({
+    required this.connection,
+    required this.onRemove,
   });
 
   @override
   Widget build(BuildContext context) {
-    final syncText = lastSync != null
-        ? 'Last sync: ${DateFormat.yMMMd().add_jm().format(lastSync!.toLocal())}'
-        : null;
+    final syncText = connection.lastSync != null
+        ? 'Last sync: ${DateFormat.yMMMd().add_jm().format(connection.lastSync!.toLocal())}'
+        : 'Not synced yet';
 
     return ListTile(
-      leading: Icon(icon, size: 28, color: AppColors.onSurface),
+      leading: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: AppColors.inputFill,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Icon(
+          Icons.g_mobiledata_rounded,
+          size: 22,
+          color: AppColors.onSurface,
+        ),
+      ),
       title: Text(
-        label,
+        connection.email,
         style: const TextStyle(
           color: AppColors.onSurface,
           fontWeight: FontWeight.w500,
+          fontSize: 14,
+        ),
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        syncText,
+        style: const TextStyle(
+          color: AppColors.onSurfaceMuted,
+          fontSize: 12,
         ),
       ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: connected ? AppColors.success : AppColors.warning,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                connected ? 'Connected' : 'Not connected',
-                style: TextStyle(
-                  color: connected ? AppColors.success : AppColors.warning,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-          if (syncText != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              syncText,
-              style: const TextStyle(
-                color: AppColors.onSurfaceMuted,
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ],
-      ),
-      isThreeLine: syncText != null,
-      trailing: TextButton(
-        onPressed: onToggle,
-        style: TextButton.styleFrom(
-          foregroundColor: connected ? AppColors.roseDark : AppColors.success,
-          textStyle: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        child: Text(connected ? 'Disconnect' : 'Connect'),
+      trailing: IconButton(
+        icon: const Icon(Icons.close_rounded, size: 20),
+        color: AppColors.onSurfaceMuted,
+        onPressed: onRemove,
+        tooltip: 'Remove account',
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
     );
