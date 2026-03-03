@@ -18,12 +18,20 @@ class OverlapWindow {
   /// Whether the window falls within reasonable waking hours for both users.
   final bool reasonableBoth;
 
+  /// Gemini-suggested activity for this window (optional).
+  final String? suggestedActivity;
+
+  /// Google Meet link generated for this window (optional).
+  final String? meetLink;
+
   const OverlapWindow({
     required this.startUtc,
     required this.endUtc,
     required this.durationMinutes,
     required this.score,
     required this.reasonableBoth,
+    this.suggestedActivity,
+    this.meetLink,
   });
 
   /// Wall-clock length of the window.
@@ -43,6 +51,8 @@ class OverlapWindow {
       durationMinutes: (map['durationMinutes'] as num).toInt(),
       score: (map['score'] as num).toDouble(),
       reasonableBoth: map['reasonableBoth'] as bool? ?? false,
+      suggestedActivity: map['suggestedActivity'] as String?,
+      meetLink: map['meetLink'] as String?,
     );
   }
 
@@ -53,7 +63,29 @@ class OverlapWindow {
         'durationMinutes': durationMinutes,
         'score': score,
         'reasonableBoth': reasonableBoth,
+        if (suggestedActivity != null) 'suggestedActivity': suggestedActivity,
+        if (meetLink != null) 'meetLink': meetLink,
       };
+
+  /// Returns a copy of this window with the given fields overridden.
+  OverlapWindow copyWith({
+    DateTime? startUtc,
+    DateTime? endUtc,
+    int? durationMinutes,
+    double? score,
+    bool? reasonableBoth,
+    String? suggestedActivity,
+    String? meetLink,
+  }) =>
+      OverlapWindow(
+        startUtc: startUtc ?? this.startUtc,
+        endUtc: endUtc ?? this.endUtc,
+        durationMinutes: durationMinutes ?? this.durationMinutes,
+        score: score ?? this.score,
+        reasonableBoth: reasonableBoth ?? this.reasonableBoth,
+        suggestedActivity: suggestedActivity ?? this.suggestedActivity,
+        meetLink: meetLink ?? this.meetLink,
+      );
 }
 
 /// Top-level Firestore document: `overlapWindows/{coupleId}`

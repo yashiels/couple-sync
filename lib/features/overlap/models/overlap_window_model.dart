@@ -9,6 +9,12 @@ class OverlapWindow {
   final bool reasonableBoth;
   final bool seen;
 
+  /// Gemini-suggested activity for this window (optional).
+  final String? suggestedActivity;
+
+  /// Google Meet link generated for this window (optional).
+  final String? meetLink;
+
   const OverlapWindow({
     required this.startUtc,
     required this.endUtc,
@@ -16,6 +22,8 @@ class OverlapWindow {
     required this.score,
     required this.reasonableBoth,
     this.seen = false,
+    this.suggestedActivity,
+    this.meetLink,
   });
 
   /// Wall-clock length of this free window.
@@ -37,6 +45,8 @@ class OverlapWindow {
       score: (map['score'] as num).toDouble(),
       reasonableBoth: (map['reasonableBoth'] as bool?) ?? false,
       seen: (map['seen'] as bool?) ?? false,
+      suggestedActivity: map['suggestedActivity'] as String?,
+      meetLink: map['meetLink'] as String?,
     );
   }
 
@@ -48,16 +58,25 @@ class OverlapWindow {
         'score': score,
         'reasonableBoth': reasonableBoth,
         'seen': seen,
+        if (suggestedActivity != null) 'suggestedActivity': suggestedActivity,
+        if (meetLink != null) 'meetLink': meetLink,
       };
 
-  /// Returns a copy of this window with [seen] overridden.
-  OverlapWindow copyWith({bool? seen}) => OverlapWindow(
+  /// Returns a copy of this window with the given fields overridden.
+  OverlapWindow copyWith({
+    bool? seen,
+    String? suggestedActivity,
+    String? meetLink,
+  }) =>
+      OverlapWindow(
         startUtc: startUtc,
         endUtc: endUtc,
         durationMinutes: durationMinutes,
         score: score,
         reasonableBoth: reasonableBoth,
         seen: seen ?? this.seen,
+        suggestedActivity: suggestedActivity ?? this.suggestedActivity,
+        meetLink: meetLink ?? this.meetLink,
       );
 
   @override
