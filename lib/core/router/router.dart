@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -16,9 +18,6 @@ import '../../shared/providers/auth_providers.dart';
 import '../theme/app_theme.dart';
 
 /// The app's [GoRouter] instance, rebuilt whenever the auth state changes.
-///
-/// Unauthenticated users are redirected to `/auth`; authenticated users
-/// landing on `/auth` are redirected to `/home`.
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(firebaseAuthStateProvider);
   final isLoggedIn = authState.valueOrNull != null;
@@ -124,7 +123,8 @@ class _AppShell extends StatelessWidget {
 
     return Scaffold(
       body: child,
-      bottomNavigationBar: _BottomNav(
+      extendBody: true,
+      bottomNavigationBar: _IOSTabBar(
         currentIndex: currentIndex,
         onTap: (i) => context.go(_tabs[i]),
       ),
@@ -132,8 +132,9 @@ class _AppShell extends StatelessWidget {
   }
 }
 
-class _BottomNav extends StatelessWidget {
-  const _BottomNav({
+/// Translucent frosted-glass tab bar mimicking iOS UITabBar.
+class _IOSTabBar extends StatelessWidget {
+  const _IOSTabBar({
     required this.currentIndex,
     required this.onTap,
   });
@@ -143,45 +144,46 @@ class _BottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surfaceElevated,
-        border: Border(
-          top: BorderSide(color: AppColors.divider, width: 1),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.lavender.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, -4),
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Color(0xD9FFFFFF), // white at ~85% opacity
+            border: Border(
+              top: BorderSide(color: AppColors.separator, width: 0.33),
+            ),
           ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Row(
-            children: [
-              _NavItem(
-                icon: Icons.home_rounded,
-                label: 'Home',
-                selected: currentIndex == 0,
-                onTap: () => onTap(0),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              child: Row(
+                children: [
+                  _TabItem(
+                    activeIcon: Icons.house_rounded,
+                    inactiveIcon: Icons.house_outlined,
+                    label: 'Home',
+                    selected: currentIndex == 0,
+                    onTap: () => onTap(0),
+                  ),
+                  _TabItem(
+                    activeIcon: Icons.calendar_month,
+                    inactiveIcon: Icons.calendar_month_outlined,
+                    label: 'Calendar',
+                    selected: currentIndex == 1,
+                    onTap: () => onTap(1),
+                  ),
+                  _TabItem(
+                    activeIcon: Icons.access_time_filled,
+                    inactiveIcon: Icons.access_time,
+                    label: 'Free Time',
+                    selected: currentIndex == 2,
+                    onTap: () => onTap(2),
+                  ),
+                ],
               ),
-              _NavItem(
-                icon: Icons.calendar_month_rounded,
-                label: 'Calendar',
-                selected: currentIndex == 1,
-                onTap: () => onTap(1),
-              ),
-              _NavItem(
-                icon: Icons.access_time_rounded,
-                label: 'Free time',
-                selected: currentIndex == 2,
-                onTap: () => onTap(2),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -189,57 +191,46 @@ class _BottomNav extends StatelessWidget {
   }
 }
 
-class _NavItem extends StatelessWidget {
-  const _NavItem({
-    required this.icon,
+/// A single tab item with outlined/filled icon toggle and always-visible label.
+class _TabItem extends StatelessWidget {
+  const _TabItem({
+    required this.activeIcon,
+    required this.inactiveIcon,
     required this.label,
     required this.selected,
     required this.onTap,
   });
 
-  final IconData icon;
+  final IconData activeIcon;
+  final IconData inactiveIcon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final color = selected ? AppColors.primary : AppColors.onSurfaceMuted;
+
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: selected
-                ? AppColors.roseLight.withValues(alpha: 0.6)
-                : Colors.transparent,
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ShaderMask(
-                shaderCallback: (bounds) => (selected
-                        ? AppColors.heroGradient
-                        : const LinearGradient(
-                            colors: [
-                              AppColors.onSurfaceMuted,
-                              AppColors.onSurfaceMuted,
-                            ],
-                          ))
-                    .createShader(bounds),
-                child: Icon(icon, size: 22, color: Colors.white),
+              Icon(
+                selected ? activeIcon : inactiveIcon,
+                size: 24,
+                color: color,
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 2),
               Text(
                 label,
-                style: TextStyle(
+                style: AppTypography.caption.copyWith(
+                  color: color,
                   fontSize: 10,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  color:
-                      selected ? AppColors.roseDark : AppColors.onSurfaceMuted,
                 ),
               ),
             ],

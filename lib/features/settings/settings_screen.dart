@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,8 +10,6 @@ import '../../shared/providers/auth_providers.dart';
 import '../../shared/providers/pairing_providers.dart';
 import '../calendar/providers/google_calendar_provider.dart';
 
-/// Full settings screen with calendar connections, notifications, privacy,
-/// scheduling, timezone, and account sections.
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
@@ -25,9 +24,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final connections = ref.watch(googleCalendarConnectionsProvider);
 
     return Scaffold(
+      backgroundColor: AppColors.groupedBackground,
       appBar: AppBar(
+        backgroundColor: AppColors.groupedBackground,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: const Icon(Icons.arrow_back_ios_rounded, size: 20),
           onPressed: () {
             if (context.canPop()) {
               context.pop();
@@ -42,185 +43,94 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         children: [
           // 1. Calendar Connections
-          _buildCalendarConnectionsSection(
-            connections: connections,
-            userId: user?.uid,
+          _SectionHeader(title: 'CALENDAR CONNECTIONS'),
+          _GroupedCard(
+            children: [
+              for (int i = 0; i < connections.length; i++) ...[
+                if (i > 0) const _Separator(),
+                _GoogleAccountRow(
+                  connection: connections[i],
+                  onRemove: () async {
+                    if (user?.uid == null) return;
+                    await ref
+                        .read(googleCalendarConnectionsProvider.notifier)
+                        .removeAccount(user!.uid, connections[i].id);
+                  },
+                ),
+              ],
+              if (connections.isNotEmpty) const _Separator(),
+              _TapRow(
+                leading: const Icon(Icons.add, size: 20, color: AppColors.primary),
+                label: 'Add Google Account',
+                labelColor: AppColors.primary,
+                onTap: () async {
+                  if (user?.uid == null) return;
+                  await ref
+                      .read(googleCalendarConnectionsProvider.notifier)
+                      .connectAccount(user!.uid);
+                },
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
+
+          const SizedBox(height: 28),
 
           // 2. Timezone
-          _buildTimezoneSection(user?.timezone ?? 'UTC'),
-          const SizedBox(height: 16),
+          _SectionHeader(title: 'TIMEZONE'),
+          _GroupedCard(
+            children: [
+              _ValueRow(
+                label: 'Current timezone',
+                value: user?.timezone ?? 'UTC',
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 28),
 
           // 3. Account
-          _buildAccountSection(context),
-          const SizedBox(height: 32),
+          _SectionHeader(title: 'ACCOUNT'),
+          _GroupedCard(
+            children: [
+              _TapRow(
+                label: 'Sign Out',
+                labelColor: AppColors.destructive,
+                onTap: () => _confirmSignOut(context),
+              ),
+              if (ref.watch(currentCoupleProvider) != null) ...[
+                const _Separator(),
+                _TapRow(
+                  label: 'Unpair from Partner',
+                  labelColor: AppColors.destructive,
+                  onTap: () => _confirmUnpair(context),
+                ),
+              ],
+            ],
+          ),
+
+          const SizedBox(height: 40),
         ],
       ),
     );
   }
 
-  // ── Section 1: Calendar Connections ────────────────────────────────────────
-
-  Widget _buildCalendarConnectionsSection({
-    required List<CalendarConnection> connections,
-    required String? userId,
-  }) {
-    return _SettingsSection(
-      icon: Icons.calendar_month_rounded,
-      title: 'Calendar Connections',
-      children: [
-        // Connected account tiles
-        for (int i = 0; i < connections.length; i++) ...[
-          if (i > 0) const Divider(height: 1, color: AppColors.divider),
-          _GoogleAccountTile(
-            connection: connections[i],
-            onRemove: () async {
-              if (userId == null) return;
-              await ref
-                  .read(googleCalendarConnectionsProvider.notifier)
-                  .removeAccount(userId, connections[i].id);
-            },
-          ),
-        ],
-        if (connections.isNotEmpty)
-          const Divider(height: 1, color: AppColors.divider),
-        // Add account tile
-        ListTile(
-          leading: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: AppColors.inputFill,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              Icons.add_rounded,
-              size: 20,
-              color: AppColors.lavenderDark,
-            ),
-          ),
-          title: const Text(
-            'Add Google Account',
-            style: TextStyle(
-              color: AppColors.lavenderDark,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          subtitle: const Text(
-            'Connect another Google Calendar',
-            style: TextStyle(color: AppColors.onSurfaceMuted, fontSize: 12),
-          ),
-          onTap: () async {
-            if (userId == null) return;
-            await ref
-                .read(googleCalendarConnectionsProvider.notifier)
-                .connectAccount(userId);
-          },
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        ),
-      ],
-    );
-  }
-
-  // ── Section 2: Timezone ────────────────────────────────────────────────────
-
-  Widget _buildTimezoneSection(String timezone) {
-    return _SettingsSection(
-      icon: Icons.language_rounded,
-      title: 'Timezone',
-      children: [
-        ListTile(
-          title: const Text(
-            'Current timezone',
-            style: TextStyle(
-              color: AppColors.onSurface,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          subtitle: Text(
-            timezone,
-            style: const TextStyle(
-              color: AppColors.lavenderDark,
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-            ),
-          ),
-          trailing: Chip(
-            label: Text(
-              DateTime.now().timeZoneName,
-              style: const TextStyle(fontSize: 11),
-            ),
-            backgroundColor: AppColors.inputFill,
-            side: BorderSide.none,
-            padding: EdgeInsets.zero,
-            labelPadding: const EdgeInsets.symmetric(horizontal: 8),
-          ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        ),
-      ],
-    );
-  }
-
-  // ── Section 3: Account ────────────────────────────────────────────────────
-
-  Widget _buildAccountSection(BuildContext context) {
-    final couple = ref.watch(currentCoupleProvider);
-
-    return _SettingsSection(
-      icon: Icons.person_rounded,
-      title: 'Account',
-      children: [
-        ListTile(
-          leading: const Icon(Icons.logout_rounded, color: AppColors.roseDark),
-          title: const Text(
-            'Sign out',
-            style: TextStyle(
-              color: AppColors.roseDark,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          onTap: () => _confirmSignOut(context),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        ),
-        if (couple != null) ...[
-          const Divider(height: 1, color: AppColors.divider),
-          ListTile(
-            leading: const Icon(Icons.link_off_rounded, color: AppColors.error),
-            title: const Text(
-              'Unpair from partner',
-              style: TextStyle(
-                color: AppColors.error,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            onTap: () => _confirmUnpair(context),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-          ),
-        ],
-      ],
-    );
-  }
-
-  // ── Confirmation dialogs ──────────────────────────────────────────────────
-
   Future<void> _confirmSignOut(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showCupertinoDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Sign out?'),
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Sign Out?'),
         content: const Text(
           'You will need to sign in again to access your shared calendar.',
         ),
         actions: [
-          TextButton(
+          CupertinoDialogAction(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('Cancel'),
           ),
-          TextButton(
+          CupertinoDialogAction(
+            isDestructiveAction: true,
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.roseDark),
-            child: const Text('Sign out'),
+            child: const Text('Sign Out'),
           ),
         ],
       ),
@@ -231,22 +141,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _confirmUnpair(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showCupertinoDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Unpair from partner?'),
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Unpair from Partner?'),
         content: const Text(
           'This will remove the pairing and unlink your calendars. '
           'You can pair again later with a new invite code.',
         ),
         actions: [
-          TextButton(
+          CupertinoDialogAction(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('Cancel'),
           ),
-          TextButton(
+          CupertinoDialogAction(
+            isDestructiveAction: true,
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
             child: const Text('Unpair'),
           ),
         ],
@@ -266,67 +176,128 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Private helper widgets
+// iOS Grouped List Helpers
 // ══════════════════════════════════════════════════════════════════════════════
 
-/// A card-based section with a bold header row and child content tiles.
-class _SettingsSection extends StatelessWidget {
-  final IconData icon;
+class _SectionHeader extends StatelessWidget {
   final String title;
-  final List<Widget> children;
-
-  const _SettingsSection({
-    required this.icon,
-    required this.title,
-    required this.children,
-  });
+  const _SectionHeader({required this.title});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Row(
-            children: [
-              Icon(icon, size: 18, color: AppColors.lavenderDark),
-              const SizedBox(width: 6),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.lavenderDark,
-                  letterSpacing: 0.3,
-                ),
-              ),
-            ],
-          ),
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, bottom: 6),
+      child: Text(
+        title,
+        style: AppTypography.footnote.copyWith(
+          color: AppColors.textSecondary,
+          letterSpacing: 0.2,
         ),
-        Card(
-          margin: EdgeInsets.zero,
-          color: AppColors.surfaceElevated,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          elevation: 0,
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: children,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
 
-/// A tile showing a connected Google account with email, last sync, and remove.
-class _GoogleAccountTile extends StatelessWidget {
+class _GroupedCard extends StatelessWidget {
+  final List<Widget> children;
+  const _GroupedCard({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: children),
+    );
+  }
+}
+
+class _Separator extends StatelessWidget {
+  const _Separator();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.only(left: 16),
+      child: Divider(height: 0.33, thickness: 0.33, color: AppColors.separator),
+    );
+  }
+}
+
+class _TapRow extends StatelessWidget {
+  final String label;
+  final Color? labelColor;
+  final Widget? leading;
+  final VoidCallback onTap;
+
+  const _TapRow({
+    required this.label,
+    required this.onTap,
+    this.labelColor,
+    this.leading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            if (leading != null) ...[
+              leading!,
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              child: Text(
+                label,
+                style: AppTypography.body.copyWith(
+                  color: labelColor ?? AppColors.textPrimary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ValueRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ValueRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label, style: AppTypography.body),
+          ),
+          Text(
+            value,
+            style: AppTypography.body.copyWith(color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GoogleAccountRow extends StatelessWidget {
   final CalendarConnection connection;
   final VoidCallback onRemove;
 
-  const _GoogleAccountTile({
+  const _GoogleAccountRow({
     required this.connection,
     required this.onRemove,
   });
@@ -334,47 +305,40 @@ class _GoogleAccountTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final syncText = connection.lastSync != null
-        ? 'Last sync: ${DateFormat.yMMMd().add_jm().format(connection.lastSync!.toLocal())}'
+        ? 'Synced ${DateFormat.yMMMd().add_jm().format(connection.lastSync!.toLocal())}'
         : 'Not synced yet';
 
-    return ListTile(
-      leading: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: AppColors.inputFill,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(
-          Icons.g_mobiledata_rounded,
-          size: 22,
-          color: AppColors.onSurface,
-        ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  connection.email,
+                  style: AppTypography.body,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  syncText,
+                  style: AppTypography.footnote,
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: onRemove,
+            child: const Icon(
+              Icons.close_rounded,
+              size: 18,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
       ),
-      title: Text(
-        connection.email,
-        style: const TextStyle(
-          color: AppColors.onSurface,
-          fontWeight: FontWeight.w500,
-          fontSize: 14,
-        ),
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        syncText,
-        style: const TextStyle(
-          color: AppColors.onSurfaceMuted,
-          fontSize: 12,
-        ),
-      ),
-      trailing: IconButton(
-        icon: const Icon(Icons.close_rounded, size: 20),
-        color: AppColors.onSurfaceMuted,
-        onPressed: onRemove,
-        tooltip: 'Remove account',
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
     );
   }
 }
-

@@ -16,8 +16,6 @@ import '../../shared/providers/pattern_providers.dart';
 import '../calendar/providers/google_calendar_provider.dart';
 import 'widgets/timezone_clock.dart';
 
-/// The main home screen with timezone clocks, hero window card, patterns
-/// section, and quick-action chips. All data is Firestore-backed via Riverpod.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -26,54 +24,65 @@ class HomeScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final couple = ref.watch(currentCoupleProvider);
 
-    // While user/couple data is loading, show a centered spinner.
     if (user == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Couple Schedule')),
-        body: const Center(child: CircularProgressIndicator()),
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator.adaptive()),
       );
     }
 
     final coupleId = couple?.coupleId;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Couple Schedule'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_rounded),
-            onPressed: () => context.push('/settings'),
+      body: CustomScrollView(
+        slivers: [
+          // Large title app bar
+          SliverAppBar(
+            pinned: true,
+            expandedHeight: 96,
+            backgroundColor: AppColors.background,
+            flexibleSpace: FlexibleSpaceBar(
+              titlePadding: const EdgeInsets.only(left: 20, bottom: 14),
+              title: Text('Home', style: AppTypography.largeTitle.copyWith(fontSize: 28)),
+              expandedTitleScale: 1.0,
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.settings_rounded),
+                onPressed: () => context.push('/settings'),
+              ),
+            ],
+          ),
+
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                const SizedBox(height: 8),
+
+                // Timezone section
+                _TimezoneSection(userTimezone: user.timezone),
+                const SizedBox(height: 20),
+
+                // Hero card
+                if (coupleId != null)
+                  _HeroWindowCard(coupleId: coupleId)
+                else
+                  _NoCoupleCard(),
+                const SizedBox(height: 20),
+
+                // Patterns
+                if (coupleId != null) _PatternsSection(coupleId: coupleId),
+                const SizedBox(height: 20),
+
+                // Quick actions
+                _QuickActionsRow(coupleId: coupleId),
+
+                // Bottom padding for tab bar
+                const SizedBox(height: 100),
+              ]),
+            ),
           ),
         ],
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          children: [
-            // ── Timezone clock section ──────────────────────────────────
-            _TimezoneSection(userTimezone: user.timezone),
-
-            const SizedBox(height: 20),
-
-            // ── Hero card — next free window ────────────────────────────
-            if (coupleId != null)
-              _HeroWindowCard(coupleId: coupleId)
-            else
-              _NoCoupleCard(),
-
-            const SizedBox(height: 20),
-
-            // ── Patterns section ────────────────────────────────────────
-            if (coupleId != null) _PatternsSection(coupleId: coupleId),
-
-            const SizedBox(height: 20),
-
-            // ── Quick actions row ───────────────────────────────────────
-            _QuickActionsRow(coupleId: coupleId),
-
-            const SizedBox(height: 24),
-          ],
-        ),
       ),
     );
   }
@@ -83,7 +92,6 @@ class HomeScreen extends ConsumerWidget {
 
 class _TimezoneSection extends ConsumerWidget {
   const _TimezoneSection({required this.userTimezone});
-
   final String userTimezone;
 
   String _cityFromTimezone(String tz) {
@@ -101,33 +109,36 @@ class _TimezoneSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Text(
-            'Time zones',
-            style: Theme.of(context).textTheme.titleLarge,
+        Text('Time Zones', style: AppTypography.title3),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceElevated,
+            borderRadius: BorderRadius.circular(10),
           ),
-        ),
-        Row(
-          children: [
-            Expanded(
-              child: TimezoneClock(
-                city: userCity,
-                utcOffset: userOffset,
-                isMe: true,
-                label: 'You',
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Expanded(
+                child: TimezoneClock(
+                  city: userCity,
+                  utcOffset: userOffset,
+                  isMe: true,
+                  label: 'You',
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: couple != null && user != null
-                  ? _PartnerClock(
-                      couple: couple,
-                      currentUserUid: user.uid,
-                    )
-                  : _EmptyPartnerClock(),
-            ),
-          ],
+              Container(
+                width: 0.33,
+                height: 48,
+                color: AppColors.separator,
+              ),
+              Expanded(
+                child: couple != null && user != null
+                    ? _PartnerClock(couple: couple, currentUserUid: user.uid)
+                    : _EmptyPartnerClock(),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -135,11 +146,7 @@ class _TimezoneSection extends ConsumerWidget {
 }
 
 class _PartnerClock extends ConsumerWidget {
-  const _PartnerClock({
-    required this.couple,
-    required this.currentUserUid,
-  });
-
+  const _PartnerClock({required this.couple, required this.currentUserUid});
   final CoupleModel couple;
   final String currentUserUid;
 
@@ -165,7 +172,6 @@ class _PartnerClock extends ConsumerWidget {
 
         return TimezoneClock(
           city: partnerCity,
-          // TODO: resolve partner's actual UTC offset from IANA timezone
           utcOffset: DateTime.now().timeZoneOffset,
           isMe: false,
           label: data['displayName'] as String? ?? 'Partner',
@@ -178,56 +184,21 @@ class _PartnerClock extends ConsumerWidget {
 class _EmptyPartnerClock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceElevated,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.divider),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: const BoxDecoration(
-                  color: AppColors.partnerB,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 6),
-              const Text(
-                'Partner',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF5A9FE0),
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Not paired yet',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: AppColors.onSurfaceMuted,
-            ),
+          Text(
+            'Partner',
+            style: AppTypography.caption.copyWith(color: AppColors.partnerB),
           ),
           const SizedBox(height: 4),
-          const Text(
+          Text('Not paired yet', style: AppTypography.subhead),
+          Text(
             'Pair to see their time',
-            style: TextStyle(
-              fontSize: 11,
-              color: AppColors.onSurfaceMuted,
-            ),
+            style: AppTypography.caption,
           ),
         ],
       ),
@@ -251,24 +222,18 @@ class _HeroWindowCard extends ConsumerWidget {
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: AppColors.surfaceElevated,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.divider),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Column(
           children: [
             Icon(Icons.access_time_rounded,
                 size: 40, color: AppColors.onSurfaceMuted),
             const SizedBox(height: 12),
-            Text(
-              'No free windows found',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.onSurfaceMuted,
-                  ),
-            ),
+            Text('No free windows found', style: AppTypography.headline),
             const SizedBox(height: 4),
             Text(
               'Connect a calendar and add blocks to find overlap.',
-              style: Theme.of(context).textTheme.bodySmall,
+              style: AppTypography.footnote,
             ),
           ],
         ),
@@ -279,8 +244,6 @@ class _HeroWindowCard extends ConsumerWidget {
   }
 }
 
-/// Gradient hero card showing the next overlap window with time, duration,
-/// and optional Gemini suggestion.
 class _OverlapHeroCard extends StatelessWidget {
   const _OverlapHeroCard({required this.window});
   final OverlapWindow window;
@@ -293,8 +256,7 @@ class _OverlapHeroCard extends StatelessWidget {
   }
 
   String _formatTime(DateTime utc) {
-    final local = utc.toLocal();
-    return DateFormat('h:mm a').format(local);
+    return DateFormat('h:mm a').format(utc.toLocal());
   }
 
   @override
@@ -309,21 +271,13 @@ class _OverlapHeroCard extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         gradient: AppColors.heroGradient,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.lavender.withValues(alpha: 0.35),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Padding(
         padding: const EdgeInsets.all(22),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header row
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -332,81 +286,65 @@ class _OverlapHeroCard extends StatelessWidget {
                   children: [
                     Text(
                       isHappening ? 'You\'re free now!' : 'Next free window',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                      style: AppTypography.caption.copyWith(
                         color: Colors.white70,
-                        letterSpacing: 0.5,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       isHappening ? 'Now' : 'in $countdownStr',
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        letterSpacing: -0.5,
-                      ),
+                      style: AppTypography.title2.copyWith(color: Colors.white),
                     ),
                   ],
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.25),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     _formatDuration(window.durationMinutes),
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
+                    style: AppTypography.subhead.copyWith(
                       color: Colors.white,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
-
-            // Time range
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.schedule_rounded,
-                      size: 16, color: Colors.white70),
+                  const Icon(Icons.schedule_rounded, size: 16, color: Colors.white70),
                   const SizedBox(width: 8),
                   Text(
                     '$startStr - $endStr',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                    style: AppTypography.subhead.copyWith(
                       color: Colors.white,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   if (window.reasonableBoth) ...[
                     const Spacer(),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Text(
+                      child: Text(
                         'Good for both',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
+                        style: AppTypography.caption.copyWith(
                           color: Colors.white,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -414,20 +352,16 @@ class _OverlapHeroCard extends StatelessWidget {
                 ],
               ),
             ),
-
-            // Gemini suggestion
             if (window.suggestedActivity != null) ...[
               const SizedBox(height: 12),
               Row(
                 children: [
-                  const Icon(Icons.auto_awesome_rounded,
-                      size: 13, color: Colors.white70),
+                  const Icon(Icons.auto_awesome_rounded, size: 13, color: Colors.white70),
                   const SizedBox(width: 5),
                   Expanded(
                     child: Text(
                       window.suggestedActivity!,
-                      style: const TextStyle(
-                        fontSize: 12,
+                      style: AppTypography.caption.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w500,
                       ),
@@ -467,32 +401,35 @@ class _NoCoupleCard extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: AppColors.surfaceElevated,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.divider),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         children: [
           Icon(Icons.favorite_border_rounded,
               size: 40, color: AppColors.rose.withValues(alpha: 0.5)),
           const SizedBox(height: 12),
-          Text(
-            'Pair with your partner',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          Text('Pair with your partner', style: AppTypography.headline),
           const SizedBox(height: 4),
           Text(
             'Use an invite code to pair and find free time together',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall,
+            style: AppTypography.footnote,
           ),
           const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: () => context.push('/pairing'),
-            icon: const Icon(Icons.link_rounded, size: 18),
-            label: const Text('Pair now'),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.rose,
-              foregroundColor: Colors.white,
+          SizedBox(
+            height: 44,
+            child: ElevatedButton.icon(
+              onPressed: () => context.push('/pairing'),
+              icon: const Icon(Icons.link_rounded, size: 18),
+              label: const Text('Pair Now'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                minimumSize: Size.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
             ),
           ),
         ],
@@ -510,16 +447,12 @@ class _PatternsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final patterns = ref.watch(suggestedPatternsProvider(coupleId));
-
     if (patterns.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Patterns',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
+        Text('Patterns', style: AppTypography.title3),
         const SizedBox(height: 12),
         ...patterns.map((p) => _PatternCard(pattern: p)),
       ],
@@ -548,53 +481,43 @@ class _PatternCard extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 10),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.surfaceElevated,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.divider),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
           children: [
-            // Day icon
             Container(
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: AppColors.lavenderLight,
-                borderRadius: BorderRadius.circular(12),
+                color: AppColors.groupedBackground,
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Center(
                 child: Text(
                   pattern.dayOfWeek.substring(0, 3),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.lavenderDark,
+                  style: AppTypography.captionBold.copyWith(
+                    color: AppColors.primary,
                   ),
                 ),
               ),
             ),
             const SizedBox(width: 14),
-            // Details
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     '${pattern.dayOfWeek}  ${pattern.startTime} - ${pattern.endTime}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.onSurface,
-                    ),
+                    style: AppTypography.subhead.copyWith(fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 4),
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
                           color: _consistencyColor(pattern.consistency)
                               .withValues(alpha: 0.15),
@@ -602,8 +525,7 @@ class _PatternCard extends StatelessWidget {
                         ),
                         child: Text(
                           pattern.consistency,
-                          style: TextStyle(
-                            fontSize: 10,
+                          style: AppTypography.caption.copyWith(
                             fontWeight: FontWeight.w600,
                             color: _consistencyColor(pattern.consistency),
                           ),
@@ -616,10 +538,7 @@ class _PatternCard extends StatelessWidget {
                             pattern.suggestedActivity!,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.onSurfaceMuted,
-                            ),
+                            style: AppTypography.caption,
                           ),
                         ),
                       ],
@@ -684,39 +603,39 @@ class _QuickActionsRowState extends ConsumerState<_QuickActionsRow> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Quick actions',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
+        Text('Quick Actions', style: AppTypography.title3),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            _ActionChip(
-              icon: Icons.add_rounded,
-              label: 'Add Block',
-              onTap: () => context.push('/blocks/add'),
-            ),
-            const SizedBox(width: 10),
-            _ActionChip(
-              icon: _syncing ? Icons.hourglass_top_rounded : Icons.sync_rounded,
-              label: 'Sync Calendars',
-              onTap: _syncing ? () {} : _syncCalendars,
-            ),
-            const SizedBox(width: 10),
-            _ActionChip(
-              icon: Icons.view_timeline_rounded,
-              label: 'All Windows',
-              onTap: () => context.go('/overlap'),
-            ),
-          ],
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _ActionButton(
+                icon: Icons.add_rounded,
+                label: 'Add Block',
+                onTap: () => context.push('/blocks/add'),
+              ),
+              const SizedBox(width: 10),
+              _ActionButton(
+                icon: _syncing ? Icons.hourglass_top_rounded : Icons.sync_rounded,
+                label: 'Sync',
+                onTap: _syncing ? () {} : _syncCalendars,
+              ),
+              const SizedBox(width: 10),
+              _ActionButton(
+                icon: Icons.view_timeline_rounded,
+                label: 'All Windows',
+                onTap: () => context.go('/overlap'),
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 }
 
-class _ActionChip extends StatelessWidget {
-  const _ActionChip({
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
     required this.icon,
     required this.label,
     required this.onTap,
@@ -728,39 +647,36 @@ class _ActionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceElevated,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.divider),
-          ),
-          child: Column(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.roseLight,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, size: 18, color: AppColors.roseDark),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 100,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceElevated,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.groupedBackground,
+                borderRadius: BorderRadius.circular(10),
               ),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.onSurface,
-                ),
+              child: Icon(icon, size: 18, color: AppColors.primary),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: AppTypography.caption.copyWith(
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

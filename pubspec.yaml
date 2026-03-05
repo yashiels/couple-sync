@@ -41,6 +41,9 @@ dependencies:
   uuid: ^4.5.3
   timezone: ^0.9.4
 
+  # iOS-native design
+  google_fonts: ^6.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

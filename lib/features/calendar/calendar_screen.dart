@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -11,8 +12,6 @@ import '../../shared/providers/pairing_providers.dart';
 import 'providers/google_calendar_provider.dart';
 import 'widgets/week_view.dart';
 
-/// Full week-view calendar screen showing partner blocks, overlap highlights,
-/// calendar connection banners, and sync controls.
 class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key});
 
@@ -22,7 +21,7 @@ class CalendarScreen extends ConsumerStatefulWidget {
 
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   late final PageController _pageController;
-  static const _initialPage = 52; // center page = current week
+  static const _initialPage = 52;
   int _currentPage = _initialPage;
 
   @override
@@ -37,8 +36,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     super.dispose();
   }
 
-  /// Returns the Monday [DateTime] for the given [page] index, relative to
-  /// the current week at [_initialPage].
   DateTime _weekStartForPage(int page) {
     final now = DateTime.now();
     final currentWeekStart = now.subtract(Duration(days: now.weekday - 1));
@@ -50,7 +47,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     return startOfDay.add(Duration(days: (page - _initialPage) * 7));
   }
 
-  /// Formats a week range label, e.g. "3 Mar - 9 Mar".
   String _weekLabel(DateTime weekStart) {
     final weekEnd = weekStart.add(const Duration(days: 6));
     final startFmt = DateFormat('d MMM').format(weekStart);
@@ -58,7 +54,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     return '$startFmt \u2013 $endFmt';
   }
 
-  /// Triggers a sync for all connected calendar providers.
   Future<void> _syncAll() async {
     final user = ref.read(currentUserProvider);
     final couple = ref.read(currentCoupleProvider);
@@ -68,7 +63,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     if (!googleConnected) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No calendars connected. Add one in Settings.')),
+          const SnackBar(
+              content: Text('No calendars connected. Add one in Settings.')),
         );
       }
       return;
@@ -93,7 +89,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     }
   }
 
-  /// Shows a bottom sheet with details for the tapped [block].
   void _showBlockDetail(TimeBlock block) {
     final user = ref.read(currentUserProvider);
     final isMe = block.userId == user?.uid;
@@ -102,81 +97,82 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       context: context,
       backgroundColor: AppColors.surfaceElevated,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
       ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Drag handle
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: AppColors.separator,
+                    borderRadius: BorderRadius.circular(2.5),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            // Title row with color dot
-            Row(
-              children: [
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: isMe ? AppColors.rose : AppColors.partnerBlue,
-                    shape: BoxShape.circle,
+              const SizedBox(height: 20),
+              // Title row
+              Row(
+                children: [
+                  Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: isMe ? AppColors.rose : AppColors.partnerBlue,
+                      shape: BoxShape.circle,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    block.title.isNotEmpty
-                        ? block.title
-                        : (isMe ? 'Busy' : 'Partner busy'),
-                    style: Theme.of(ctx).textTheme.headlineSmall,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      block.title.isNotEmpty
+                          ? block.title
+                          : (isMe ? 'Busy' : 'Partner busy'),
+                      style: AppTypography.title2,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _DetailRow(
-              icon: Icons.schedule_rounded,
-              label:
-                  '${DateFormat('EEE d MMM, HH:mm').format(block.startUtc.toLocal())}'
-                  ' \u2013 '
-                  '${DateFormat('HH:mm').format(block.endUtc.toLocal())}',
-            ),
-            const SizedBox(height: 8),
-            _DetailRow(
-              icon: Icons.category_rounded,
-              label: block.category.name[0].toUpperCase() +
-                  block.category.name.substring(1),
-            ),
-            const SizedBox(height: 8),
-            _DetailRow(
-              icon: Icons.person_rounded,
-              label: isMe ? 'You' : 'Partner',
-            ),
-            const SizedBox(height: 8),
-            _DetailRow(
-              icon: _sourceIcon(block.source),
-              label: block.source.name[0].toUpperCase() +
-                  block.source.name.substring(1),
-            ),
-            const SizedBox(height: 24),
-          ],
+                ],
+              ),
+              const SizedBox(height: 16),
+              _DetailRow(
+                icon: Icons.schedule_rounded,
+                label:
+                    '${DateFormat('EEE d MMM, HH:mm').format(block.startUtc.toLocal())}'
+                    ' \u2013 '
+                    '${DateFormat('HH:mm').format(block.endUtc.toLocal())}',
+              ),
+              const SizedBox(height: 8),
+              _DetailRow(
+                icon: Icons.category_rounded,
+                label: block.category.name[0].toUpperCase() +
+                    block.category.name.substring(1),
+              ),
+              const SizedBox(height: 8),
+              _DetailRow(
+                icon: Icons.person_rounded,
+                label: isMe ? 'You' : 'Partner',
+              ),
+              const SizedBox(height: 8),
+              _DetailRow(
+                icon: _sourceIcon(block.source),
+                label: block.source.name[0].toUpperCase() +
+                    block.source.name.substring(1),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  /// Returns an appropriate icon for the block's [source].
   IconData _sourceIcon(BlockSource source) {
     switch (source) {
       case BlockSource.google:
@@ -191,86 +187,103 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final couple = ref.watch(currentCoupleProvider);
-
     final coupleId = couple?.coupleId;
     final blocks = coupleId != null
         ? ref.watch(coupleBlocksProvider(coupleId)).valueOrNull ?? []
         : <TimeBlock>[];
-
-    // WeekView expects FreeWindow list; overlap rendering is handled
-    // separately via block overlays, so pass an empty list for now.
     final freeWindows = <FreeWindow>[];
-
     final weekStart = _weekStartForPage(_currentPage);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Calendar'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.today_rounded),
-            tooltip: 'Today',
-            onPressed: () {
-              _pageController.animateToPage(
-                _initialPage,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.sync_rounded),
-            tooltip: 'Sync calendars',
-            onPressed: _syncAll,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Week navigation header
-          _WeekNavHeader(
-            label: _weekLabel(weekStart),
-            onPrev: () => _pageController.previousPage(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
+      body: CustomScrollView(
+        slivers: [
+          // Large title
+          SliverAppBar(
+            pinned: true,
+            expandedHeight: 96,
+            backgroundColor: AppColors.background,
+            flexibleSpace: FlexibleSpaceBar(
+              titlePadding: const EdgeInsets.only(left: 20, bottom: 14),
+              title: Text('Calendar',
+                  style: AppTypography.largeTitle.copyWith(fontSize: 28)),
+              expandedTitleScale: 1.0,
             ),
-            onNext: () => _pageController.nextPage(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
-            ),
+            actions: [
+              CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                onPressed: () {
+                  _pageController.animateToPage(
+                    _initialPage,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  );
+                },
+                child: Text('Today',
+                    style: AppTypography.headline
+                        .copyWith(color: AppColors.primary)),
+              ),
+              CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                onPressed: _syncAll,
+                child: Icon(Icons.sync_rounded, color: AppColors.primary, size: 22),
+              ),
+            ],
           ),
 
-          // Legend
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Row(
-              children: const [
-                _LegendDot(color: AppColors.rose, label: 'You'),
-                SizedBox(width: 16),
-                _LegendDot(color: AppColors.partnerBlue, label: 'Partner'),
+          SliverFillRemaining(
+            child: Column(
+              children: [
+                // Week nav header
+                _WeekNavHeader(
+                  label: _weekLabel(weekStart),
+                  onPrev: () => _pageController.previousPage(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  ),
+                  onNext: () => _pageController.nextPage(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  ),
+                ),
+
+                // Legend
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Row(
+                    children: [
+                      _LegendDot(color: AppColors.rose, label: 'You'),
+                      const SizedBox(width: 16),
+                      _LegendDot(
+                          color: AppColors.partnerBlue, label: 'Partner'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
+
+                // Week view pages
+                Expanded(
+                  child: PageView.builder(
+                    controller: _pageController,
+                    itemCount: _initialPage * 2 + 1,
+                    onPageChanged: (page) =>
+                        setState(() => _currentPage = page),
+                    itemBuilder: (context, page) {
+                      final ws = _weekStartForPage(page);
+                      return WeekView(
+                        weekStart: ws,
+                        blocks: blocks,
+                        freeWindows: freeWindows,
+                        myUtcOffset: DateTime.now().timeZoneOffset,
+                        partnerUtcOffset: DateTime.now().timeZoneOffset,
+                        myUserId:
+                            ref.read(currentUserProvider)?.uid ?? '',
+                        onBlockTap: _showBlockDetail,
+                      );
+                    },
+                  ),
+                ),
               ],
-            ),
-          ),
-          const SizedBox(height: 4),
-
-          // Week view pages
-          Expanded(
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: _initialPage * 2 + 1, // 52 weeks back + current + 52 forward
-              onPageChanged: (page) => setState(() => _currentPage = page),
-              itemBuilder: (context, page) {
-                final ws = _weekStartForPage(page);
-                return WeekView(
-                  weekStart: ws,
-                  blocks: blocks,
-                  freeWindows: freeWindows,
-                  myUtcOffset: DateTime.now().timeZoneOffset,
-                  partnerUtcOffset: DateTime.now().timeZoneOffset,
-                  myUserId: ref.read(currentUserProvider)?.uid ?? '',
-                  onBlockTap: _showBlockDetail,
-                );
-              },
             ),
           ),
         ],
@@ -279,18 +292,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Supporting widgets
-// ---------------------------------------------------------------------------
+// ── Supporting widgets ────────────────────────────────────────────────────────
 
-/// Chevron-arrow week navigation header with a centred label.
 class _WeekNavHeader extends StatelessWidget {
   const _WeekNavHeader({
     required this.label,
     required this.onPrev,
     required this.onNext,
   });
-
   final String label;
   final VoidCallback onPrev;
   final VoidCallback onNext;
@@ -302,21 +311,18 @@ class _WeekNavHeader extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          IconButton(
-            icon: const Icon(Icons.chevron_left_rounded),
+          CupertinoButton(
+            padding: EdgeInsets.zero,
             onPressed: onPrev,
-            color: AppColors.onSurface,
+            child: const Icon(Icons.chevron_left_rounded,
+                color: AppColors.onSurface),
           ),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.chevron_right_rounded),
+          Text(label, style: AppTypography.headline),
+          CupertinoButton(
+            padding: EdgeInsets.zero,
             onPressed: onNext,
-            color: AppColors.onSurface,
+            child: const Icon(Icons.chevron_right_rounded,
+                color: AppColors.onSurface),
           ),
         ],
       ),
@@ -324,10 +330,8 @@ class _WeekNavHeader extends StatelessWidget {
   }
 }
 
-/// Small coloured dot with a text label, used in the calendar legend row.
 class _LegendDot extends StatelessWidget {
   const _LegendDot({required this.color, required this.label});
-
   final Color color;
   final String label;
 
@@ -339,22 +343,17 @@ class _LegendDot extends StatelessWidget {
         Container(
           width: 8,
           height: 8,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 4),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        Text(label, style: AppTypography.footnote),
       ],
     );
   }
 }
 
-/// Icon + label row used inside the block detail bottom sheet.
 class _DetailRow extends StatelessWidget {
   const _DetailRow({required this.icon, required this.label});
-
   final IconData icon;
   final String label;
 
@@ -364,7 +363,7 @@ class _DetailRow extends StatelessWidget {
       children: [
         Icon(icon, size: 18, color: AppColors.onSurfaceMuted),
         const SizedBox(width: 10),
-        Text(label, style: Theme.of(context).textTheme.bodyMedium),
+        Text(label, style: AppTypography.body),
       ],
     );
   }

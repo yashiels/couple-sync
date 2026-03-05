@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -7,33 +8,17 @@ import '../../shared/models/overlap_window.dart';
 import '../../shared/providers/overlap_providers.dart';
 import '../../shared/providers/pairing_providers.dart';
 
-/// Duration filter options for the free-windows list.
 enum _DurationFilter {
-  any('Any'),
-  thirtyMin('30 min'),
-  oneHour('1 hr'),
-  twoHours('2 hr');
+  any('Any', 0),
+  thirtyMin('30 min', 30),
+  oneHour('1 hr', 60),
+  twoHours('2 hr', 120);
 
-  const _DurationFilter(this.label);
+  const _DurationFilter(this.label, this.minMinutes);
   final String label;
-
-  /// Minimum duration in minutes that this filter requires.
-  int get minMinutes {
-    switch (this) {
-      case _DurationFilter.any:
-        return 0;
-      case _DurationFilter.thirtyMin:
-        return 30;
-      case _DurationFilter.oneHour:
-        return 60;
-      case _DurationFilter.twoHours:
-        return 120;
-    }
-  }
+  final int minMinutes;
 }
 
-/// Displays the Firestore-computed free windows for the current couple,
-/// sorted by overlap score with duration filtering and Gemini suggestions.
 class OverlapScreen extends ConsumerStatefulWidget {
   const OverlapScreen({super.key});
 
@@ -68,15 +53,33 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
 
     if (couple == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Free Windows')),
-        body: const Center(
-          child: Padding(
-            padding: EdgeInsets.all(32),
-            child: Text(
-              'Pair with your partner first to see shared free windows.',
-              textAlign: TextAlign.center,
+        backgroundColor: AppColors.groupedBackground,
+        body: CustomScrollView(
+          slivers: [
+            SliverAppBar(
+              pinned: true,
+              expandedHeight: 96,
+              backgroundColor: AppColors.groupedBackground,
+              flexibleSpace: FlexibleSpaceBar(
+                titlePadding: const EdgeInsets.only(left: 20, bottom: 14),
+                title: Text('Free Time',
+                    style: AppTypography.largeTitle.copyWith(fontSize: 28)),
+                expandedTitleScale: 1.0,
+              ),
             ),
-          ),
+            SliverFillRemaining(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Text(
+                    'Pair with your partner first to see shared free windows.',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.body,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -86,322 +89,221 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
     final computedAt = ref.watch(overlapComputedAtProvider(coupleId));
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Free Windows'),
-        actions: [
-          if (computedAt != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Center(
-                child: Text(
-                  'Updated ${_relativeTime(computedAt)}',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
+      backgroundColor: AppColors.groupedBackground,
+      body: CustomScrollView(
+        slivers: [
+          // Large title
+          SliverAppBar(
+            pinned: true,
+            expandedHeight: 96,
+            backgroundColor: AppColors.groupedBackground,
+            flexibleSpace: FlexibleSpaceBar(
+              titlePadding: const EdgeInsets.only(left: 20, bottom: 14),
+              title: Text('Free Time',
+                  style: AppTypography.largeTitle.copyWith(fontSize: 28)),
+              expandedTitleScale: 1.0,
             ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Duration filter chip row
-          _buildFilterRow(context),
-          const Divider(height: 1),
-          // Window list
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () async {
-                ref.invalidate(overlapResultProvider(coupleId));
-              },
-              child: overlapAsync.when(
-                data: (result) {
-                  if (result == null || result.windows.isEmpty) {
-                    return _buildEmptyState(context);
-                  }
-                  final filtered = result.windows
-                      .where((w) =>
-                          w.durationMinutes >= _selectedFilter.minMinutes)
-                      .toList();
-                  if (filtered.isEmpty) {
-                    return _buildNoMatchState(context);
-                  }
-                  return _buildWindowList(context, filtered);
-                },
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(child: Text('Error: $e')),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Builds the duration filter chip row at the top of the screen.
-  Widget _buildFilterRow(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: _DurationFilter.values.map((filter) {
-          final selected = _selectedFilter == filter;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text(filter.label),
-              selected: selected,
-              onSelected: (_) => setState(() => _selectedFilter = filter),
-              selectedColor: AppColors.lavender,
-              labelStyle: TextStyle(
-                color: selected ? Colors.white : AppColors.onSurface,
-                fontWeight: FontWeight.w500,
-                fontSize: 13,
-              ),
-              backgroundColor: AppColors.surfaceElevated,
-              side: BorderSide(
-                color: selected
-                    ? AppColors.lavender
-                    : AppColors.divider,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  /// Empty state shown when there are no overlap windows at all.
-  Widget _buildEmptyState(BuildContext context) {
-    return ListView(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const SizedBox(height: 48),
-              Container(
-                width: 96,
-                height: 96,
-                decoration: const BoxDecoration(
-                  gradient: AppColors.heroGradient,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.favorite_rounded,
-                    size: 48, color: Colors.white),
-              ),
-              const SizedBox(height: 24),
-              Text('No free windows yet',
-                  style: Theme.of(context).textTheme.headlineMedium),
-              const SizedBox(height: 10),
-              Text(
-                'Add your schedules and we\'ll find moments when you\'re both free.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// State shown when the filter excludes all available windows.
-  Widget _buildNoMatchState(BuildContext context) {
-    return ListView(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const SizedBox(height: 48),
-              const Icon(Icons.filter_list_off_rounded,
-                  size: 48, color: AppColors.onSurfaceMuted),
-              const SizedBox(height: 16),
-              Text('No windows match this filter',
-                  style: Theme.of(context).textTheme.headlineMedium),
-              const SizedBox(height: 10),
-              Text(
-                'Try a shorter minimum duration to see more results.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Builds the scrollable list of window cards.
-  Widget _buildWindowList(
-    BuildContext context,
-    List<OverlapWindow> windows,
-  ) {
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: windows.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
-      itemBuilder: (context, i) {
-        return _buildWindowCard(context, windows[i], isTop: i == 0);
-      },
-    );
-  }
-
-  /// Builds a single window card with time range, duration badge,
-  /// and Gemini suggestion chip.
-  Widget _buildWindowCard(
-    BuildContext context,
-    OverlapWindow window, {
-    required bool isTop,
-  }) {
-    final start = window.startUtc.toLocal();
-    final end = window.endUtc.toLocal();
-
-    if (isTop) {
-      return _buildHeroCard(context, window, start, end);
-    }
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: AppColors.lavender.withAlpha(60),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.access_time_rounded,
-                      color: AppColors.lavenderDeep),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(_dateFmt.format(start),
-                          style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${_timeFmt.format(start)} – ${_timeFmt.format(end)}',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                ),
-                // Duration badge
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.lavenderLight,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    _formatDuration(window.durationMinutes),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.lavenderDark,
+            actions: [
+              if (computedAt != null)
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: Center(
+                    child: Text(
+                      'Updated ${_relativeTime(computedAt)}',
+                      style: AppTypography.caption,
                     ),
                   ),
                 ),
-              ],
-            ),
-            // Suggested activity chip
-            if (window.suggestedActivity != null) ...[
-              const SizedBox(height: 12),
-              _buildSuggestionChip(context, window.suggestedActivity!),
             ],
+          ),
+
+          // Segmented filter
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: CupertinoSlidingSegmentedControl<_DurationFilter>(
+                groupValue: _selectedFilter,
+                children: {
+                  for (final f in _DurationFilter.values)
+                    f: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                      child: Text(
+                        f.label,
+                        style: AppTypography.subhead.copyWith(
+                          fontWeight: _selectedFilter == f
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                },
+                onValueChanged: (v) {
+                  if (v != null) setState(() => _selectedFilter = v);
+                },
+              ),
+            ),
+          ),
+
+          // Window list
+          overlapAsync.when(
+            data: (result) {
+              if (result == null || result.windows.isEmpty) {
+                return SliverFillRemaining(child: _buildEmptyState());
+              }
+              final filtered = result.windows
+                  .where((w) => w.durationMinutes >= _selectedFilter.minMinutes)
+                  .toList();
+              if (filtered.isEmpty) {
+                return SliverFillRemaining(child: _buildNoMatchState());
+              }
+              return _buildWindowSliver(filtered);
+            },
+            loading: () => const SliverFillRemaining(
+              child: Center(child: CupertinoActivityIndicator()),
+            ),
+            error: (e, _) => SliverFillRemaining(
+              child: Center(
+                child: Text('Error: $e', style: AppTypography.footnote),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: const BoxDecoration(
+                gradient: AppColors.heroGradient,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.favorite_rounded, size: 40, color: Colors.white),
+            ),
+            const SizedBox(height: 24),
+            Text('No free windows yet', style: AppTypography.title2),
+            const SizedBox(height: 10),
+            Text(
+              'Add your schedules and we\'ll find moments when you\'re both free.',
+              textAlign: TextAlign.center,
+              style: AppTypography.footnote,
+            ),
           ],
         ),
       ),
     );
   }
 
-  /// Hero card for the top-ranked window with gradient background.
-  Widget _buildHeroCard(
-    BuildContext context,
-    OverlapWindow window,
-    DateTime start,
-    DateTime end,
-  ) {
+  Widget _buildNoMatchState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.filter_list_off_rounded,
+                size: 48, color: AppColors.onSurfaceMuted),
+            const SizedBox(height: 16),
+            Text('No windows match this filter', style: AppTypography.title2),
+            const SizedBox(height: 10),
+            Text(
+              'Try a shorter minimum duration to see more results.',
+              textAlign: TextAlign.center,
+              style: AppTypography.footnote,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  SliverPadding _buildWindowSliver(List<OverlapWindow> windows) {
+    return SliverPadding(
+      padding: const EdgeInsets.all(16),
+      sliver: SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, i) {
+            final window = windows[i];
+            return Padding(
+              padding: EdgeInsets.only(bottom: i < windows.length - 1 ? 10 : 80),
+              child: i == 0
+                  ? _buildHeroCard(window)
+                  : _buildWindowCard(window),
+            );
+          },
+          childCount: windows.length,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeroCard(OverlapWindow window) {
+    final start = window.startUtc.toLocal();
+    final end = window.endUtc.toLocal();
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: AppColors.heroGradient,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.favorite_rounded,
-                  color: Colors.white, size: 18),
+              const Icon(Icons.favorite_rounded, color: Colors.white, size: 16),
               const SizedBox(width: 6),
               Text('Best Match',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(color: Colors.white70)),
+                  style: AppTypography.caption.copyWith(color: Colors.white70)),
             ],
           ),
           const SizedBox(height: 12),
           Text(
             _dateFmt.format(start),
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: Colors.white, fontWeight: FontWeight.w700),
+            style: AppTypography.headline.copyWith(color: Colors.white),
           ),
           const SizedBox(height: 4),
           Text(
-            '${_timeFmt.format(start)} – ${_timeFmt.format(end)}',
-            style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                color: Colors.white, fontWeight: FontWeight.w700),
+            '${_timeFmt.format(start)} - ${_timeFmt.format(end)}',
+            style: AppTypography.title1.copyWith(color: Colors.white),
           ),
           const SizedBox(height: 8),
           Row(
             children: [
-              _buildHeroChip(_formatDuration(window.durationMinutes)),
+              _heroChip(_formatDuration(window.durationMinutes)),
               const SizedBox(width: 8),
-              if (window.reasonableBoth)
-                _buildHeroChip('Good hours for both'),
+              if (window.reasonableBoth) _heroChip('Good hours for both'),
             ],
           ),
-          // Gemini suggestion chip on hero card
           if (window.suggestedActivity != null) ...[
             const SizedBox(height: 10),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
                 color: Colors.white.withAlpha(40),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.auto_awesome_rounded,
-                      size: 14, color: Colors.white),
+                  const Icon(Icons.auto_awesome_rounded, size: 14, color: Colors.white),
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(
                       window.suggestedActivity!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: AppTypography.caption.copyWith(
                         color: Colors.white,
-                        fontSize: 12,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -415,54 +317,90 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
     );
   }
 
-  /// Small chip used on the hero card with semi-transparent white background.
-  Widget _buildHeroChip(String label) {
+  Widget _heroChip(String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withAlpha(60),
+        color: Colors.white.withAlpha(50),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         label,
-        style: const TextStyle(
+        style: AppTypography.caption.copyWith(
           color: Colors.white,
-          fontSize: 12,
           fontWeight: FontWeight.w500,
         ),
       ),
     );
   }
 
-  /// Gemini-suggested activity chip with sparkle icon.
-  Widget _buildSuggestionChip(BuildContext context, String activity) {
+  Widget _buildWindowCard(OverlapWindow window) {
+    final start = window.startUtc.toLocal();
+    final end = window.endUtc.toLocal();
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.lavenderLight,
-        borderRadius: BorderRadius.circular(12),
+        color: AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(10),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.auto_awesome_rounded,
-              size: 14, color: AppColors.lavenderDark),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              activity,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: AppColors.lavenderDark,
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(_dateFmt.format(start), style: AppTypography.headline),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${_timeFmt.format(start)} - ${_timeFmt.format(end)}',
+                      style: AppTypography.footnote,
+                    ),
+                  ],
+                ),
               ),
-            ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.groupedBackground,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  _formatDuration(window.durationMinutes),
+                  style: AppTypography.captionBold.copyWith(
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ],
           ),
+          if (window.suggestedActivity != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.auto_awesome_rounded,
+                    size: 14, color: AppColors.primary),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    window.suggestedActivity!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
   }
-
 }

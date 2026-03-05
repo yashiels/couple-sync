@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,60 +24,75 @@ class AuthScreen extends ConsumerWidget {
           child: Column(
             children: [
               const Spacer(flex: 2),
+              // App icon
               Container(
                 width: 80,
                 height: 80,
                 decoration: BoxDecoration(
                   gradient: AppColors.heroGradient,
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Icon(Icons.favorite_rounded, color: Colors.white, size: 40),
+                child: const Icon(Icons.favorite_rounded,
+                    color: Colors.white, size: 40),
               ),
               const SizedBox(height: 20),
-              Text('Couple Schedule', style: Theme.of(context).textTheme.displaySmall),
+              Text('Couple Schedule', style: AppTypography.largeTitle),
               const SizedBox(height: 8),
               Text(
                 'Sync your lives, find your moments.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                style: AppTypography.subhead.copyWith(
                   color: AppColors.textSecondary,
                 ),
               ),
               const Spacer(flex: 3),
-              // Google Sign In
+
+              // Google Sign In — white bg, 1px border, 50px height, 10px radius
               SizedBox(
                 width: double.infinity,
-                height: 56,
+                height: 50,
                 child: OutlinedButton.icon(
-                  onPressed: isLoading ? null : () => _signInWithGoogle(context, ref),
+                  onPressed: isLoading
+                      ? null
+                      : () => _signInWithGoogle(context, ref),
                   style: OutlinedButton.styleFrom(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    side: const BorderSide(color: AppColors.divider),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    side: const BorderSide(color: AppColors.separator),
+                    backgroundColor: AppColors.surfaceElevated,
                   ),
                   icon: const Icon(Icons.g_mobiledata_rounded, size: 28),
-                  label: const Text('Continue with Google', style: TextStyle(fontSize: 16)),
+                  label: Text('Continue with Google',
+                      style: AppTypography.headline),
                 ),
               ),
-              // Apple Sign In — only shown on iOS, macOS, and web
+
+              // Apple Sign In — black bg, 50px height, 10px radius
               if (kIsWeb || Platform.isIOS || Platform.isMacOS) ...[
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
-                  height: 56,
+                  height: 50,
                   child: ElevatedButton.icon(
-                    onPressed: isLoading ? null : () => _signInWithApple(context, ref),
+                    onPressed: isLoading
+                        ? null
+                        : () => _signInWithApple(context, ref),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.black,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      elevation: 0,
                     ),
                     icon: const Icon(Icons.apple_rounded, size: 28),
-                    label: const Text('Continue with Apple', style: TextStyle(fontSize: 16)),
+                    label: Text('Continue with Apple',
+                        style: AppTypography.headline
+                            .copyWith(color: Colors.white)),
                   ),
                 ),
               ],
+
               const SizedBox(height: 32),
-              if (isLoading)
-                const CircularProgressIndicator(),
+              if (isLoading) const CupertinoActivityIndicator(),
               const Spacer(),
             ],
           ),

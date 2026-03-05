@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,10 +8,8 @@ import '../../core/theme/app_theme.dart';
 import '../../shared/providers/auth_providers.dart';
 import '../../shared/providers/pairing_providers.dart';
 
-/// Screen for connecting with a partner via a 6-character invite code.
-///
-/// Two tabs: "Share Code" generates and displays the user's own invite code,
-/// and "Enter Code" redeems a partner's code.
+enum _PairingTab { share, enter }
+
 class PairingScreen extends ConsumerStatefulWidget {
   const PairingScreen({super.key});
 
@@ -18,52 +17,51 @@ class PairingScreen extends ConsumerStatefulWidget {
   ConsumerState<PairingScreen> createState() => _PairingScreenState();
 }
 
-class _PairingScreenState extends ConsumerState<PairingScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tab;
-
-  @override
-  void initState() {
-    super.initState();
-    _tab = TabController(length: 2, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tab.dispose();
-    super.dispose();
-  }
+class _PairingScreenState extends ConsumerState<PairingScreen> {
+  _PairingTab _tab = _PairingTab.share;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.groupedBackground,
       appBar: AppBar(
+        backgroundColor: AppColors.groupedBackground,
         title: const Text('Pair with Partner'),
-        bottom: TabBar(
-          controller: _tab,
-          labelColor: AppColors.roseDeep,
-          unselectedLabelColor: AppColors.textSecondary,
-          indicatorColor: AppColors.roseDeep,
-          tabs: const [
-            Tab(icon: Icon(Icons.share_rounded), text: 'Share Code'),
-            Tab(icon: Icon(Icons.vpn_key_rounded), text: 'Enter Code'),
-          ],
-        ),
       ),
-      body: TabBarView(
-        controller: _tab,
-        children: const [
-          _ShareCodeTab(),
-          _EnterCodeTab(),
+      body: Column(
+        children: [
+          // Segmented control
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: CupertinoSlidingSegmentedControl<_PairingTab>(
+              groupValue: _tab,
+              children: {
+                _PairingTab.share: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  child: Text('Share Code', style: AppTypography.subhead),
+                ),
+                _PairingTab.enter: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  child: Text('Enter Code', style: AppTypography.subhead),
+                ),
+              },
+              onValueChanged: (v) {
+                if (v != null) setState(() => _tab = v);
+              },
+            ),
+          ),
+          Expanded(
+            child: _tab == _PairingTab.share
+                ? const _ShareCodeTab()
+                : const _EnterCodeTab(),
+          ),
         ],
       ),
     );
   }
 }
 
-// ---------------------------------------------------------------------------
-// Share Code Tab
-// ---------------------------------------------------------------------------
+// ── Share Code Tab ────────────────────────────────────────────────────────────
 
 class _ShareCodeTab extends ConsumerStatefulWidget {
   const _ShareCodeTab();
@@ -81,17 +79,20 @@ class _ShareCodeTabState extends ConsumerState<_ShareCodeTab> {
     final uid = ref.read(currentUserProvider)?.uid;
     if (uid == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You must be signed in to generate a code.')),
+        const SnackBar(
+            content: Text('You must be signed in to generate a code.')),
       );
       return;
     }
     setState(() => _loading = true);
     try {
-      final code = await ref.read(pairingNotifierProvider.notifier).generateCode(uid);
+      final code =
+          await ref.read(pairingNotifierProvider.notifier).generateCode(uid);
       setState(() => _code = code);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -114,34 +115,34 @@ class _ShareCodeTabState extends ConsumerState<_ShareCodeTab> {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(Icons.favorite_rounded, size: 64, color: AppColors.rose),
+          Icon(Icons.favorite_rounded, size: 64,
+              color: AppColors.rose),
           const SizedBox(height: 20),
           Text(
             'Share Your Code',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineMedium,
+            style: AppTypography.title2,
           ),
           const SizedBox(height: 8),
           Text(
             'Give this code to your partner so they can pair with you.',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: AppTypography.footnote,
           ),
           const SizedBox(height: 36),
           if (_code != null) ...[
+            // Code display — large monospace in rounded card
             Container(
               padding: const EdgeInsets.symmetric(vertical: 24),
               decoration: BoxDecoration(
-                gradient: AppColors.heroGradient,
-                borderRadius: BorderRadius.circular(20),
+                color: AppColors.surfaceElevated,
+                borderRadius: BorderRadius.circular(10),
               ),
               alignment: Alignment.center,
               child: Text(
                 _code!,
-                style: const TextStyle(
-                  fontSize: 40,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
+                style: AppTypography.largeTitle.copyWith(
+                  fontFamily: 'Menlo',
                   letterSpacing: 10,
                 ),
               ),
@@ -150,22 +151,34 @@ class _ShareCodeTabState extends ConsumerState<_ShareCodeTab> {
             Text(
               'Generated just now \u2014 valid for 48 hours',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
+              style: AppTypography.caption,
             ),
             const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _copyCode,
-              icon: Icon(_copied ? Icons.check_rounded : Icons.copy_rounded),
-              label: Text(_copied ? 'Copied!' : 'Copy Code'),
+            SizedBox(
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: _copyCode,
+                icon: Icon(
+                    _copied ? Icons.check_rounded : Icons.copy_rounded),
+                label: Text(_copied ? 'Copied!' : 'Copy Code'),
+              ),
             ),
             const SizedBox(height: 12),
-            TextButton(onPressed: _generateCode, child: const Text('Generate New Code')),
+            CupertinoButton(
+              onPressed: _generateCode,
+              child: Text('Generate New Code',
+                  style: AppTypography.headline
+                      .copyWith(color: AppColors.primary)),
+            ),
           ] else ...[
-            ElevatedButton(
-              onPressed: _loading ? null : _generateCode,
-              child: _loading
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Generate Invite Code'),
+            SizedBox(
+              height: 50,
+              child: ElevatedButton(
+                onPressed: _loading ? null : _generateCode,
+                child: _loading
+                    ? const CupertinoActivityIndicator(color: Colors.white)
+                    : const Text('Generate Invite Code'),
+              ),
             ),
           ],
         ],
@@ -174,9 +187,7 @@ class _ShareCodeTabState extends ConsumerState<_ShareCodeTab> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Enter Code Tab
-// ---------------------------------------------------------------------------
+// ── Enter Code Tab ────────────────────────────────────────────────────────────
 
 class _EnterCodeTab extends ConsumerStatefulWidget {
   const _EnterCodeTab();
@@ -229,43 +240,54 @@ class _EnterCodeTabState extends ConsumerState<_EnterCodeTab> {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(Icons.person_add_rounded, size: 64, color: AppColors.skyBlue),
+          Icon(Icons.person_add_rounded, size: 64,
+              color: AppColors.partnerBlue),
           const SizedBox(height: 20),
           Text(
             'Enter Partner\'s Code',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineMedium,
+            style: AppTypography.title2,
           ),
           const SizedBox(height: 8),
           Text(
             'Type the 6-character code your partner shared with you.',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: AppTypography.footnote,
           ),
           const SizedBox(height: 36),
-          TextField(
+          // iOS-style rounded text field
+          CupertinoTextField(
             controller: _controller,
-            decoration: InputDecoration(
-              hintText: 'ABC123',
-              errorText: _error,
-              prefixIcon: const Icon(Icons.vpn_key_rounded),
-            ),
+            placeholder: 'ABC123',
             textCapitalization: TextCapitalization.characters,
             maxLength: 6,
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 6,
-            ),
+            style: AppTypography.title1.copyWith(letterSpacing: 6),
             textAlign: TextAlign.center,
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceElevated,
+              borderRadius: BorderRadius.circular(10),
+            ),
             onSubmitted: (_) => _connect(),
           ),
+          if (_error != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: AppTypography.footnote
+                  .copyWith(color: AppColors.destructive),
+            ),
+          ],
           const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: loading ? null : _connect,
-            child: loading
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Text('Pair'),
+          SizedBox(
+            height: 50,
+            child: ElevatedButton(
+              onPressed: loading ? null : _connect,
+              child: loading
+                  ? const CupertinoActivityIndicator(color: Colors.white)
+                  : const Text('Pair'),
+            ),
           ),
         ],
       ),

@@ -3,10 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 
-/// Live clock card displaying the current time in a given UTC offset.
-///
-/// Ticks every second. Rose-tinted for the user's own clock, sky-blue for the
-/// partner's.
+/// Live clock displaying the current time in a given UTC offset.
+/// Ticks every second. Designed to sit inside a grouped card container.
 class TimezoneClock extends StatefulWidget {
   const TimezoneClock({
     super.key,
@@ -55,64 +53,32 @@ class _TimezoneClockState extends State<TimezoneClock> {
     final timeStr = DateFormat('HH:mm').format(_localTime);
     final secondsStr = DateFormat(':ss').format(_localTime);
     final dateStr = DateFormat('EEE, MMM d').format(_localTime);
-    final isPM = _localTime.hour >= 12;
-    final amPm = isPM ? 'PM' : 'AM';
+    final amPm = _localTime.hour >= 12 ? 'PM' : 'AM';
+    final accentColor = widget.isMe ? AppColors.rose : AppColors.partnerBlue;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceElevated,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: (widget.isMe ? AppColors.rose : AppColors.partnerB)
-                .withValues(alpha: 0.12),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(
-          color: (widget.isMe ? AppColors.roseLight : const Color(0xFFD0E8FF)),
-          width: 1,
-        ),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: widget.isMe ? AppColors.rose : AppColors.partnerB,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                widget.label ?? (widget.isMe ? 'You' : 'Partner'),
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: widget.isMe ? AppColors.roseDark : const Color(0xFF5A9FE0),
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
+          // Label
+          Text(
+            widget.label ?? (widget.isMe ? 'You' : 'Partner'),
+            style: AppTypography.caption.copyWith(
+              color: accentColor,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
+          // Time
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
                 timeStr,
-                style: const TextStyle(
-                  fontSize: 32,
+                style: AppTypography.title1.copyWith(
                   fontWeight: FontWeight.w300,
-                  color: AppColors.onSurface,
                   letterSpacing: -1,
                   height: 1,
                 ),
@@ -121,44 +87,27 @@ class _TimezoneClockState extends State<TimezoneClock> {
                 padding: const EdgeInsets.only(bottom: 3),
                 child: Text(
                   secondsStr,
-                  style: const TextStyle(
-                    fontSize: 14,
+                  style: AppTypography.footnote.copyWith(
                     fontWeight: FontWeight.w300,
-                    color: AppColors.onSurfaceMuted,
-                    letterSpacing: 0,
                   ),
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 3),
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Text(
                   amPm,
-                  style: TextStyle(
-                    fontSize: 11,
+                  style: AppTypography.caption.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: widget.isMe ? AppColors.rose : AppColors.partnerB,
+                    color: accentColor,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            widget.city,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: AppColors.onSurface,
-            ),
-          ),
-          Text(
-            dateStr,
-            style: const TextStyle(
-              fontSize: 11,
-              color: AppColors.onSurfaceMuted,
-            ),
-          ),
+          const SizedBox(height: 2),
+          Text(widget.city, style: AppTypography.subhead),
+          Text(dateStr, style: AppTypography.caption),
         ],
       ),
     );
