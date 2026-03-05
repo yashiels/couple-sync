@@ -78,12 +78,15 @@ async function runOverlapEngine(coupleId: string): Promise<OverlapWindowDoc[]> {
   const fromMs = Date.now();
   const toMs = fromMs + LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000;
 
-  // 4. Fetch all blocks within the horizon
+  // 4. Fetch all blocks within the horizon.
+  // Widen query start by 24 h so we don't miss blocks that started before
+  // `fromMs` but are still active (same approach as the Flutter side).
+  const queryFromMs = fromMs - 24 * 60 * 60 * 1000;
   const blocksSnap = await getDb()
     .collection("timeblocks")
     .doc(coupleId)
     .collection("blocks")
-    .where("startUtc", ">=", admin.firestore.Timestamp.fromMillis(fromMs))
+    .where("startUtc", ">=", admin.firestore.Timestamp.fromMillis(queryFromMs))
     .where("startUtc", "<", admin.firestore.Timestamp.fromMillis(toMs))
     .get();
 
@@ -109,17 +112,39 @@ async function runOverlapEngine(coupleId: string): Promise<OverlapWindowDoc[]> {
   // 7. Intersect the two free timelines
   const intersected = intersectIntervals(freeA, freeB);
 
-  // 8. Filter: minimum duration + both users outside quiet hours
+  // 8. Clip windows to reasonable waking hours for both partners, then
+  //    filter by minimum duration.  Instead of discarding an entire window
+  //    whose start falls before 7 AM, we clip to the later of the two
+  //    partners' quiet-hour-end times (7 AM local) and the earlier of
+  //    their quiet-hour-start times (11 PM local).
   const minMs = MIN_DURATION_MINUTES * 60_000;
-  const filtered = intersected.filter((w) => {
-    if (w.endMs - w.startMs < minMs) return false;
-    const hourA = getLocalHour(w.startMs, tzA);
-    const hourB = getLocalHour(w.startMs, tzB);
-    // Drop windows where either partner is in deep-quiet hours
-    if (hourA < QUIET_HOUR_BEFORE || hourA >= QUIET_HOUR_AFTER) return false;
-    if (hourB < QUIET_HOUR_BEFORE || hourB >= QUIET_HOUR_AFTER) return false;
-    return true;
-  });
+
+  const filtered = intersected
+    .map((w) => {
+      // --- clip start to 7 AM local for each partner ---
+      const dtStartA = DateTime.fromMillis(w.startMs, { zone: tzA });
+      const dayStartA = dtStartA.startOf("day").toMillis();
+      const validStartA = dayStartA + QUIET_HOUR_BEFORE * 3_600_000;
+
+      const dtStartB = DateTime.fromMillis(w.startMs, { zone: tzB });
+      const dayStartB = dtStartB.startOf("day").toMillis();
+      const validStartB = dayStartB + QUIET_HOUR_BEFORE * 3_600_000;
+
+      // --- clip end to 11 PM local for each partner ---
+      const dtEndA = DateTime.fromMillis(w.endMs, { zone: tzA });
+      const dayEndA = dtEndA.startOf("day").toMillis();
+      const validEndA = dayEndA + QUIET_HOUR_AFTER * 3_600_000;
+
+      const dtEndB = DateTime.fromMillis(w.endMs, { zone: tzB });
+      const dayEndB = dtEndB.startOf("day").toMillis();
+      const validEndB = dayEndB + QUIET_HOUR_AFTER * 3_600_000;
+
+      const clippedStart = Math.max(w.startMs, validStartA, validStartB);
+      const clippedEnd = Math.min(w.endMs, validEndA, validEndB);
+
+      return { startMs: clippedStart, endMs: clippedEnd };
+    })
+    .filter((w) => w.endMs - w.startMs >= minMs);
 
   // 9. Score, rank, slice
   const ranked: ScoredWindow[] = filtered
@@ -164,7 +189,7 @@ function buildBusyTimeline(
   userId: string
 ): Interval[] {
   return blocks
-    .filter((b) => b.userId === userId && b.type === "busy" && b.visibility !== "onlyMe")
+    .filter((b) => b.userId === userId && (b.type === "busy" || b.type === "tentative") && b.visibility !== "onlyMe")
     .map((b) => ({ startMs: b.startMs, endMs: b.endMs }))
     .sort((a, b) => a.startMs - b.startMs);
 }

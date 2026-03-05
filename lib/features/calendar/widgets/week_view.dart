@@ -129,11 +129,20 @@ class WeekView extends StatelessWidget {
     final widgets = <Widget>[];
     for (int i = 0; i < days.length; i++) {
       final day = days[i];
-      if (localStart.year == day.year &&
-          localStart.month == day.month &&
-          localStart.day == day.day) {
-        final top = _timeToY(localStart.hour + localStart.minute / 60);
-        final bottom = _timeToY(localEnd.hour + localEnd.minute / 60);
+      final dayStart = DateTime(day.year, day.month, day.day);
+      final dayEnd = dayStart.add(const Duration(days: 1));
+
+      // Check if block overlaps this day at all
+      if (localStart.isBefore(dayEnd) && localEnd.isAfter(dayStart)) {
+        // Clamp to this day's boundaries
+        final renderStart =
+            localStart.isBefore(dayStart) ? dayStart : localStart;
+        final renderEnd = localEnd.isAfter(dayEnd) ? dayEnd : localEnd;
+
+        final top =
+            _timeToY(renderStart.hour + renderStart.minute / 60);
+        final bottom =
+            _timeToY(renderEnd.hour + renderEnd.minute / 60);
         final h = (bottom - top).clamp(12.0, double.infinity);
 
         // Split column: me on left half, partner on right half
