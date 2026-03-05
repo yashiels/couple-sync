@@ -37,6 +37,13 @@
             {
               "client_id": "612024885391-qrn5t5iqigqo53rfianmprdg3526p6i8.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "612024885391-pg88jhm3s6s5c6tqvopmeg218915hvvp.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.nexiontech.coupleSchedule"
+              }
             }
           ]
         }
@@ -66,6 +73,13 @@
             {
               "client_id": "612024885391-qrn5t5iqigqo53rfianmprdg3526p6i8.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "612024885391-pg88jhm3s6s5c6tqvopmeg218915hvvp.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.nexiontech.coupleSchedule"
+              }
             }
           ]
         }
@@ -95,6 +109,13 @@
             {
               "client_id": "612024885391-qrn5t5iqigqo53rfianmprdg3526p6i8.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "612024885391-pg88jhm3s6s5c6tqvopmeg218915hvvp.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.nexiontech.coupleSchedule"
+              }
             }
           ]
         }
@@ -124,6 +145,13 @@
             {
               "client_id": "612024885391-qrn5t5iqigqo53rfianmprdg3526p6i8.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "612024885391-pg88jhm3s6s5c6tqvopmeg218915hvvp.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.nexiontech.coupleSchedule"
+              }
             }
           ]
         }
@@ -153,6 +181,13 @@
             {
               "client_id": "612024885391-qrn5t5iqigqo53rfianmprdg3526p6i8.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "612024885391-pg88jhm3s6s5c6tqvopmeg218915hvvp.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.nexiontech.coupleSchedule"
+              }
             }
           ]
         }

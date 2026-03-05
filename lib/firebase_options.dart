@@ -35,7 +35,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyDZxp6dr-a_0tSufbF5C2egEki03iQhBrU',
-    appId: '1:612024885391:android:5264f30d47fce06d7790fa',
+    appId: '1:612024885391:android:7309cdd64a9ecb037790fa',
     messagingSenderId: '612024885391',
     projectId: 'astra-488209',
     storageBucket: 'astra-488209.firebasestorage.app',
@@ -47,6 +47,9 @@ class DefaultFirebaseOptions {
     messagingSenderId: '612024885391',
     projectId: 'astra-488209',
     storageBucket: 'astra-488209.firebasestorage.app',
+    iosClientId: '612024885391-pg88jhm3s6s5c6tqvopmeg218915hvvp.apps.googleusercontent.com',
+    androidClientId: '612024885391-5k78j2qhbqd38u09t9b440l10chhomp7.apps.googleusercontent.com',
     iosBundleId: 'za.co.nexiontech.coupleschedule',
   );
+
 }
