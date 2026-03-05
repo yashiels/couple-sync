@@ -7,17 +7,26 @@ import 'package:http/http.dart' as http;
 import '../../../shared/models/time_block_model.dart';
 
 /// Provides Google Calendar integration via OAuth 2.0 + CalendarApi freebusy.
+///
+/// Accepts a shared [GoogleSignIn] instance via constructor injection so that
+/// both [AuthService] and this service use the same underlying sign-in
+/// session. On first API call, [requestScopes] is used to ensure the calendar
+/// scopes have been granted (they may not be if the user originally signed in
+/// through [AuthService] which does not request calendar scopes).
 class GoogleCalendarService {
   static const _scopes = [
     gcal.CalendarApi.calendarReadonlyScope,
     gcal.CalendarApi.calendarEventsScope,
   ];
 
-  final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: _scopes);
+  final GoogleSignIn _googleSignIn;
   final FirebaseFirestore _firestore;
 
-  GoogleCalendarService({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+  GoogleCalendarService({
+    GoogleSignIn? googleSignIn,
+    FirebaseFirestore? firestore,
+  })  : _googleSignIn = googleSignIn ?? GoogleSignIn(scopes: _scopes),
+        _firestore = firestore ?? FirebaseFirestore.instance;
 
   // ── Connection ────────────────────────────────────────────────────────────
 
@@ -28,10 +37,22 @@ class GoogleCalendarService {
   String? get connectedEmail => _googleSignIn.currentUser?.email;
 
   /// Initiates Google OAuth and returns the connected email, or null if cancelled.
+  ///
+  /// If the user is already signed in (via [AuthService]) but has not yet
+  /// granted calendar scopes, [requestScopes] is called to prompt for the
+  /// additional permissions.
   Future<String?> connectAccount() async {
     try {
-      final account = await _googleSignIn.signIn();
-      return account?.email;
+      var account = _googleSignIn.currentUser ??
+          await _googleSignIn.signInSilently();
+      account ??= await _googleSignIn.signIn();
+      if (account == null) return null;
+
+      // Ensure calendar scopes are granted (may not be if the user originally
+      // signed in through AuthService which does not request calendar scopes).
+      await _googleSignIn.requestScopes(_scopes);
+
+      return account.email;
     } catch (e) {
       debugPrint('GoogleCalendarService.connectAccount error: $e');
       return null;
@@ -65,6 +86,9 @@ class GoogleCalendarService {
     final account = _googleSignIn.currentUser ??
         await _googleSignIn.signInSilently();
     if (account == null) throw Exception('Not signed in to Google Calendar');
+
+    // Ensure calendar scopes are granted before making API calls.
+    await _googleSignIn.requestScopes(_scopes);
 
     final authHeaders = await account.authHeaders;
     final client = _AuthClient(authHeaders);
@@ -128,7 +152,7 @@ class GoogleCalendarService {
 
     // Delete stale Google blocks for this user.
     final stale = await blocksRef
-        .where('ownerUid', isEqualTo: userId)
+        .where('userId', isEqualTo: userId)
         .where('source', isEqualTo: 'google')
         .get();
     for (final doc in stale.docs) {
@@ -161,6 +185,9 @@ class GoogleCalendarService {
     final account = _googleSignIn.currentUser ??
         await _googleSignIn.signInSilently();
     if (account == null) throw Exception('Not signed in to Google Calendar');
+
+    // Ensure calendar scopes are granted before making API calls.
+    await _googleSignIn.requestScopes(_scopes);
 
     final authHeaders = await account.authHeaders;
     final client = _AuthClient(authHeaders);

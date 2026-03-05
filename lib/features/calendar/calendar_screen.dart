@@ -59,8 +59,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final couple = ref.read(currentCoupleProvider);
     if (user == null || couple == null) return;
 
-    final googleConnected = ref.read(googleCalendarConnectionProvider);
-    if (!googleConnected) {
+    final connections = ref.read(googleCalendarConnectionsProvider);
+    if (connections.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -71,9 +71,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     }
 
     try {
+      // MVP limitation: the `google_sign_in` plugin only supports a single
+      // signed-in Google account at a time. `fetchBusyPeriods` always uses
+      // `_googleSignIn.currentUser`, so iterating over multiple connections
+      // would just re-sync the same account repeatedly. We therefore sync
+      // only the first connection. Multi-account support will require either
+      // server-side OAuth or a plugin that supports multiple accounts.
+      final connection = connections.first;
       await ref.read(googleCalendarSyncProvider.notifier).sync(
             userId: user.uid,
             coupleId: couple.coupleId,
+            connectionId: connection.id,
           );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

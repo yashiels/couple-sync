@@ -1,8 +1,8 @@
-import 'dart:io';
+import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show debugPrint, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 /// Top-level handler for background/terminated FCM messages.
@@ -22,6 +22,7 @@ class NotificationService {
 
   final _messaging = FirebaseMessaging.instance;
   final _localNotifications = FlutterLocalNotificationsPlugin();
+  StreamSubscription<String>? _tokenSub;
 
   static const _androidChannel = AndroidNotificationChannel(
     'couple_schedule_default',
@@ -53,7 +54,7 @@ class NotificationService {
 
     await _localNotifications.initialize(settings);
 
-    if (Platform.isAndroid) {
+    if (defaultTargetPlatform == TargetPlatform.android) {
       await _localNotifications
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>()
@@ -115,8 +116,9 @@ class NotificationService {
       SetOptions(merge: true),
     );
 
-    // Refresh whenever the token rotates.
-    _messaging.onTokenRefresh.listen((newToken) {
+    // Cancel any previous listener before creating a new one.
+    await _tokenSub?.cancel();
+    _tokenSub = _messaging.onTokenRefresh.listen((newToken) {
       FirebaseFirestore.instance.collection('users').doc(uid).set(
         {'fcmToken': newToken, 'tokenUpdatedAt': FieldValue.serverTimestamp()},
         SetOptions(merge: true),

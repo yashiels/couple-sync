@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -145,22 +146,47 @@ class _TimezoneSection extends ConsumerWidget {
   }
 }
 
-class _PartnerClock extends ConsumerWidget {
+class _PartnerClock extends ConsumerStatefulWidget {
   const _PartnerClock({required this.couple, required this.currentUserUid});
   final CoupleModel couple;
   final String currentUserUid;
 
-  String _cityFromTimezone(String tz) {
-    final parts = tz.split('/');
-    return parts.length > 1 ? parts.last.replaceAll('_', ' ') : tz;
+  @override
+  ConsumerState<_PartnerClock> createState() => _PartnerClockState();
+}
+
+class _PartnerClockState extends ConsumerState<_PartnerClock> {
+  late final Future<DocumentSnapshot> _partnerFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    final partnerUid = widget.couple.partnerUid(widget.currentUserUid);
+    _partnerFuture =
+        FirebaseFirestore.instance.collection('users').doc(partnerUid).get();
+  }
+
+  String _cityFromTimezone(String tzName) {
+    final parts = tzName.split('/');
+    return parts.length > 1 ? parts.last.replaceAll('_', ' ') : tzName;
+  }
+
+  /// Computes the partner's UTC offset from their IANA timezone string.
+  /// Falls back to local device offset if the timezone is invalid.
+  Duration _offsetFromTimezone(String partnerTz) {
+    try {
+      final location = tz.getLocation(partnerTz);
+      return tz.TZDateTime.now(location).timeZoneOffset;
+    } catch (_) {
+      // Invalid or abbreviated timezone -- fall back to local offset.
+      return DateTime.now().timeZoneOffset;
+    }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final partnerUid = couple.partnerUid(currentUserUid);
-
+  Widget build(BuildContext context) {
     return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection('users').doc(partnerUid).get(),
+      future: _partnerFuture,
       builder: (context, snapshot) {
         if (!snapshot.hasData || !snapshot.data!.exists) {
           return _EmptyPartnerClock();
@@ -172,7 +198,7 @@ class _PartnerClock extends ConsumerWidget {
 
         return TimezoneClock(
           city: partnerCity,
-          utcOffset: DateTime.now().timeZoneOffset,
+          utcOffset: _offsetFromTimezone(partnerTz),
           isMe: false,
           label: data['displayName'] as String? ?? 'Partner',
         );

@@ -64,21 +64,26 @@ class UserModel {
         'calendarConnections': calendarConnections.map((c) => c.toMap()).toList(),
       };
 
+  static const _sentinel = Object();
+
   /// Returns a copy of this user with the given fields replaced.
+  ///
+  /// Nullable fields ([coupleId], [photoUrl]) use a sentinel so that passing
+  /// `null` explicitly clears the value instead of being ignored.
   UserModel copyWith({
     String? displayName,
-    String? photoUrl,
+    Object? photoUrl = _sentinel,
     String? timezone,
-    String? coupleId,
+    Object? coupleId = _sentinel,
     List<CalendarConnection>? calendarConnections,
   }) {
     return UserModel(
       uid: uid,
       email: email,
       displayName: displayName ?? this.displayName,
-      photoUrl: photoUrl ?? this.photoUrl,
+      photoUrl: photoUrl == _sentinel ? this.photoUrl : photoUrl as String?,
       timezone: timezone ?? this.timezone,
-      coupleId: coupleId ?? this.coupleId,
+      coupleId: coupleId == _sentinel ? this.coupleId : coupleId as String?,
       createdAt: createdAt,
       calendarConnections: calendarConnections ?? this.calendarConnections,
     );

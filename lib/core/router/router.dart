@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,23 +16,71 @@ import '../../features/blocks/block_form_screen.dart';
 import '../../features/overlap/overlap_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../shared/providers/auth_providers.dart';
+import '../../shared/providers/pairing_providers.dart';
 import '../theme/app_theme.dart';
 
-/// The app's [GoRouter] instance, rebuilt whenever the auth state changes.
+// ── Auth-aware refresh notifier ───────────────────────────────────────────────
+
+/// A [ChangeNotifier] that listens to [firebaseAuthStateProvider] and notifies
+/// GoRouter to re-evaluate its redirect whenever the auth state changes.
+/// This avoids recreating the entire [GoRouter] on every auth event.
+class _AuthChangeNotifier extends ChangeNotifier {
+  _AuthChangeNotifier(Ref ref) {
+    _sub = ref.listen<AsyncValue<User?>>(firebaseAuthStateProvider, (_, _) {
+      notifyListeners();
+    });
+  }
+
+  late final ProviderSubscription<AsyncValue<User?>> _sub;
+
+  @override
+  void dispose() {
+    _sub.close();
+    super.dispose();
+  }
+}
+
+// ── Router provider (created once) ────────────────────────────────────────────
+
+/// The app's [GoRouter] instance, created once and kept alive for the lifetime
+/// of the app.  Auth/onboarding state changes trigger a redirect re-evaluation
+/// through [GoRouter.refreshListenable] rather than rebuilding the router.
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(firebaseAuthStateProvider);
-  final isLoggedIn = authState.valueOrNull != null;
+  final refreshNotifier = _AuthChangeNotifier(ref);
+  ref.onDispose(refreshNotifier.dispose);
 
   return GoRouter(
-    initialLocation: isLoggedIn ? '/home' : '/auth',
+    initialLocation: '/auth',
+    refreshListenable: refreshNotifier,
     redirect: (context, state) {
-      final loggedIn = authState.valueOrNull != null;
-      final onPublicRoute = state.matchedLocation == '/auth' ||
-          state.matchedLocation == '/onboarding' ||
-          state.matchedLocation == '/timezone-setup';
+      final loggedIn =
+          ref.read(firebaseAuthStateProvider).valueOrNull != null;
+      final loc = state.matchedLocation;
 
-      if (!loggedIn && !onPublicRoute) return '/auth';
-      if (loggedIn && state.matchedLocation == '/auth') return '/home';
+      // Unauthenticated users can only visit /auth and /onboarding.
+      const publicRoutes = {'/auth', '/onboarding'};
+      if (!loggedIn) {
+        return publicRoutes.contains(loc) ? null : '/auth';
+      }
+
+      // Authenticated — check onboarding completion.
+      final user = ref.read(currentUserProvider);
+      final couple = ref.read(currentCoupleProvider);
+
+      // If coming from /auth, redirect into the onboarding funnel or home.
+      if (loc == '/auth') {
+        if (user == null) return '/home'; // still hydrating — let it settle
+        final tz = user.timezone;
+        if (tz.isEmpty || !tz.contains('/')) return '/timezone-setup';
+        if (user.coupleId == null && couple == null) return '/pairing';
+        return '/home';
+      }
+
+      // Allow onboarding/setup routes while logged in.
+      const onboardingRoutes = {'/onboarding', '/timezone-setup', '/pairing'};
+      if (onboardingRoutes.contains(loc)) return null;
+
+      // Already on an authenticated route — allow.
       return null;
     },
     routes: [

@@ -3,18 +3,22 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timezone/data/latest.dart' as tz_data;
 
 import 'core/router/router.dart';
 import 'core/theme/app_theme.dart';
 import 'firebase_options.dart';
 import 'shared/providers/auth_providers.dart';
 import 'shared/providers/pairing_providers.dart';
+import 'shared/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  tz_data.initializeTimeZones();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  await NotificationService.instance.init();
   if (!kIsWeb) {
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -32,6 +36,9 @@ class CoupleScheduleApp extends ConsumerStatefulWidget {
 }
 
 class _CoupleScheduleAppState extends ConsumerState<CoupleScheduleApp> {
+  /// Guard flag that prevents concurrent [_hydrateSession] executions.
+  bool _hydrating = false;
+
   @override
   void initState() {
     super.initState();
@@ -39,6 +46,8 @@ class _CoupleScheduleAppState extends ConsumerState<CoupleScheduleApp> {
   }
 
   Future<void> _hydrateSession() async {
+    if (_hydrating) return;
+    _hydrating = true;
     try {
       final authService = ref.read(authServiceProvider);
       final firebaseUser = authService.currentUser;
@@ -53,6 +62,12 @@ class _CoupleScheduleAppState extends ConsumerState<CoupleScheduleApp> {
               ref.read(currentCoupleProvider.notifier).state = couple;
             }
           }
+          // Bug 22: Set auth status so the rest of the app knows we're
+          // authenticated after rehydrating from an existing session.
+          if (mounted) {
+            ref.read(authNotifierProvider.notifier).setStatus(
+                AuthStatus.authenticated);
+          }
         }
       } else {
         ref.read(currentUserProvider.notifier).state = null;
@@ -60,6 +75,8 @@ class _CoupleScheduleAppState extends ConsumerState<CoupleScheduleApp> {
       }
     } catch (e) {
       debugPrint('Session hydration failed: $e');
+    } finally {
+      _hydrating = false;
     }
   }
 

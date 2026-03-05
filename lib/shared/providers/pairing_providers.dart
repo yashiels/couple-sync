@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/couple_model.dart';
+import '../models/user_model.dart';
 import '../services/pairing_service.dart';
+import 'auth_providers.dart';
 
 /// Singleton [PairingService] instance.
 final pairingServiceProvider = Provider<PairingService>((ref) => PairingService());
@@ -23,8 +25,10 @@ enum PairingStatus { idle, loading, success, error }
 class PairingNotifier extends StateNotifier<PairingStatus> {
   final PairingService _service;
   final StateController<CoupleModel?> _coupleController;
+  final StateController<UserModel?> _userController;
 
-  PairingNotifier(this._service, this._coupleController) : super(PairingStatus.idle);
+  PairingNotifier(this._service, this._coupleController, this._userController)
+      : super(PairingStatus.idle);
 
   /// The last error message, populated on [PairingStatus.error].
   String? lastError;
@@ -55,6 +59,20 @@ class PairingNotifier extends StateNotifier<PairingStatus> {
     try {
       final couple = await _service.redeemInviteCode(code: code, redeemerUid: redeemerUid);
       _coupleController.state = couple;
+      // Also update currentUserProvider so the rest of the app sees the new coupleId.
+      final currentUser = _userController.state;
+      if (currentUser != null) {
+        _userController.state = UserModel(
+          uid: currentUser.uid,
+          email: currentUser.email,
+          displayName: currentUser.displayName,
+          photoUrl: currentUser.photoUrl,
+          timezone: currentUser.timezone,
+          coupleId: couple.coupleId,
+          createdAt: currentUser.createdAt,
+          calendarConnections: currentUser.calendarConnections,
+        );
+      }
       lastCouple = couple;
       state = PairingStatus.success;
       return couple;
@@ -71,5 +89,6 @@ final pairingNotifierProvider = StateNotifierProvider<PairingNotifier, PairingSt
   return PairingNotifier(
     ref.watch(pairingServiceProvider),
     ref.read(currentCoupleProvider.notifier),
+    ref.read(currentUserProvider.notifier),
   );
 });

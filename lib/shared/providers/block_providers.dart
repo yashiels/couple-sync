@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/time_block_model.dart';
@@ -11,8 +13,26 @@ final userBlocksProvider = StreamProvider.family<List<TimeBlock>, ({String coupl
   return ref.watch(blockServiceProvider).watchUserBlocks(ids.coupleId, ids.userId);
 });
 
+/// Counter that is incremented periodically to force [coupleBlocksProvider]
+/// to re-evaluate its time window so it does not become stale.
+final blockWindowRefreshProvider = StateProvider<int>((ref) => 0);
+
 /// Streams all couple blocks for the next 14 days.
+///
+/// Watches [blockWindowRefreshProvider] so the time window is recalculated
+/// whenever that counter is incremented. A periodic timer auto-increments
+/// every 15 minutes so the window never drifts too far.
 final coupleBlocksProvider = StreamProvider.family<List<TimeBlock>, String>((ref, coupleId) {
+  // Watch the refresh counter so incrementing it rebuilds this provider
+  // with a fresh DateTime.now().
+  ref.watch(blockWindowRefreshProvider);
+
+  // Auto-invalidate every 15 minutes to keep the time window current.
+  final timer = Timer.periodic(const Duration(minutes: 15), (_) {
+    ref.invalidateSelf();
+  });
+  ref.onDispose(timer.cancel);
+
   final now = DateTime.now().toUtc();
   return ref.watch(blockServiceProvider).watchBlocksInRange(
         coupleId: coupleId,
@@ -23,6 +43,8 @@ final coupleBlocksProvider = StreamProvider.family<List<TimeBlock>, String>((ref
 
 /// Ephemeral state for the add/edit block form.
 class BlockFormState {
+  static const _sentinel = Object();
+
   final String title;
   final BlockType type;
   final BlockCategory category;
@@ -50,27 +72,31 @@ class BlockFormState {
       title.isNotEmpty && startUtc != null && endUtc != null && endUtc!.isAfter(startUtc!);
 
   /// Returns a copy of this state with the given fields replaced.
+  ///
+  /// Nullable fields ([startUtc], [endUtc], [recurrenceRule], [error]) use a
+  /// sentinel so that passing `null` explicitly clears the value instead of
+  /// being ignored.
   BlockFormState copyWith({
     String? title,
     BlockType? type,
     BlockCategory? category,
-    DateTime? startUtc,
-    DateTime? endUtc,
+    Object? startUtc = _sentinel,
+    Object? endUtc = _sentinel,
     TimeBlockVisibility? visibility,
-    String? recurrenceRule,
+    Object? recurrenceRule = _sentinel,
     bool? saving,
-    String? error,
+    Object? error = _sentinel,
   }) {
     return BlockFormState(
       title: title ?? this.title,
       type: type ?? this.type,
       category: category ?? this.category,
-      startUtc: startUtc ?? this.startUtc,
-      endUtc: endUtc ?? this.endUtc,
+      startUtc: startUtc == _sentinel ? this.startUtc : startUtc as DateTime?,
+      endUtc: endUtc == _sentinel ? this.endUtc : endUtc as DateTime?,
       visibility: visibility ?? this.visibility,
-      recurrenceRule: recurrenceRule ?? this.recurrenceRule,
+      recurrenceRule: recurrenceRule == _sentinel ? this.recurrenceRule : recurrenceRule as String?,
       saving: saving ?? this.saving,
-      error: error ?? this.error,
+      error: error == _sentinel ? this.error : error as String?,
     );
   }
 }
@@ -139,6 +165,7 @@ class BlockFormNotifier extends StateNotifier<BlockFormState> {
               category: state.category,
               startUtc: state.startUtc,
               endUtc: state.endUtc,
+              timezone: timezone,
               visibility: state.visibility,
               recurrenceRule: state.recurrenceRule,
             ),

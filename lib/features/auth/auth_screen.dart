@@ -1,7 +1,5 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -67,7 +65,9 @@ class AuthScreen extends ConsumerWidget {
               ),
 
               // Apple Sign In — black bg, 50px height, 10px radius
-              if (kIsWeb || Platform.isIOS || Platform.isMacOS) ...[
+              if (kIsWeb ||
+                  defaultTargetPlatform == TargetPlatform.iOS ||
+                  defaultTargetPlatform == TargetPlatform.macOS) ...[
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
@@ -101,10 +101,24 @@ class AuthScreen extends ConsumerWidget {
     );
   }
 
+  /// Determines the first route the user should land on after sign-in,
+  /// based on whether their profile and couple pairing are complete.
+  String _postSignInRoute(WidgetRef ref) {
+    final user = ref.read(currentUserProvider);
+    if (user == null) return '/home';
+    // Timezone still holds an abbreviation (e.g. "UTC", "EST") or is empty —
+    // the user hasn't completed timezone setup yet.
+    final tz = user.timezone;
+    final needsTimezone = tz.isEmpty || !tz.contains('/');
+    if (needsTimezone) return '/timezone-setup';
+    if (user.coupleId == null) return '/pairing';
+    return '/home';
+  }
+
   Future<void> _signInWithGoogle(BuildContext context, WidgetRef ref) async {
     try {
       await ref.read(authNotifierProvider.notifier).signInWithGoogle();
-      if (context.mounted) context.go('/home');
+      if (context.mounted) context.go(_postSignInRoute(ref));
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -117,7 +131,7 @@ class AuthScreen extends ConsumerWidget {
   Future<void> _signInWithApple(BuildContext context, WidgetRef ref) async {
     try {
       await ref.read(authNotifierProvider.notifier).signInWithApple();
-      if (context.mounted) context.go('/home');
+      if (context.mounted) context.go(_postSignInRoute(ref));
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

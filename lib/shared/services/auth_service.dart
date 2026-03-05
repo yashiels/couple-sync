@@ -118,7 +118,7 @@ class AuthService {
       email: user.email ?? '',
       displayName: displayName ?? user.displayName ?? user.email?.split('@').first ?? 'User',
       photoUrl: user.photoURL,
-      timezone: DateTime.now().timeZoneName,
+      timezone: '',
       createdAt: DateTime.now().toUtc(),
     );
     await _firestore.collection('users').doc(user.uid).set(model.toFirestore());

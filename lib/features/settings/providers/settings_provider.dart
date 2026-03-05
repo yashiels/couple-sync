@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../shared/providers/pairing_providers.dart';
+
 // ── Couple settings model ─────────────────────────────────────────────────────
 
 /// Privacy and scheduling settings persisted to Firestore under
@@ -46,8 +48,10 @@ class CoupleSettings {
 
 // ── Providers ─────────────────────────────────────────────────────────────────
 
-/// The couple ID for the current user — must be overridden at login.
-final coupleIdProvider = StateProvider<String?>((ref) => null);
+/// The couple ID for the current user, derived from [currentCoupleProvider].
+final coupleIdProvider = Provider<String?>((ref) {
+  return ref.watch(currentCoupleProvider)?.coupleId;
+});
 
 /// Streams couple settings from Firestore.
 final coupleSettingsProvider =

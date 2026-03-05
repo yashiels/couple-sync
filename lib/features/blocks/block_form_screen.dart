@@ -196,11 +196,11 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
         actions: [
           CupertinoButton(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            onPressed: (formState.saving || !canSave) ? null : _save,
+            onPressed: (formState.saving || !formState.isValid || !canSave) ? null : _save,
             child: Text(
               'Save',
               style: AppTypography.headline.copyWith(
-                color: (formState.saving || !canSave)
+                color: (formState.saving || !formState.isValid || !canSave)
                     ? AppColors.textTertiary
                     : AppColors.primary,
               ),

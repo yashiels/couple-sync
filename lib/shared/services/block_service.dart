@@ -62,13 +62,19 @@ class BlockService {
   // --- Queries ---
 
   /// Streams all blocks for a couple in a given UTC date range.
+  ///
+  /// The query filters on `startUtc` only (Firestore limitation). To catch
+  /// blocks that started before [fromUtc] but are still active (e.g. overnight
+  /// blocks), we widen the lower bound by 24 hours. Callers should do their
+  /// own client-side filtering if exact boundaries are needed.
   Stream<List<TimeBlock>> watchBlocksInRange({
     required String coupleId,
     required DateTime fromUtc,
     required DateTime toUtc,
   }) {
+    final widenedFrom = fromUtc.subtract(const Duration(hours: 24));
     return _blocksRef(coupleId)
-        .where('startUtc', isGreaterThanOrEqualTo: Timestamp.fromDate(fromUtc))
+        .where('startUtc', isGreaterThanOrEqualTo: Timestamp.fromDate(widenedFrom))
         .where('startUtc', isLessThan: Timestamp.fromDate(toUtc))
         .orderBy('startUtc')
         .snapshots()

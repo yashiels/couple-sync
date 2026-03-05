@@ -41,11 +41,11 @@ class OverlapWindow {
   factory OverlapWindow.fromMap(Map<String, dynamic> map) {
     return OverlapWindow(
       startUtc: DateTime.fromMillisecondsSinceEpoch(
-        (map['startUtc'] as int),
+        (map['startUtc'] as num).toInt(),
         isUtc: true,
       ),
       endUtc: DateTime.fromMillisecondsSinceEpoch(
-        (map['endUtc'] as int),
+        (map['endUtc'] as num).toInt(),
         isUtc: true,
       ),
       durationMinutes: (map['durationMinutes'] as num).toInt(),
@@ -105,7 +105,7 @@ class OverlapResult {
     final data = doc.data() as Map<String, dynamic>;
     final rawWindows = data['windows'] as List<dynamic>? ?? [];
     return OverlapResult(
-      coupleId: doc.id,
+      coupleId: (data['coupleId'] as String?) ?? doc.reference.parent.parent!.id,
       windows: rawWindows
           .map((w) => OverlapWindow.fromMap(w as Map<String, dynamic>))
           .toList(),

@@ -96,28 +96,34 @@ class TimeBlock {
         'createdAt': Timestamp.fromDate(createdAt),
       };
 
+  static const _sentinel = Object();
+
   /// Returns a copy of this block with the given fields replaced.
+  ///
+  /// Nullable fields ([recurrenceRule], [coupleId]) use a sentinel so that
+  /// passing `null` explicitly clears the value instead of being ignored.
   TimeBlock copyWith({
     String? title,
     DateTime? startUtc,
     DateTime? endUtc,
     String? timezone,
-    String? recurrenceRule,
+    Object? recurrenceRule = _sentinel,
     BlockType? type,
     BlockSource? source,
     TimeBlockVisibility? visibility,
     BlockCategory? category,
+    Object? coupleId = _sentinel,
   }) {
     return TimeBlock(
       id: id,
       userId: userId,
-      coupleId: coupleId,
+      coupleId: coupleId == _sentinel ? this.coupleId : coupleId as String?,
       type: type ?? this.type,
       title: title ?? this.title,
       startUtc: startUtc ?? this.startUtc,
       endUtc: endUtc ?? this.endUtc,
       timezone: timezone ?? this.timezone,
-      recurrenceRule: recurrenceRule ?? this.recurrenceRule,
+      recurrenceRule: recurrenceRule == _sentinel ? this.recurrenceRule : recurrenceRule as String?,
       source: source ?? this.source,
       visibility: visibility ?? this.visibility,
       category: category ?? this.category,

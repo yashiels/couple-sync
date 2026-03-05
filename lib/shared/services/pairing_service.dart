@@ -19,7 +19,17 @@ class PairingService {
   // --- Invite Code Generation ---
 
   /// Generates a fresh 6-char invite code and writes it to Firestore.
+  ///
+  /// Throws if the user is already in a couple.
   Future<String> generateInviteCode(String uid) async {
+    final userDoc = await _db.collection('users').doc(uid).get();
+    if (userDoc.exists) {
+      final data = userDoc.data();
+      if (data != null && data['coupleId'] != null) {
+        throw Exception('Already in a couple');
+      }
+    }
+
     final rng = Random.secure();
     final code = List.generate(
       _codeLength,
@@ -55,10 +65,21 @@ class PairingService {
   // --- Pairing ---
 
   /// Redeems an invite code and creates the couple relationship.
+  ///
+  /// Throws if the redeemer is already in a couple.
   Future<CoupleModel> redeemInviteCode({
     required String code,
     required String redeemerUid,
   }) async {
+    // Guard: redeemer must not already be in a couple.
+    final redeemerDoc = await _db.collection('users').doc(redeemerUid).get();
+    if (redeemerDoc.exists) {
+      final data = redeemerDoc.data();
+      if (data != null && data['coupleId'] != null) {
+        throw Exception('Already in a couple');
+      }
+    }
+
     final inviteRef = _db.collection('invites').doc(code.toUpperCase());
     final inviteSnap = await inviteRef.get();
 
