@@ -1,7 +1,26 @@
 {
   "permissions": {
     "allow": [
-      "mcp__ide__getDiagnostics"
+      "Bash(*)",
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)",
+      "Glob(*)",
+      "Grep(*)",
+      "Task(*)",
+      "WebFetch(*)",
+      "WebSearch(*)",
+      "mcp__qdrant__qdrant-find",
+      "mcp__qdrant__qdrant-store",
+      "mcp__linear__get_issue",
+      "mcp__sequential-thinking__sequentialthinking",
+      "mcp__plugin_claude-mem_mcp-search__search",
+      "mcp__plugin_claude-mem_mcp-search__get_observations",
+      "mcp__plugin_claude-mem_mcp-search__save_observation"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "playwright"
+  ],
+  "enableAllProjectMcpServers": true
 }

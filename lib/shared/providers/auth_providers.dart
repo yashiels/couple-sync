@@ -10,7 +10,8 @@ import 'pairing_providers.dart';
 ///
 /// Uses the shared [GoogleSignIn] instance from [sharedGoogleSignInProvider]
 /// so that both auth and calendar services operate on the same OAuth session,
-/// avoiding scope mismatch (Bug 12).
+/// avoiding scope mismatch (Bug 12). On web, [GoogleSignIn] is null because
+/// Firebase Auth uses [signInWithPopup] directly.
 final authServiceProvider = Provider<AuthService>((ref) {
   return AuthService(
     googleSignIn: ref.watch(sharedGoogleSignInProvider),
@@ -29,6 +30,10 @@ final isAuthenticatedProvider = Provider<bool>((ref) {
 
 /// The signed-in user's [UserModel] from Firestore, or `null` when logged out.
 final currentUserProvider = StateProvider<UserModel?>((ref) => null);
+
+/// Whether the initial session hydration has completed.
+/// The router must wait for this before making onboarding/routing decisions.
+final hydrationCompleteProvider = StateProvider<bool>((ref) => false);
 
 /// Possible states of the authentication flow.
 enum AuthStatus { initial, loading, authenticated, unauthenticated, error }

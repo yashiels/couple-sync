@@ -1,8 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:googleapis/calendar/v3.dart' as gcal;
-
 import '../../../shared/models/calendar_connection.dart';
 import '../../../shared/models/user_model.dart';
 import '../../../shared/providers/auth_providers.dart';
@@ -12,23 +11,30 @@ import '../services/google_calendar_service.dart';
 // ── Shared GoogleSignIn instance ──────────────────────────────────────────────
 
 /// A single [GoogleSignIn] instance shared between [AuthService] and
-/// [GoogleCalendarService]. Calendar scopes are included so that
-/// [requestScopes] can promote the session when calendar access is needed.
-final sharedGoogleSignInProvider = Provider<GoogleSignIn>(
-  (_) => GoogleSignIn(scopes: [
-    gcal.CalendarApi.calendarReadonlyScope,
-    gcal.CalendarApi.calendarEventsScope,
-  ]),
+/// [GoogleCalendarService]. Only created on mobile — on web, Firebase Auth
+/// uses [signInWithPopup] directly and does not need [GoogleSignIn].
+final sharedGoogleSignInProvider = Provider<GoogleSignIn?>(
+  (_) => kIsWeb
+      ? null
+      : GoogleSignIn(
+          scopes: [
+            'email',
+          ],
+        ),
 );
 
 // ── Service ───────────────────────────────────────────────────────────────────
 
 /// Singleton [GoogleCalendarService] instance backed by the shared
 /// [GoogleSignIn] so that auth and calendar use the same OAuth session.
+/// On web, passes null so the service creates its own instance if needed.
 final googleCalendarServiceProvider = Provider<GoogleCalendarService>(
-  (ref) => GoogleCalendarService(
-    googleSignIn: ref.watch(sharedGoogleSignInProvider),
-  ),
+  (ref) {
+    final googleSignIn = ref.watch(sharedGoogleSignInProvider);
+    return GoogleCalendarService(
+      googleSignIn: googleSignIn,
+    );
+  },
 );
 
 // ── Multi-account connection management ──────────────────────────────────────

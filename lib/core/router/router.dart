@@ -21,40 +21,47 @@ import '../theme/app_theme.dart';
 
 // ── Auth-aware refresh notifier ───────────────────────────────────────────────
 
-/// A [ChangeNotifier] that listens to [firebaseAuthStateProvider] and notifies
-/// GoRouter to re-evaluate its redirect whenever the auth state changes.
-/// This avoids recreating the entire [GoRouter] on every auth event.
+/// A [ChangeNotifier] that listens to auth and hydration state changes via
+/// [ProviderContainer] and notifies GoRouter to re-evaluate its redirect.
+/// Created in [main] outside the widget tree to avoid Riverpod marking
+/// ProviderScope dirty during its own mount.
 class _AuthChangeNotifier extends ChangeNotifier {
-  _AuthChangeNotifier(Ref ref) {
-    _sub = ref.listen<AsyncValue<User?>>(firebaseAuthStateProvider, (_, _) {
-      notifyListeners();
-    });
+  _AuthChangeNotifier(ProviderContainer container) {
+    _authSub = container.listen<AsyncValue<User?>>(
+      firebaseAuthStateProvider,
+      (prev, next) => notifyListeners(),
+    );
+    _hydrationSub = container.listen<bool>(
+      hydrationCompleteProvider,
+      (prev, next) => notifyListeners(),
+    );
   }
 
-  late final ProviderSubscription<AsyncValue<User?>> _sub;
+  late final ProviderSubscription<AsyncValue<User?>> _authSub;
+  late final ProviderSubscription<bool> _hydrationSub;
 
   @override
   void dispose() {
-    _sub.close();
+    _authSub.close();
+    _hydrationSub.close();
     super.dispose();
   }
 }
 
-// ── Router provider (created once) ────────────────────────────────────────────
+// ── Router factory (created once in main) ─────────────────────────────────────
 
-/// The app's [GoRouter] instance, created once and kept alive for the lifetime
-/// of the app.  Auth/onboarding state changes trigger a redirect re-evaluation
-/// through [GoRouter.refreshListenable] rather than rebuilding the router.
-final routerProvider = Provider<GoRouter>((ref) {
-  final refreshNotifier = _AuthChangeNotifier(ref);
-  ref.onDispose(refreshNotifier.dispose);
+/// Creates the app's [GoRouter], reading provider state from [container].
+/// Called from [main] before the widget tree mounts so that no provider
+/// creation or state change can occur during ProviderScope's first build.
+GoRouter createAppRouter(ProviderContainer container) {
+  final refreshNotifier = _AuthChangeNotifier(container);
 
   return GoRouter(
     initialLocation: '/auth',
     refreshListenable: refreshNotifier,
     redirect: (context, state) {
       final loggedIn =
-          ref.read(firebaseAuthStateProvider).valueOrNull != null;
+          container.read(firebaseAuthStateProvider).valueOrNull != null;
       final loc = state.matchedLocation;
 
       // Unauthenticated users can only visit /auth and /onboarding.
@@ -63,13 +70,22 @@ final routerProvider = Provider<GoRouter>((ref) {
         return publicRoutes.contains(loc) ? null : '/auth';
       }
 
-      // Authenticated — check onboarding completion.
-      final user = ref.read(currentUserProvider);
-      final couple = ref.read(currentCoupleProvider);
+      // Wait for session hydration to complete before making routing
+      // decisions.  While hydrating, keep the user on /auth (which shows
+      // a loading indicator) so we don't flash wrong screens.
+      final hydrated = container.read(hydrationCompleteProvider);
+      if (!hydrated) {
+        return null; // stay wherever we are until hydration completes
+      }
 
-      // If coming from /auth, redirect into the onboarding funnel or home.
+      // Authenticated & hydrated — check onboarding completion.
+      final user = container.read(currentUserProvider);
+      final couple = container.read(currentCoupleProvider);
+
+      // If on /auth after hydration, redirect into the onboarding
+      // funnel or straight to home.
       if (loc == '/auth') {
-        if (user == null) return '/home'; // still hydrating — let it settle
+        if (user == null) return '/auth'; // no user doc yet — stay
         final tz = user.timezone;
         if (tz.isEmpty || !tz.contains('/')) return '/timezone-setup';
         if (user.coupleId == null && couple == null) return '/pairing';
@@ -80,7 +96,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       const onboardingRoutes = {'/onboarding', '/timezone-setup', '/pairing'};
       if (onboardingRoutes.contains(loc)) return null;
 
-      // Already on an authenticated route — allow.
+      // Authenticated user on an authenticated route — allow.
       return null;
     },
     routes: [
@@ -154,7 +170,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
-});
+}
 
 // ── Shell with bottom navigation ────────────────────────────────────────────
 

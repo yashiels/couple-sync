@@ -164,8 +164,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
     if (confirmed == true && mounted) {
       final couple = ref.read(currentCoupleProvider);
+      final pairingService = ref.read(pairingServiceProvider);
       if (couple != null) {
-        await ref.read(pairingServiceProvider).unpair(couple);
+        await pairingService.unpair(couple);
+        if (!mounted) return;
         ref.read(currentCoupleProvider.notifier).state = null;
       }
       if (context.mounted) {

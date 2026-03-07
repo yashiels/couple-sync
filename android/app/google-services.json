@@ -14,7 +14,7 @@
       },
       "oauth_client": [
         {
-          "client_id": "612024885391-5k78j2qhbqd38u09t9b440l10chhomp7.apps.googleusercontent.com",
+          "client_id": "612024885391-04fkb8cl4bftasqrqorth6ptmpmi53bi.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.nexiontech.couple_schedule",
@@ -42,7 +42,7 @@
               "client_id": "612024885391-pg88jhm3s6s5c6tqvopmeg218915hvvp.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.nexiontech.coupleSchedule"
+                "bundle_id": "za.co.nexiontech.coupleschedule"
               }
             }
           ]
@@ -78,7 +78,7 @@
               "client_id": "612024885391-pg88jhm3s6s5c6tqvopmeg218915hvvp.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.nexiontech.coupleSchedule"
+                "bundle_id": "za.co.nexiontech.coupleschedule"
               }
             }
           ]
@@ -114,7 +114,7 @@
               "client_id": "612024885391-pg88jhm3s6s5c6tqvopmeg218915hvvp.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.nexiontech.coupleSchedule"
+                "bundle_id": "za.co.nexiontech.coupleschedule"
               }
             }
           ]
@@ -150,7 +150,7 @@
               "client_id": "612024885391-pg88jhm3s6s5c6tqvopmeg218915hvvp.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.nexiontech.coupleSchedule"
+                "bundle_id": "za.co.nexiontech.coupleschedule"
               }
             }
           ]
@@ -186,7 +186,7 @@
               "client_id": "612024885391-pg88jhm3s6s5c6tqvopmeg218915hvvp.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.nexiontech.coupleSchedule"
+                "bundle_id": "za.co.nexiontech.coupleschedule"
               }
             }
           ]

@@ -1,43 +1,79 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users can read/write their own document
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    /// Returns true if the authenticated user is a member of the given couple.
+    function isCoupleMemember(coupleId) {
+      let couple = get(/databases/$(database)/documents/couples/$(coupleId)).data;
+      return request.auth.uid == couple.userAUid || request.auth.uid == couple.userBUid;
+    }
+
+    // ── Users ────────────────────────────────────────────────────────────────
     match /users/{userId} {
+      // Users can read/write their own document.
       allow read, write: if request.auth != null && request.auth.uid == userId;
-      // Partners can read each other's data
-      allow read: if request.auth != null;
+
+      // Partners can read each other's profile (needed for timezone display).
+      // Restricted to authenticated users who share a couple with this user.
+      allow read: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.coupleId != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.coupleId ==
+           get(/databases/$(database)/documents/users/$(userId)).data.coupleId;
+
+      // Allow any authenticated user to set/clear ONLY the coupleId field on
+      // another user's document. This is needed because the pairing batch
+      // write updates both users' coupleId atomically.
+      allow update: if request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['coupleId']);
     }
 
-    // Couple members can read/write couple data
+    // ── Couples ──────────────────────────────────────────────────────────────
     match /couples/{coupleId} {
-      allow read, write: if request.auth != null;
+      // Only couple members can read their couple document.
+      allow read: if request.auth != null && isCoupleMemember(coupleId);
+
+      // Creation is allowed if the auth user is one of the two members.
+      allow create: if request.auth != null
+        && (request.resource.data.userAUid == request.auth.uid
+            || request.resource.data.userBUid == request.auth.uid);
+
+      // Updates/deletes only by existing members.
+      allow update, delete: if request.auth != null && isCoupleMemember(coupleId);
     }
 
-    // Time blocks scoped to couple
+    // ── Time blocks (scoped to couple) ───────────────────────────────────────
     match /timeblocks/{coupleId}/blocks/{blockId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null && isCoupleMemember(coupleId);
     }
 
-    // Overlap windows scoped to couple
+    // ── Overlap windows (scoped to couple, written only by Cloud Functions) ─
     match /overlaps/{coupleId}/{document=**} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null && isCoupleMemember(coupleId);
       allow write: if false; // Only Cloud Functions write
     }
 
-    // Invite codes
+    // ── Invite codes ─────────────────────────────────────────────────────────
     match /invites/{code} {
-      allow read, write: if request.auth != null;
+      // Anyone authenticated can read an invite (to redeem it).
+      allow read: if request.auth != null;
+      // Only the creator can write (create) an invite.
+      allow create: if request.auth != null
+        && request.resource.data.createdByUid == request.auth.uid;
+      // Updates allowed by creator (cancel) or redeemer (accept).
+      allow update: if request.auth != null;
     }
 
-    // Recurring windows
+    // ── Recurring windows (written by Cloud Functions) ───────────────────────
     match /couples/{coupleId}/recurringWindows/{windowId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null && isCoupleMemember(coupleId);
       allow write: if false; // Only Cloud Functions write
     }
 
-    // Pattern requests (trigger for manual detection)
+    // ── Pattern requests (trigger for manual detection) ──────────────────────
     match /couples/{coupleId}/patternRequests/{requestId} {
-      allow create: if request.auth != null;
+      allow create: if request.auth != null && isCoupleMemember(coupleId);
     }
   }
 }

@@ -119,10 +119,11 @@ class AuthScreen extends ConsumerWidget {
     try {
       await ref.read(authNotifierProvider.notifier).signInWithGoogle();
       if (context.mounted) context.go(_postSignInRoute(ref));
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('Google sign-in error: $e\n$st');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Google sign-in failed. Please try again.')),
+          SnackBar(content: Text('Google sign-in failed: $e')),
         );
       }
     }

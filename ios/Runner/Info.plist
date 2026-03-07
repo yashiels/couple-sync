@@ -60,6 +60,10 @@
 			</array>
 		</dict>
 	</dict>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Couple Schedule needs access to your calendar to sync your busy times and find mutual free windows with your partner.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Couple Schedule needs access to your calendar to sync your busy times and find mutual free windows with your partner.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Couple Schedule uses Face ID for secure authentication.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

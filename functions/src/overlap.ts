@@ -6,6 +6,153 @@ import { suggestActivities } from "./gemini";
 const getDb = () => admin.firestore();
 
 // ---------------------------------------------------------------------------
+// RRULE expansion (lightweight, covers DAILY/WEEKLY/MONTHLY FREQ)
+// ---------------------------------------------------------------------------
+
+interface ParsedRRule {
+  freq: string;
+  interval: number;
+  byDay: string[];
+  until: number | null; // UTC ms
+  count: number | null;
+}
+
+function parseRRule(rrule: string): ParsedRRule | null {
+  if (!rrule) return null;
+  const rule = rrule.replace(/^RRULE:/, "");
+  const parts: Record<string, string> = {};
+  for (const seg of rule.split(";")) {
+    const [k, v] = seg.split("=");
+    if (k && v) parts[k] = v;
+  }
+  const freq = parts["FREQ"];
+  if (!freq) return null;
+  return {
+    freq,
+    interval: parseInt(parts["INTERVAL"] || "1", 10),
+    byDay: parts["BYDAY"] ? parts["BYDAY"].split(",") : [],
+    until: parts["UNTIL"] ? parseRRuleDate(parts["UNTIL"]) : null,
+    count: parts["COUNT"] ? parseInt(parts["COUNT"], 10) : null,
+  };
+}
+
+function parseRRuleDate(s: string): number {
+  // Handle YYYYMMDD or YYYYMMDDTHHmmssZ
+  const y = parseInt(s.substring(0, 4), 10);
+  const m = parseInt(s.substring(4, 6), 10) - 1;
+  const d = parseInt(s.substring(6, 8), 10);
+  if (s.length >= 15) {
+    const hh = parseInt(s.substring(9, 11), 10);
+    const mm = parseInt(s.substring(11, 13), 10);
+    const ss = parseInt(s.substring(13, 15), 10);
+    return Date.UTC(y, m, d, hh, mm, ss);
+  }
+  return Date.UTC(y, m, d);
+}
+
+const LUXON_DOW: Record<string, number> = {
+  MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6, SU: 7,
+};
+
+/**
+ * Expands a single block with a recurrenceRule into concrete instances
+ * within [horizonStart, horizonEnd).  The original block's start/end
+ * define the duration and anchor.
+ */
+function expandRecurrence(
+  startMs: number,
+  endMs: number,
+  rrule: string,
+  horizonStart: number,
+  horizonEnd: number,
+): Array<{ startMs: number; endMs: number }> {
+  const parsed = parseRRule(rrule);
+  if (!parsed) return [{ startMs, endMs }];
+
+  const durationMs = endMs - startMs;
+  const results: Array<{ startMs: number; endMs: number }> = [];
+  const anchor = DateTime.fromMillis(startMs, { zone: "UTC" });
+  const maxOccurrences = parsed.count ?? 365; // safety cap
+  let count = 0;
+
+  // Generate candidate dates
+  let cursor = anchor;
+  const limit = DateTime.fromMillis(horizonEnd, { zone: "UTC" });
+  const untilLimit = parsed.until
+    ? DateTime.fromMillis(parsed.until, { zone: "UTC" })
+    : null;
+
+  while (cursor <= limit && count < maxOccurrences) {
+    if (untilLimit && cursor > untilLimit) break;
+
+    const cMs = cursor.toMillis();
+
+    if (parsed.freq === "WEEKLY" && parsed.byDay.length > 0) {
+      // For WEEKLY+BYDAY, check each day of the week within this week
+      for (const dayCode of parsed.byDay) {
+        const targetDow = LUXON_DOW[dayCode];
+        if (targetDow === undefined) continue;
+        const diff = targetDow - cursor.weekday;
+        const candidate = cursor.plus({ days: diff });
+        const candMs = candidate.toMillis();
+        if (candMs >= startMs && candMs >= horizonStart && candMs < horizonEnd) {
+          if (!untilLimit || candidate <= untilLimit) {
+            results.push({ startMs: candMs, endMs: candMs + durationMs });
+            count++;
+            if (parsed.count && count >= parsed.count) break;
+          }
+        }
+      }
+      cursor = cursor.plus({ weeks: parsed.interval });
+    } else if (parsed.freq === "DAILY") {
+      if (cMs >= horizonStart && cMs < horizonEnd) {
+        results.push({ startMs: cMs, endMs: cMs + durationMs });
+        count++;
+      }
+      cursor = cursor.plus({ days: parsed.interval });
+    } else if (parsed.freq === "WEEKLY") {
+      if (cMs >= horizonStart && cMs < horizonEnd) {
+        results.push({ startMs: cMs, endMs: cMs + durationMs });
+        count++;
+      }
+      cursor = cursor.plus({ weeks: parsed.interval });
+    } else if (parsed.freq === "MONTHLY") {
+      if (cMs >= horizonStart && cMs < horizonEnd) {
+        results.push({ startMs: cMs, endMs: cMs + durationMs });
+        count++;
+      }
+      cursor = cursor.plus({ months: parsed.interval });
+    } else {
+      // Unsupported freq — return just the original
+      return [{ startMs, endMs }];
+    }
+
+    // Skip past dates before the horizon
+    if (cursor.toMillis() < startMs) {
+      // Fast-forward: jump to horizon start
+      const jumps = Math.floor(
+        (horizonStart - cursor.toMillis()) /
+          (parsed.interval *
+            (parsed.freq === "DAILY"
+              ? 86_400_000
+              : parsed.freq === "WEEKLY"
+              ? 604_800_000
+              : 2_592_000_000))
+      );
+      if (jumps > 1) {
+        if (parsed.freq === "DAILY")
+          cursor = cursor.plus({ days: jumps * parsed.interval });
+        else if (parsed.freq === "WEEKLY")
+          cursor = cursor.plus({ weeks: jumps * parsed.interval });
+        else cursor = cursor.plus({ months: jumps * parsed.interval });
+      }
+    }
+  }
+
+  return results.length > 0 ? results : [{ startMs, endMs }];
+}
+
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
@@ -90,7 +237,8 @@ async function runOverlapEngine(coupleId: string): Promise<OverlapWindowDoc[]> {
     .where("startUtc", "<", admin.firestore.Timestamp.fromMillis(toMs))
     .get();
 
-  const blocks = blocksSnap.docs.map((doc) => {
+  // Parse blocks and expand any that have recurrence rules
+  const rawBlocks = blocksSnap.docs.map((doc) => {
     const d = doc.data();
     return {
       userId: d.userId as string,
@@ -98,7 +246,23 @@ async function runOverlapEngine(coupleId: string): Promise<OverlapWindowDoc[]> {
       startMs: (d.startUtc as admin.firestore.Timestamp).toMillis(),
       endMs: (d.endUtc as admin.firestore.Timestamp).toMillis(),
       visibility: d.visibility as string,
+      recurrenceRule: (d.recurrenceRule as string) || "",
     };
+  });
+
+  // Expand recurring blocks into concrete instances within the horizon
+  const blocks = rawBlocks.flatMap((b) => {
+    if (!b.recurrenceRule) {
+      return [{ userId: b.userId, type: b.type, startMs: b.startMs, endMs: b.endMs, visibility: b.visibility }];
+    }
+    const instances = expandRecurrence(b.startMs, b.endMs, b.recurrenceRule, fromMs, toMs);
+    return instances.map((inst) => ({
+      userId: b.userId,
+      type: b.type,
+      startMs: inst.startMs,
+      endMs: inst.endMs,
+      visibility: b.visibility,
+    }));
   });
 
   // 5. Build sorted busy timelines per user (skip "onlyMe" blocks)

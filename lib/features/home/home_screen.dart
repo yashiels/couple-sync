@@ -596,14 +596,16 @@ class _QuickActionsRowState extends ConsumerState<_QuickActionsRow> {
   Future<void> _syncCalendars() async {
     if (_syncing) return;
     final user = ref.read(currentUserProvider);
+    final service = ref.read(googleCalendarServiceProvider);
     if (user == null || widget.coupleId == null) return;
 
     setState(() => _syncing = true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Syncing calendars...')),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Syncing calendars...')),
+      );
+    }
     try {
-      final service = ref.read(googleCalendarServiceProvider);
       await service.syncToFirestore(
         userId: user.uid,
         coupleId: widget.coupleId!,

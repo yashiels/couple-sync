@@ -34,7 +34,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
     final couple = ref.read(currentCoupleProvider);
     if (couple == null || widget.editingBlockId == null) return;
 
-    setState(() => _loadingBlock = true);
+    if (mounted) setState(() => _loadingBlock = true);
     try {
       final block = await ref
           .read(blockServiceProvider)
@@ -63,6 +63,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
   }) async {
     DateTime selected = initial?.toLocal() ?? DateTime.now();
 
+    if (!context.mounted) return;
     await showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surfaceElevated,

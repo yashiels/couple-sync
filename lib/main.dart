@@ -1,8 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 
 import 'core/router/router.dart';
@@ -25,73 +27,82 @@ void main() async {
       statusBarIconBrightness: Brightness.dark,
     ));
   }
-  runApp(const ProviderScope(child: CoupleScheduleApp()));
-}
 
-class CoupleScheduleApp extends ConsumerStatefulWidget {
-  const CoupleScheduleApp({super.key});
+  // Create the ProviderContainer and GoRouter OUTSIDE the widget tree.
+  // This avoids Riverpod's _UncontrolledProviderScopeElement calling
+  // markNeedsBuild() during its own mount when provider state changes
+  // (e.g. Firebase Auth stream emitting cached user), which causes
+  // the `!_dirty` assertion crash in framework.dart.
+  final container = ProviderContainer();
 
-  @override
-  ConsumerState<CoupleScheduleApp> createState() => _CoupleScheduleAppState();
-}
+  // Force-create firebaseAuthStateProvider so its synchronous emission
+  // (cached Firebase user) happens before any widget builds.
+  container.read(firebaseAuthStateProvider);
 
-class _CoupleScheduleAppState extends ConsumerState<CoupleScheduleApp> {
-  /// Guard flag that prevents concurrent [_hydrateSession] executions.
-  bool _hydrating = false;
+  // Create the router using the container directly — no ref.watch needed.
+  final router = createAppRouter(container);
 
-  @override
-  void initState() {
-    super.initState();
-    _hydrateSession();
-  }
-
-  Future<void> _hydrateSession() async {
-    if (_hydrating) return;
-    _hydrating = true;
-    try {
-      final authService = ref.read(authServiceProvider);
-      final firebaseUser = authService.currentUser;
-      if (firebaseUser != null) {
-        final userModel = await authService.fetchUserModel(firebaseUser.uid);
-        if (!mounted || authService.currentUser?.uid != firebaseUser.uid) return;
-        if (userModel != null) {
-          ref.read(currentUserProvider.notifier).state = userModel;
-          if (userModel.coupleId != null) {
-            final couple = await authService.fetchCoupleForUser(firebaseUser.uid);
-            if (mounted) {
-              ref.read(currentCoupleProvider.notifier).state = couple;
-            }
-          }
-          // Bug 22: Set auth status so the rest of the app knows we're
-          // authenticated after rehydrating from an existing session.
-          if (mounted) {
-            ref.read(authNotifierProvider.notifier).setStatus(
-                AuthStatus.authenticated);
-          }
-        }
-      } else {
-        ref.read(currentUserProvider.notifier).state = null;
-        ref.read(currentCoupleProvider.notifier).state = null;
-      }
-    } catch (e) {
-      debugPrint('Session hydration failed: $e');
-    } finally {
-      _hydrating = false;
+  // Listen for auth state changes to drive session hydration.
+  // This replaces the ref.listen that was previously in CoupleScheduleApp.build().
+  container.listen<AsyncValue<User?>>(firebaseAuthStateProvider, (prev, next) {
+    final prevUser = prev?.valueOrNull;
+    final nextUser = next.valueOrNull;
+    if (prevUser?.uid != nextUser?.uid) {
+      _hydrateSession(container);
     }
+  });
+
+  // Run initial session hydration.
+  _hydrateSession(container);
+
+  runApp(UncontrolledProviderScope(
+    container: container,
+    child: CoupleScheduleApp(router: router),
+  ));
+}
+
+/// Restores user and couple state from Firestore when a Firebase user is
+/// already signed in (persisted session) or when auth state changes.
+bool _hydrating = false;
+
+Future<void> _hydrateSession(ProviderContainer container) async {
+  if (_hydrating) return;
+  _hydrating = true;
+  try {
+    final authService = container.read(authServiceProvider);
+    final firebaseUser = authService.currentUser;
+    if (firebaseUser != null) {
+      final userModel = await authService.fetchUserModel(firebaseUser.uid);
+      if (authService.currentUser?.uid != firebaseUser.uid) return;
+      if (userModel != null) {
+        container.read(currentUserProvider.notifier).state = userModel;
+        if (userModel.coupleId != null) {
+          final couple =
+              await authService.fetchCoupleForUser(firebaseUser.uid);
+          container.read(currentCoupleProvider.notifier).state = couple;
+        }
+        container
+            .read(authNotifierProvider.notifier)
+            .setStatus(AuthStatus.authenticated);
+      }
+    } else {
+      container.read(currentUserProvider.notifier).state = null;
+      container.read(currentCoupleProvider.notifier).state = null;
+    }
+  } catch (e) {
+    debugPrint('Session hydration failed: $e');
+  } finally {
+    _hydrating = false;
+    container.read(hydrationCompleteProvider.notifier).state = true;
   }
+}
+
+class CoupleScheduleApp extends StatelessWidget {
+  const CoupleScheduleApp({super.key, required this.router});
+  final GoRouter router;
 
   @override
   Widget build(BuildContext context) {
-    // Listen for auth state changes to re-hydrate on sign-in/sign-out
-    ref.listen(firebaseAuthStateProvider, (prev, next) {
-      final prevUser = prev?.valueOrNull;
-      final nextUser = next.valueOrNull;
-      if (prevUser?.uid != nextUser?.uid) {
-        _hydrateSession();
-      }
-    });
-
-    final router = ref.watch(routerProvider);
     return MaterialApp.router(
       title: 'Couple Schedule',
       theme: AppTheme.light,

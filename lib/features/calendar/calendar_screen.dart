@@ -98,6 +98,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   void _showBlockDetail(TimeBlock block) {
+    if (!context.mounted) return;
     final user = ref.read(currentUserProvider);
     final isMe = block.userId == user?.uid;
 

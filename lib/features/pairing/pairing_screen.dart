@@ -78,6 +78,7 @@ class _ShareCodeTabState extends ConsumerState<_ShareCodeTab> {
   Future<void> _generateCode() async {
     final uid = ref.read(currentUserProvider)?.uid;
     if (uid == null) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('You must be signed in to generate a code.')),
@@ -88,7 +89,7 @@ class _ShareCodeTabState extends ConsumerState<_ShareCodeTab> {
     try {
       final code =
           await ref.read(pairingNotifierProvider.notifier).generateCode(uid);
-      setState(() => _code = code);
+      if (mounted) setState(() => _code = code);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -102,6 +103,7 @@ class _ShareCodeTabState extends ConsumerState<_ShareCodeTab> {
   Future<void> _copyCode() async {
     if (_code == null) return;
     await Clipboard.setData(ClipboardData(text: _code!));
+    if (!mounted) return;
     setState(() => _copied = true);
     await Future.delayed(const Duration(seconds: 2));
     if (mounted) setState(() => _copied = false);
@@ -225,7 +227,7 @@ class _EnterCodeTabState extends ConsumerState<_EnterCodeTab> {
           );
       if (mounted) context.go('/home');
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     }
   }
 

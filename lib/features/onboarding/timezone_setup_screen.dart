@@ -45,8 +45,10 @@ class _TimezoneSetupScreenState extends ConsumerState<TimezoneSetupScreen> {
     if (_selected == null) return;
     setState(() => _saving = true);
     final user = ref.read(currentUserProvider);
+    final authService = ref.read(authServiceProvider);
     if (user != null) {
-      await ref.read(authServiceProvider).updateTimezone(user.uid, _selected!);
+      await authService.updateTimezone(user.uid, _selected!);
+      if (!mounted) return;
       // Update in-memory state so the rest of the app sees the new timezone.
       ref.read(currentUserProvider.notifier).state =
           user.copyWith(timezone: _selected!);
