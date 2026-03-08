@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:googleapis/calendar/v3.dart' as gcal;
 import '../../../shared/models/calendar_connection.dart';
 import '../../../shared/models/user_model.dart';
 import '../../../shared/providers/auth_providers.dart';
@@ -13,12 +14,18 @@ import '../services/google_calendar_service.dart';
 /// A single [GoogleSignIn] instance shared between [AuthService] and
 /// [GoogleCalendarService]. Only created on mobile — on web, Firebase Auth
 /// uses [signInWithPopup] directly and does not need [GoogleSignIn].
+/// Includes calendar scopes so that calendar features (sync, connect account)
+/// work without needing a separate requestScopes call. Google Sign-In on
+/// Android only prompts for scopes listed here; requestScopes alone is
+/// unreliable if the initial instance didn't include them.
 final sharedGoogleSignInProvider = Provider<GoogleSignIn?>(
   (_) => kIsWeb
       ? null
       : GoogleSignIn(
           scopes: [
             'email',
+            gcal.CalendarApi.calendarReadonlyScope,
+            gcal.CalendarApi.calendarEventsScope,
           ],
         ),
 );

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
 import '../../core/theme/app_theme.dart';
 import '../../shared/models/calendar_connection.dart';
@@ -79,9 +81,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _SectionHeader(title: 'TIMEZONE'),
           _GroupedCard(
             children: [
-              _ValueRow(
-                label: 'Current timezone',
-                value: user?.timezone ?? 'UTC',
+              _TapRow(
+                label: user?.timezone ?? 'UTC',
+                leading: const Icon(Icons.schedule_rounded, size: 20, color: AppColors.primary),
+                onTap: () => _changeTimezone(context),
               ),
             ],
           ),
@@ -112,6 +115,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _changeTimezone(BuildContext context) async {
+    tz.initializeTimeZones();
+    final zones = tz.timeZoneDatabase.locations.keys.toList()..sort();
+    final current = ref.read(currentUserProvider)?.timezone ?? 'UTC';
+
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surfaceElevated,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => _TimezonePickerSheet(zones: zones, current: current),
+    );
+
+    if (selected != null && selected != current && mounted) {
+      final user = ref.read(currentUserProvider);
+      if (user != null) {
+        await ref.read(authServiceProvider).updateTimezone(user.uid, selected);
+        if (!mounted) return;
+        ref.read(currentUserProvider.notifier).state =
+            user.copyWith(timezone: selected);
+      }
+    }
   }
 
   Future<void> _confirmSignOut(BuildContext context) async {
@@ -270,31 +299,6 @@ class _TapRow extends StatelessWidget {
   }
 }
 
-class _ValueRow extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _ValueRow({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(label, style: AppTypography.body),
-          ),
-          Text(
-            value,
-            style: AppTypography.body.copyWith(color: AppColors.textSecondary),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _GoogleAccountRow extends StatelessWidget {
   final CalendarConnection connection;
   final VoidCallback onRemove;
@@ -337,6 +341,84 @@ class _GoogleAccountRow extends StatelessWidget {
               Icons.close_rounded,
               size: 18,
               color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Timezone picker bottom sheet ─────────────────────────────────────────────
+
+class _TimezonePickerSheet extends StatefulWidget {
+  final List<String> zones;
+  final String current;
+
+  const _TimezonePickerSheet({required this.zones, required this.current});
+
+  @override
+  State<_TimezonePickerSheet> createState() => _TimezonePickerSheetState();
+}
+
+class _TimezonePickerSheetState extends State<_TimezonePickerSheet> {
+  String _query = '';
+
+  List<String> get _filtered {
+    if (_query.isEmpty) return widget.zones;
+    final q = _query.toLowerCase();
+    return widget.zones.where((z) => z.toLowerCase().contains(q)).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      maxChildSize: 0.9,
+      minChildSize: 0.4,
+      expand: false,
+      builder: (context, scrollController) => Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text('Select Timezone', style: AppTypography.headline),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: CupertinoSearchTextField(
+              onChanged: (v) => setState(() => _query = v),
+              placeholder: 'Search timezone...',
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ListView.builder(
+              controller: scrollController,
+              itemCount: _filtered.length,
+              itemBuilder: (context, i) {
+                final zone = _filtered[i];
+                final selected = zone == widget.current;
+                return ListTile(
+                  title: Text(zone, style: AppTypography.body),
+                  selected: selected,
+                  selectedColor: AppColors.primary,
+                  trailing: selected
+                      ? const Icon(Icons.check_circle_rounded,
+                          color: AppColors.primary)
+                      : null,
+                  onTap: () => Navigator.pop(context, zone),
+                );
+              },
             ),
           ),
         ],

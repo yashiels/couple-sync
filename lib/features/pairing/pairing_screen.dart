@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../shared/models/user_model.dart';
 import '../../shared/providers/auth_providers.dart';
 import '../../shared/providers/pairing_providers.dart';
 
@@ -74,6 +78,50 @@ class _ShareCodeTabState extends ConsumerState<_ShareCodeTab> {
   String? _code;
   bool _loading = false;
   bool _copied = false;
+  StreamSubscription<DocumentSnapshot>? _userSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _listenForPairing();
+  }
+
+  @override
+  void dispose() {
+    _userSub?.cancel();
+    super.dispose();
+  }
+
+  /// Listens for changes to the current user's Firestore document.
+  /// When the partner redeems the invite code, the batch write sets
+  /// `coupleId` on this user's document. We detect that and navigate.
+  void _listenForPairing() {
+    final uid = ref.read(currentUserProvider)?.uid;
+    if (uid == null) return;
+
+    _userSub = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .snapshots()
+        .listen((snap) async {
+      if (!snap.exists || !mounted) return;
+      final data = snap.data();
+      if (data != null && data['coupleId'] != null) {
+        // Partner has redeemed the code — update local state and navigate.
+        final freshUser = UserModel.fromFirestore(snap);
+        ref.read(currentUserProvider.notifier).state = freshUser;
+
+        // Also fetch and set the couple model.
+        final authService = ref.read(authServiceProvider);
+        final couple = await authService.fetchCoupleForUser(uid);
+        if (couple != null) {
+          ref.read(currentCoupleProvider.notifier).state = couple;
+        }
+
+        if (mounted) context.go('/home');
+      }
+    });
+  }
 
   Future<void> _generateCode() async {
     final uid = ref.read(currentUserProvider)?.uid;
