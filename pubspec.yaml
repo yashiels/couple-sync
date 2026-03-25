@@ -1,0 +1,24 @@
+name: couple_schedule_foundation_dev83
+description: Foundation scaffolding for DEV-83
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ">3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  go_router: ^6.0.0
+  intl: ^0.17.0
+  riverpod: ^2.0.0
+  flutter_riverpod: ^2.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
