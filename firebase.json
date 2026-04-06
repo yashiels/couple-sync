@@ -1,0 +1,22 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs18"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "app": "android/app",
+        "build": "android/app/build.gradle"
+      },
+      "ios": {
+        "app": "ios/Runner",
+        "build": "ios/Runner.xcodeproj/project.pbxproj"
+      }
+    }
+  }
+}
