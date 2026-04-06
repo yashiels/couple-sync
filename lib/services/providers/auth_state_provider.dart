@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/user_model.dart';
+import '../auth_service.dart';
 
 /// Authentication state that tracks user and profile data for routing decisions.
 class AuthState {
@@ -54,12 +55,17 @@ class AuthState {
 class AuthStateNotifier extends StateNotifier<AuthState> {
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
+  final AuthService _authService;
+
+  String? _lastError;
 
   AuthStateNotifier({
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
+    AuthService? authService,
   })  : _auth = auth ?? FirebaseAuth.instance,
         _firestore = firestore ?? FirebaseFirestore.instance,
+        _authService = authService ?? AuthService(),
         super(const AuthState()) {
     _init();
   }
@@ -123,11 +129,58 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  /// Sign in with Google.
+  /// Returns true on success, false on failure.
+  /// Check [lastError] for error message on failure.
+  Future<bool> signInWithGoogle() async {
+    try {
+      _lastError = null;
+      await _authService.signInWithGoogle();
+      return true;
+    } on AuthException catch (e) {
+      _lastError = e.message;
+      return false;
+    }
+  }
+
+  /// Sign in with Apple.
+  /// Returns true on success, false on failure.
+  /// Check [lastError] for error message on failure.
+  Future<bool> signInWithApple() async {
+    try {
+      _lastError = null;
+      await _authService.signInWithApple();
+      return true;
+    } on AuthException catch (e) {
+      _lastError = e.message;
+      return false;
+    }
+  }
+
   /// Sign out the current user.
   Future<void> signOut() async {
-    await _auth.signOut();
+    try {
+      _lastError = null;
+      await _authService.signOut();
+    } on AuthException catch (e) {
+      _lastError = e.message;
+    }
+  }
+
+  /// Get the last error message, or null if no error.
+  String? get lastError => _lastError;
+
+  /// Clear the last error message.
+  void clearError() {
+    _lastError = null;
   }
 }
+
+/// Provider for the AuthService.
+/// Use this for direct access to auth operations.
+final authServiceProvider = Provider<AuthService>((ref) {
+  return AuthService();
+});
 
 /// Provider for authentication state.
 /// Use this in guards and UI to check auth status, timezone, and couple pairing.
