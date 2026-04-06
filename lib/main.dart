@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'firebase_options.dart';
 
@@ -24,7 +25,11 @@ void main() async {
     return;
   }
 
-  runApp(const MyApp());
+  runApp(
+    const ProviderScope(
+      child: MyApp(),
+    ),
+  );
 }
 
 /// Handles initialization errors by showing a user-friendly error screen.
