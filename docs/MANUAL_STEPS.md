@@ -34,3 +34,51 @@ The project `nexion-ai-prod` must be on the Blaze plan for Cloud Functions.
 ## Future Manual Steps
 
 (Add additional manual setup requirements here as they are discovered)
+
+## STORY-002: Flutter Project Setup
+
+### Apple Sign-In Configuration (iOS)
+
+Apple Sign-In requires an Apple Developer account and proper capability configuration.
+
+**Steps:**
+1. Ensure you have an active Apple Developer account ($99/year)
+2. Open `ios/Runner.xcworkspace` in Xcode
+3. Select the Runner project
+4. Go to Signing & Capabilities tab
+5. Click "+ Capability" and add "Sign in with Apple"
+6. Ensure the bundle ID matches your Apple Developer App ID
+7. Configure the capability in Apple Developer Console:
+   - Go to [Apple Developer Console](https://developer.apple.com/account)
+   - Navigate to Certificates, Identifiers & Profiles
+   - Find your App ID and enable "Sign in with Apple"
+   - Create necessary provisioning profiles
+
+### iOS Build Verification
+
+The first iOS build should be verified manually:
+
+```bash
+cd /Volumes/pulsar/apex-local/Developer/github/skyner-group/couple-sync
+~/flutter/bin/flutter build ios --no-codesign
+```
+
+**Note:** Build may take 5-10 minutes on first run due to CocoaPods installation.
+
+### Android Build Verification
+
+Android debug build should be verified:
+
+```bash
+cd /Volumes/pulsar/apex-local/Developer/github/skyner-group/couple-sync
+~/flutter/bin/flutter build apk --debug
+```
+
+**Note:** Build may take 3-5 minutes on first run due to Gradle setup.
+
+### Platform-Specific Notes
+
+- **iOS**: Requires macOS with Xcode installed
+- **Android**: Requires Android SDK (included with Flutter)
+- **Apple Sign-In**: Only works on physical iOS devices, not simulators
+- **Google Sign-In**: Requires OAuth 2.0 client ID configuration in Google Cloud Console
