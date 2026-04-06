@@ -79,11 +79,14 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // App logo/icon
-                Icon(
-                  Icons.favorite,
-                  size: 80,
-                  color: colorScheme.primary,
+                // App logo/icon (decorative, excluded from accessibility)
+                Semantics(
+                  excludeSemantics: true,
+                  child: Icon(
+                    Icons.favorite,
+                    size: 80,
+                    color: colorScheme.primary,
+                  ),
                 ),
                 const SizedBox(height: 24),
 
@@ -107,66 +110,89 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 ),
                 const SizedBox(height: 48),
 
-                // Error message
+                // Error message with accessibility
                 if (_errorMessage != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: colorScheme.errorContainer,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          color: colorScheme.error,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _errorMessage!,
-                            style: TextStyle(
-                              color: colorScheme.onErrorContainer,
+                  Semantics(
+                    liveRegion: true,
+                    container: true,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: colorScheme.errorContainer,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Semantics(
+                            excludeSemantics: true,
+                            child: Icon(
+                              Icons.error_outline,
+                              color: colorScheme.error,
+                              size: 20,
                             ),
                           ),
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            Icons.close,
-                            color: colorScheme.onErrorContainer,
-                            size: 20,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _errorMessage!,
+                              style: TextStyle(
+                                color: colorScheme.onErrorContainer,
+                              ),
+                            ),
                           ),
-                          onPressed: () {
-                            setState(() {
-                              _errorMessage = null;
-                            });
-                          },
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                      ],
+                          IconButton(
+                            icon: Semantics(
+                              excludeSemantics: true,
+                              child: Icon(
+                                Icons.close,
+                                color: colorScheme.onErrorContainer,
+                                size: 20,
+                              ),
+                            ),
+                            tooltip: 'Dismiss error',
+                            onPressed: () {
+                              setState(() {
+                                _errorMessage = null;
+                              });
+                            },
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
                 ],
 
                 // Google Sign-In button
-                _SignInButton(
-                  text: 'Continue with Google',
-                  icon: _buildGoogleIcon(),
-                  isLoading: _isGoogleLoading,
-                  onPressed: _handleGoogleSignIn,
+                Semantics(
+                  button: true,
+                  enabled: !_isGoogleLoading && !_isAppleLoading,
+                  label: 'Continue with Google',
+                  hint: _isGoogleLoading ? 'Signing in with Google' : 'Sign in using your Google account',
+                  child: _SignInButton(
+                    text: 'Continue with Google',
+                    icon: _buildGoogleIcon(),
+                    isLoading: _isGoogleLoading,
+                    onPressed: _handleGoogleSignIn,
+                  ),
                 ),
                 const SizedBox(height: 16),
 
                 // Apple Sign-In button
-                _SignInButton(
-                  text: 'Continue with Apple',
-                  icon: _buildAppleIcon(),
-                  isLoading: _isAppleLoading,
-                  onPressed: _handleAppleSignIn,
-                  isAppleButton: true,
+                Semantics(
+                  button: true,
+                  enabled: !_isGoogleLoading && !_isAppleLoading,
+                  label: 'Continue with Apple',
+                  hint: _isAppleLoading ? 'Signing in with Apple' : 'Sign in using your Apple ID',
+                  child: _SignInButton(
+                    text: 'Continue with Apple',
+                    icon: _buildAppleIcon(),
+                    isLoading: _isAppleLoading,
+                    onPressed: _handleAppleSignIn,
+                    isAppleButton: true,
+                  ),
                 ),
                 const SizedBox(height: 32),
 
@@ -230,6 +256,7 @@ class _SignInButton extends StatelessWidget {
       child: InkWell(
         onTap: isLoading ? null : onPressed,
         borderRadius: BorderRadius.circular(8),
+        enableFeedback: true,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
           decoration: BoxDecoration(
