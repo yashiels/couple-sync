@@ -203,7 +203,7 @@ class CalendarService {
       auth.AccessToken(
         'Bearer',
         accessToken,
-        DateTime.now().add(const Duration(hours: 1)),
+        DateTime.now().toUtc().add(const Duration(hours: 1)),
       ),
     );
 
