@@ -2,17 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'routes.dart';
-import '../services/providers/auth_state_provider.dart';
-import '../features/auth/screens/auth_screen.dart';
-import '../features/onboarding/screens/timezone_setup_screen.dart';
-import '../features/onboarding/screens/routine_wizard_screen.dart';
-import '../features/onboarding/screens/pairing_screen.dart';
-import '../features/home/screens/home_screen.dart';
-import '../features/calendar/screens/calendar_screen.dart';
-import '../features/blocks/screens/blocks_screen.dart';
-import '../features/blocks/screens/block_form_screen.dart';
-import '../features/overlap/screens/overlap_screen.dart';
-import '../features/settings/screens/settings_screen.dart';
+import '../../services/providers/auth_state_provider.dart';
+import '../../features/auth/screens/auth_screen.dart';
+import '../../features/onboarding/screens/timezone_setup_screen.dart';
+import '../../features/onboarding/screens/routine_wizard_screen.dart';
+import '../../features/onboarding/screens/pairing_screen.dart';
+import '../../features/home/screens/home_screen.dart';
+import '../../features/calendar/screens/calendar_screen.dart';
+import '../../features/blocks/screens/blocks_screen.dart';
+import '../../features/blocks/screens/block_form_screen.dart';
+import '../../features/overlap/screens/overlap_screen.dart';
+import '../../features/settings/screens/settings_screen.dart';
 
 /// GoRouter configuration provider.
 /// Exposes the router via Riverpod for use in app.dart.

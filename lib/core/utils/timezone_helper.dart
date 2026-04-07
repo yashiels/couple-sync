@@ -1,4 +1,3 @@
-import 'dart:ui' as ui;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
 
@@ -18,15 +17,42 @@ class TimezoneHelper {
 
   /// Get the device's current timezone as an IANA timezone ID.
   /// Falls back to 'UTC' if detection fails.
+  ///
+  /// Note: Auto-detection is limited in Flutter. The app relies on
+  /// user selection during onboarding for accurate timezone data.
   static Future<String> detectDeviceTimezone() async {
     try {
-      // Use Flutter's window timezone which gives IANA ID
-      final String? timezoneName = ui.PlatformDispatcher.instance.timeZoneName;
-      if (timezoneName != null && timezoneName.isNotEmpty) {
-        // Validate it's a valid IANA timezone
-        if (isValidTimezone(timezoneName)) {
-          return timezoneName;
-        }
+      // Try to get local timezone from DateTime
+      // This returns abbreviations like 'SAST' not IANA IDs
+      // So we try to match common cases
+      final localName = DateTime.now().timeZoneName;
+      
+      // Map common abbreviations to IANA IDs
+      final abbreviationMap = {
+        'SAST': 'Africa/Johannesburg',
+        'EST': 'America/New_York',
+        'EDT': 'America/New_York',
+        'CST': 'America/Chicago',
+        'CDT': 'America/Chicago',
+        'MST': 'America/Denver',
+        'MDT': 'America/Denver',
+        'PST': 'America/Los_Angeles',
+        'PDT': 'America/Los_Angeles',
+        'GMT': 'Europe/London',
+        'BST': 'Europe/London',
+        'CET': 'Europe/Paris',
+        'CEST': 'Europe/Paris',
+        'JST': 'Asia/Tokyo',
+        'AEST': 'Australia/Sydney',
+        'AEDT': 'Australia/Sydney',
+        'NZST': 'Pacific/Auckland',
+        'NZDT': 'Pacific/Auckland',
+        'UTC': 'UTC',
+      };
+      
+      final ianaId = abbreviationMap[localName];
+      if (ianaId != null && isValidTimezone(ianaId)) {
+        return ianaId;
       }
     } catch (_) {
       // Fall through to UTC fallback

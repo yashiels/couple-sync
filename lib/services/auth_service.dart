@@ -72,11 +72,6 @@ class AuthService {
       return user;
     } on AuthException {
       rethrow;
-    } on GoogleSignInException catch (e) {
-      throw AuthException(
-        code: 'google-sign-in-error',
-        message: _getGoogleSignInErrorMessage(e),
-      );
     } on FirebaseAuthException catch (e) {
       throw AuthException(
         code: e.code,
@@ -263,22 +258,6 @@ class AuthService {
             'Please use the original sign-in method.';
       default:
         return 'Sign in failed. Please try again.';
-    }
-  }
-
-  /// Converts GoogleSignInException to user-friendly messages.
-  String _getGoogleSignInErrorMessage(GoogleSignInException e) {
-    switch (e.code) {
-      case GoogleSignInExceptionCode.canceled:
-        return 'Sign in was cancelled. Please try again.';
-      case GoogleSignInExceptionCode.networkError:
-        return 'Network error. Please check your connection and try again.';
-      case GoogleSignInExceptionCode.signInDisabled:
-        return 'Google Sign-In is not enabled. Please contact support.';
-      case GoogleSignInExceptionCode.signInFailed:
-        return 'Failed to sign in with Google. Please try again.';
-      default:
-        return 'An error occurred with Google Sign-In. Please try again.';
     }
   }
 
