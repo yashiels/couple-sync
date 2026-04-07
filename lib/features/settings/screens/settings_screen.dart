@@ -4,12 +4,12 @@ import 'package:go_router/go_router.dart';
 import '../../../core/models/couple_model.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/router/routes.dart';
-import '../../../services/auth_service.dart';
+import '../../../services/calendar_service.dart';
 import '../../../services/providers/auth_state_provider.dart';
+import '../../../services/providers/calendar_provider.dart';
 import '../../../services/providers/firestore_provider.dart';
 import '../widgets/settings_section_widget.dart';
 
-// TODO: STORY-018 - Implement Google Calendar OAuth
 // TODO: STORY-019 - Implement Google Calendar sync functionality
 
 /// Provider for notification settings (local flag, doesn't affect FCM registration).
@@ -49,15 +49,38 @@ class SettingsScreen extends ConsumerWidget {
             title: 'Calendar',
             icon: Icons.calendar_today,
             children: [
-              // TODO: STORY-018 - Connect to Google Calendar OAuth status
-              const SettingsStatusItem(
-                title: 'Google Calendar',
-                subtitle: 'Connect your Google Calendar for automatic sync',
-                status: 'Not Connected',
-                statusColor: Colors.orange,
-                statusIcon: Icons.cloud_off,
+              // Calendar connection status
+              Consumer(
+                builder: (context, ref, child) {
+                  final connectionState =
+                      ref.watch(calendarConnectionNotifierProvider);
+                  return connectionState.when(
+                    data: (isConnected) => SettingsStatusItem(
+                      title: 'Google Calendar',
+                      subtitle: 'Connect your Google Calendar for automatic sync',
+                      status: isConnected ? 'Connected' : 'Not Connected',
+                      statusColor: isConnected ? Colors.green : Colors.orange,
+                      statusIcon:
+                          isConnected ? Icons.cloud_done : Icons.cloud_off,
+                    ),
+                    loading: () => const SettingsStatusItem(
+                      title: 'Google Calendar',
+                      subtitle: 'Connect your Google Calendar for automatic sync',
+                      status: 'Checking...',
+                      statusColor: Colors.grey,
+                      statusIcon: Icons.hourglass_empty,
+                    ),
+                    error: (error, _) => SettingsStatusItem(
+                      title: 'Google Calendar',
+                      subtitle: 'Connect your Google Calendar for automatic sync',
+                      status: 'Error',
+                      statusColor: Colors.red,
+                      statusIcon: Icons.error_outline,
+                    ),
+                  );
+                },
               ),
-              // TODO: STORY-019 - Show last sync time from sync service
+              // Last sync status (placeholder for STORY-019)
               const SettingsStatusItem(
                 title: 'Last Sync',
                 subtitle: 'Last time your calendar was synced',
@@ -65,30 +88,72 @@ class SettingsScreen extends ConsumerWidget {
                 statusColor: Colors.grey,
                 statusIcon: Icons.sync_disabled,
               ),
-              // TODO: STORY-018 - Add Connect/Disconnect button functionality
-              SettingsButton(
-                title: 'Connect Calendar',
-                subtitle: 'Authorize Google Calendar access',
-                label: 'Connect',
-                icon: Icons.link,
-                onTap: () {
-                  // TODO: STORY-018 - Trigger OAuth flow
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Calendar integration coming soon'),
+              // Connect/Disconnect button
+              Consumer(
+                builder: (context, ref, child) {
+                  final connectionState =
+                      ref.watch(calendarConnectionNotifierProvider);
+                  return connectionState.when(
+                    data: (isConnected) => SettingsButton(
+                      title: isConnected ? 'Disconnect' : 'Connect Calendar',
+                      subtitle: isConnected
+                          ? 'Remove Google Calendar access'
+                          : 'Authorize Google Calendar access',
+                      label: isConnected ? 'Disconnect' : 'Connect',
+                      icon: isConnected ? Icons.link_off : Icons.link,
+                      isDestructive: isConnected,
+                      onTap: () => _handleCalendarConnection(
+                        context,
+                        ref,
+                        isConnected,
+                      ),
+                    ),
+                    loading: () => const SettingsButton(
+                      title: 'Connect Calendar',
+                      subtitle: 'Authorize Google Calendar access',
+                      label: 'Connect',
+                      icon: Icons.link,
+                      enabled: false,
+                      onTap: null,
+                    ),
+                    error: (error, _) => SettingsButton(
+                      title: 'Connect Calendar',
+                      subtitle: 'Authorize Google Calendar access',
+                      label: 'Connect',
+                      icon: Icons.link,
+                      onTap: () => _handleCalendarConnection(
+                        context,
+                        ref,
+                        false,
+                      ),
                     ),
                   );
                 },
               ),
-              // TODO: STORY-019 - Add Manual Sync functionality
-              SettingsButton(
-                title: 'Manual Sync',
-                subtitle: 'Force sync your calendar now',
-                label: 'Sync',
-                icon: Icons.sync,
-                enabled: false, // Disabled until OAuth implemented
-                onTap: () {
-                  // TODO: STORY-019 - Trigger manual sync
+              // Manual Sync (disabled until OAuth implemented - STORY-019)
+              Consumer(
+                builder: (context, ref, child) {
+                  final connectionState =
+                      ref.watch(calendarConnectionNotifierProvider);
+                  final isConnected = connectionState.valueOrNull ?? false;
+                  return SettingsButton(
+                    title: 'Manual Sync',
+                    subtitle: 'Force sync your calendar now',
+                    label: 'Sync',
+                    icon: Icons.sync,
+                    enabled: isConnected, // Enabled when connected
+                    onTap: isConnected
+                        ? () {
+                            // TODO: STORY-019 - Trigger manual sync
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content:
+                                    Text('Manual sync coming in STORY-019'),
+                              ),
+                            );
+                          }
+                        : null,
+                  );
                 },
               ),
             ],
@@ -219,6 +284,105 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _handleCalendarConnection(
+    BuildContext context,
+    WidgetRef ref,
+    bool isConnected,
+  ) async {
+    final notifier = ref.read(calendarConnectionNotifierProvider.notifier);
+
+    if (isConnected) {
+      // Show confirmation dialog before disconnecting
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Disconnect Calendar'),
+          content: const Text(
+            'Are you sure you want to disconnect Google Calendar? '
+            'You will need to reconnect to sync your calendar.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
+              child: const Text('Disconnect'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true) return;
+
+      try {
+        await notifier.disconnect();
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Google Calendar disconnected'),
+            ),
+          );
+        }
+      } on CalendarException catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.message),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to disconnect: $e'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+      }
+    } else {
+      // Connect to Google Calendar
+      try {
+        final connected = await notifier.connect();
+        if (context.mounted) {
+          if (connected) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Google Calendar connected successfully'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        }
+      } on CalendarException catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.message),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to connect: $e'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+      }
+    }
   }
 
   Future<CoupleModel?> _fetchCouple(WidgetRef ref, String coupleId) async {
