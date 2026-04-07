@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function: Check if user is a member of a couple
+    function isCoupleMember(coupleId) {
+      let couple = get(/databases/$(database)/documents/couples/$(coupleId)).data;
+      return couple != null && 
+             (couple.userAUid == request.auth.uid || couple.userBUid == request.auth.uid);
+    }
+    
+    // Helper function: Check if user is a partner of another user
+    function isPartnerOf(uid) {
+      let userDoc = get(/databases/$(database)/documents/users/$(uid)).data;
+      let callerDoc = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return userDoc != null && 
+             callerDoc != null && 
+             userDoc.coupleId != null && 
+             userDoc.coupleId == callerDoc.coupleId;
+    }
+
+    // 1. users/{uid}
+    // - Read: Owner or partner (via coupleId lookup)
+    // - Write: Only owner (coupleId is written by Cloud Functions via admin SDK)
+    match /users/{uid} {
+      allow read: if request.auth != null && 
+                     (request.auth.uid == uid || isPartnerOf(uid));
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // 2. couples/{coupleId}
+    // - Read: Only members (userAUid or userBUid)
+    // - Write: Cloud Functions only (admin SDK bypasses rules)
+    match /couples/{coupleId} {
+      allow read: if request.auth != null && 
+                     (resource.data.userAUid == request.auth.uid || 
+                      resource.data.userBUid == request.auth.uid);
+      // No allow write - Cloud Functions use admin SDK which bypasses rules
+    }
+
+    // 3. invites/{code}
+    // - Read: Any authenticated user
+    // - Create: Any authenticated user
+    // - Update: Only creator (createdByUid)
+    match /invites/{code} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && 
+                       resource.data.createdByUid == request.auth.uid;
+    }
+
+    // 4. timeblocks/{coupleId}/blocks/{blockId}
+    // - Read/Write: Only couple members (verified via get() on couples/{coupleId})
+    match /timeblocks/{coupleId}/blocks/{blockId} {
+      allow read, write: if request.auth != null && isCoupleMember(coupleId);
+    }
+
+    // 5. overlaps/{coupleId}/windows/latest
+    // - Read: Only couple members
+    // - Write: Cloud Functions only (admin SDK bypasses rules)
+    match /overlaps/{coupleId}/windows/{windowId} {
+      allow read: if request.auth != null && isCoupleMember(coupleId);
+      // No allow write - Cloud Functions use admin SDK which bypasses rules
+    }
+  }
+}
