@@ -1,0 +1,367 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../core/models/models.dart';
+
+/// Exception for Firestore operations with user-friendly messages.
+class FirestoreException implements Exception {
+  final String code;
+  final String message;
+  final dynamic originalError;
+
+  const FirestoreException({
+    required this.code,
+    required this.message,
+    this.originalError,
+  });
+
+  @override
+  String toString() => 'FirestoreException($code): $message';
+}
+
+/// Service for all Firestore database operations.
+/// Abstracts Firestore complexity and returns typed model objects.
+class FirestoreService {
+  final FirebaseFirestore _firestore;
+
+  FirestoreService({FirebaseFirestore? firestore})
+      : _firestore = firestore ?? FirebaseFirestore.instance;
+
+  // ============================================================
+  // USERS
+  // ============================================================
+
+  /// Get a user by UID.
+  /// Returns null if the user doesn't exist.
+  Future<UserModel?> getUser(String uid) async {
+    try {
+      final doc = await _firestore.collection('users').doc(uid).get();
+
+      if (!doc.exists) return null;
+
+      return UserModel.fromJson(doc.data()!);
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to get user');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while fetching user',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Create a new user document.
+  /// Uses server timestamp for createdAt.
+  Future<void> createUser(String uid, Map<String, dynamic> data) async {
+    try {
+      await _firestore.collection('users').doc(uid).set({
+        ...data,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to create user');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while creating user',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Update an existing user document.
+  /// Only updates the fields provided in data.
+  Future<void> updateUser(String uid, Map<String, dynamic> data) async {
+    try {
+      await _firestore.collection('users').doc(uid).update(data);
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to update user');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while updating user',
+        originalError: e,
+      );
+    }
+  }
+
+  // ============================================================
+  // COUPLES
+  // ============================================================
+
+  /// Get a couple by coupleId.
+  /// Returns null if the couple doesn't exist.
+  Future<CoupleModel?> getCouple(String coupleId) async {
+    try {
+      final doc = await _firestore.collection('couples').doc(coupleId).get();
+
+      if (!doc.exists) return null;
+
+      return CoupleModel.fromJson(doc.data()!);
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to get couple');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while fetching couple',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Create a new couple document.
+  /// Uses server timestamp for createdAt.
+  Future<String> createCouple(CoupleModel couple) async {
+    try {
+      final docRef = await _firestore.collection('couples').add({
+        ...couple.toJson(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      return docRef.id;
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to create couple');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while creating couple',
+        originalError: e,
+      );
+    }
+  }
+
+  // ============================================================
+  // INVITES
+  // ============================================================
+
+  /// Create a new invite document with the given code.
+  /// Uses server timestamp for createdAt (if present in data).
+  Future<void> createInvite(String code, Map<String, dynamic> data) async {
+    try {
+      await _firestore.collection('invites').doc(code).set({
+        ...data,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to create invite');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while creating invite',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Get an invite by code.
+  /// Returns null if the invite doesn't exist.
+  Future<InviteModel?> getInvite(String code) async {
+    try {
+      final doc = await _firestore.collection('invites').doc(code).get();
+
+      if (!doc.exists) return null;
+
+      return InviteModel.fromJson(doc.data()!);
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to get invite');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while fetching invite',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Update an existing invite document.
+  /// Only updates the fields provided in data.
+  Future<void> updateInvite(String code, Map<String, dynamic> data) async {
+    try {
+      await _firestore.collection('invites').doc(code).update(data);
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to update invite');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while updating invite',
+        originalError: e,
+      );
+    }
+  }
+
+  // ============================================================
+  // TIME BLOCKS
+  // ============================================================
+
+  /// Get all time blocks for a user in a couple.
+  /// Returns blocks from the subcollection: timeblocks/{coupleId}/blocks/{blockId}
+  Future<List<TimeBlock>> getBlocks(String coupleId, String userId) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('timeblocks')
+          .doc(coupleId)
+          .collection('blocks')
+          .where('userId', isEqualTo: userId)
+          .get();
+
+      return querySnapshot.docs
+          .map((doc) => TimeBlock.fromJson(doc.data()))
+          .toList();
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to get blocks');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while fetching blocks',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Create a new time block.
+  /// Uses server timestamp for createdAt.
+  /// Returns the block ID.
+  Future<String> createBlock(String coupleId, TimeBlock block) async {
+    try {
+      final docRef = await _firestore
+          .collection('timeblocks')
+          .doc(coupleId)
+          .collection('blocks')
+          .add({
+        ...block.toJson(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      return docRef.id;
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to create block');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while creating block',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Update an existing time block.
+  /// Only updates the fields provided in data.
+  Future<void> updateBlock(
+    String coupleId,
+    String blockId,
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      await _firestore
+          .collection('timeblocks')
+          .doc(coupleId)
+          .collection('blocks')
+          .doc(blockId)
+          .update(data);
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to update block');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while updating block',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Delete a time block.
+  Future<void> deleteBlock(String coupleId, String blockId) async {
+    try {
+      await _firestore
+          .collection('timeblocks')
+          .doc(coupleId)
+          .collection('blocks')
+          .doc(blockId)
+          .delete();
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to delete block');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while deleting block',
+        originalError: e,
+      );
+    }
+  }
+
+  // ============================================================
+  // OVERLAP
+  // ============================================================
+
+  /// Get the overlap result for a couple.
+  /// Reads from: overlaps/{coupleId}/windows/latest
+  Future<OverlapResult?> getOverlap(String coupleId) async {
+    try {
+      final doc = await _firestore
+          .collection('overlaps')
+          .doc(coupleId)
+          .collection('windows')
+          .doc('latest')
+          .get();
+
+      if (!doc.exists) return null;
+
+      return OverlapResult.fromJson(doc.data()!);
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to get overlap');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while fetching overlap',
+        originalError: e,
+      );
+    }
+  }
+
+  // ============================================================
+  // HELPERS
+  // ============================================================
+
+  /// Maps FirebaseException to FirestoreException with user-friendly messages.
+  FirestoreException _mapFirebaseException(
+    FirebaseException e,
+    String operation,
+  ) {
+    String message;
+    String code = e.code;
+
+    switch (e.code) {
+      case 'permission-denied':
+        message = 'You do not have permission to perform this operation';
+        break;
+      case 'not-found':
+        message = 'The requested document was not found';
+        break;
+      case 'already-exists':
+        message = 'The document already exists';
+        break;
+      case 'unavailable':
+        message = 'Service temporarily unavailable. Please try again later';
+        break;
+      case 'deadline-exceeded':
+        message = 'Operation timed out. Please try again';
+        break;
+      case 'resource-exhausted':
+        message = 'Too many requests. Please try again later';
+        break;
+      case 'cancelled':
+        message = 'Operation was cancelled';
+        break;
+      case 'unauthenticated':
+        message = 'Authentication required. Please sign in again';
+        break;
+      default:
+        message = '$operation. Please try again';
+    }
+
+    return FirestoreException(
+      code: code,
+      message: message,
+      originalError: e,
+    );
+  }
+}
