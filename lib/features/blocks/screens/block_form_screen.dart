@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../core/router/routes.dart';
+import '../../../core/router/routes.dart';
 
 /// Placeholder screen for the block form (create/edit).
 /// Will be implemented in STORY-027+ (UI implementation phase).

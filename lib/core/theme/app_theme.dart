@@ -94,14 +94,8 @@ class AppTheme {
         color: textColor,
       ),
       
-      // Caption - Deprecated in M3 but included for compatibility
+      // Caption - Deprecated in M3, removed
       // Maps to bodySmall in M3
-      caption: TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w400,
-        letterSpacing: 0.4,
-        color: isDark ? AppColors.onSurfaceVariantDark : AppColors.onSurfaceVariantLight,
-      ),
     );
   }
 
@@ -141,7 +135,7 @@ class AppTheme {
         elevation: 0,
         centerTitle: true,
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.surfaceLight,
         elevation: 1,
         shape: RoundedRectangleBorder(
@@ -223,7 +217,7 @@ class AppTheme {
         elevation: 0,
         centerTitle: true,
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.surfaceDark,
         elevation: 1,
         shape: RoundedRectangleBorder(
