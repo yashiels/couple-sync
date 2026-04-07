@@ -14,6 +14,65 @@ import '../../features/blocks/screens/block_form_screen.dart';
 import '../../features/overlap/screens/overlap_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
 
+/// Pure redirect logic extracted for testability.
+///
+/// Returns the path to redirect to, or null if no redirect is needed.
+String? computeRedirect(AuthState authState, String currentPath) {
+  // While loading auth state, don't redirect
+  if (authState.isLoading) {
+    return null;
+  }
+
+  // Guard 1: Not authenticated → redirect to /auth
+  // Allow access to auth screen when not authenticated
+  if (!authState.isAuthenticated) {
+    if (currentPath == AppRoutes.auth) {
+      return null; // Stay on auth screen
+    }
+    return AppRoutes.auth;
+  }
+
+  // Guard 2: Authenticated but no timezone → redirect to /timezone-setup
+  if (!authState.hasTimezone) {
+    if (currentPath == AppRoutes.timezoneSetup) {
+      return null; // Stay on timezone setup
+    }
+    // Allow auth screen to show sign-out option
+    if (currentPath == AppRoutes.auth) {
+      return null;
+    }
+    return AppRoutes.timezoneSetup;
+  }
+
+  // Guard 3: Has timezone but no coupleId → redirect to /routine-setup (then /pairing)
+  if (!authState.hasCouple) {
+    if (currentPath == AppRoutes.pairing) {
+      return null; // Stay on pairing screen
+    }
+    if (currentPath == AppRoutes.routineSetup) {
+      return null; // Allow routine wizard
+    }
+    if (currentPath == AppRoutes.timezoneSetup) {
+      return null; // Allow going back to timezone setup
+    }
+    if (currentPath == AppRoutes.auth) {
+      return null; // Allow sign out
+    }
+    // Go to routine setup first, then pairing
+    return AppRoutes.routineSetup;
+  }
+
+  // Guard 4: Has coupleId and navigating to /auth or /pairing → redirect to /home
+  if (authState.hasCouple) {
+    if (currentPath == AppRoutes.auth || currentPath == AppRoutes.pairing) {
+      return AppRoutes.home;
+    }
+  }
+
+  // No redirect needed
+  return null;
+}
+
 /// GoRouter configuration provider.
 /// Exposes the router via Riverpod for use in app.dart.
 final routerProvider = Provider<GoRouter>((ref) {
@@ -22,69 +81,10 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: AppRoutes.home,
     debugLogDiagnostics: true,
-    
+
     // Redirect guards based on auth state
-    redirect: (context, state) {
-      final isLoading = authState.isLoading;
-      final isAuthenticated = authState.isAuthenticated;
-      final hasTimezone = authState.hasTimezone;
-      final hasCouple = authState.hasCouple;
-      final currentPath = state.matchedLocation;
-
-      // While loading auth state, don't redirect
-      if (isLoading) {
-        return null;
-      }
-
-      // Guard 1: Not authenticated → redirect to /auth
-      // Allow access to auth screen when not authenticated
-      if (!isAuthenticated) {
-        if (currentPath == AppRoutes.auth) {
-          return null; // Stay on auth screen
-        }
-        return AppRoutes.auth;
-      }
-
-      // Guard 2: Authenticated but no timezone → redirect to /timezone-setup
-      if (!hasTimezone) {
-        if (currentPath == AppRoutes.timezoneSetup) {
-          return null; // Stay on timezone setup
-        }
-        // Allow auth screen to show sign-out option
-        if (currentPath == AppRoutes.auth) {
-          return null;
-        }
-        return AppRoutes.timezoneSetup;
-      }
-
-      // Guard 3: Has timezone but no coupleId → redirect to /routine-setup (then /pairing)
-      if (!hasCouple) {
-        if (currentPath == AppRoutes.pairing) {
-          return null; // Stay on pairing screen
-        }
-        if (currentPath == AppRoutes.routineSetup) {
-          return null; // Allow routine wizard
-        }
-        if (currentPath == AppRoutes.timezoneSetup) {
-          return null; // Allow going back to timezone setup
-        }
-        if (currentPath == AppRoutes.auth) {
-          return null; // Allow sign out
-        }
-        // Go to routine setup first, then pairing
-        return AppRoutes.routineSetup;
-      }
-
-      // Guard 4: Has coupleId and navigating to /auth or /pairing → redirect to /home
-      if (hasCouple) {
-        if (currentPath == AppRoutes.auth || currentPath == AppRoutes.pairing) {
-          return AppRoutes.home;
-        }
-      }
-
-      // No redirect needed
-      return null;
-    },
+    redirect: (context, state) =>
+        computeRedirect(authState, state.matchedLocation),
 
     // Refresh router when auth state changes
     refreshListenable: AuthStateListenable(authState),
