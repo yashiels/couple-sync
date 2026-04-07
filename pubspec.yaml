@@ -56,6 +56,12 @@ dependencies:
   googleapis: ^14.0.0
   googleapis_auth: ^2.0.0
 
+  # Secure Storage
+  flutter_secure_storage: ^9.2.2
+
+  # HTTP Client
+  http: ^1.2.0
+
   # UI
   cupertino_icons: ^1.0.8
   share_plus: ^10.1.4
