@@ -15,6 +15,8 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+      - name: Fix Flutter git ownership
+        run: git config --global --add safe.directory "$(dirname "$(dirname "$(which flutter)")")"
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos
 
@@ -26,6 +28,8 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+      - name: Fix Flutter git ownership
+        run: git config --global --add safe.directory "$(dirname "$(dirname "$(which flutter)")")"
       - run: flutter pub get
       - run: flutter test
 
@@ -38,5 +42,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+      - name: Fix Flutter git ownership
+        run: git config --global --add safe.directory "$(dirname "$(dirname "$(which flutter)")")"
       - run: flutter pub get
       - run: flutter build apk --debug
