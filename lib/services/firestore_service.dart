@@ -288,6 +288,72 @@ class FirestoreService {
     }
   }
 
+  /// Delete all google-sourced blocks for a user.
+  /// Used for replace strategy when syncing from Google Calendar.
+  Future<int> deleteGoogleSourcedBlocks(String coupleId, String userId) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('timeblocks')
+          .doc(coupleId)
+          .collection('blocks')
+          .where('userId', isEqualTo: userId)
+          .where('source', isEqualTo: 'google')
+          .get();
+
+      final batch = _firestore.batch();
+      for (final doc in querySnapshot.docs) {
+        batch.delete(doc.reference);
+      }
+
+      if (querySnapshot.docs.isNotEmpty) {
+        await batch.commit();
+      }
+
+      return querySnapshot.docs.length;
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to delete google-sourced blocks');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while deleting blocks',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Batch create multiple time blocks.
+  /// Used for efficiently writing multiple blocks at once.
+  Future<int> batchCreateBlocks(String coupleId, List<TimeBlock> blocks) async {
+    try {
+      if (blocks.isEmpty) return 0;
+
+      final batch = _firestore.batch();
+      final collection = _firestore
+          .collection('timeblocks')
+          .doc(coupleId)
+          .collection('blocks');
+
+      for (final block in blocks) {
+        final docRef = collection.doc();
+        batch.set(docRef, {
+          ...block.toJson(),
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
+      return blocks.length;
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to create blocks');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while creating blocks',
+        originalError: e,
+      );
+    }
+  }
+
   // ============================================================
   // OVERLAP
   // ============================================================

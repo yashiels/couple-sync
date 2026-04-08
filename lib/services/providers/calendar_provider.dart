@@ -1,5 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../calendar_service.dart';
+import '../firestore_service.dart';
+import '../../core/models/time_block.dart';
+import 'auth_state_provider.dart';
+import 'firestore_provider.dart';
 
 /// Provider for the CalendarService singleton.
 final calendarServiceProvider = Provider<CalendarService>((ref) {
@@ -12,6 +16,37 @@ final calendarConnectionProvider = FutureProvider<bool>((ref) async {
   final calendarService = ref.watch(calendarServiceProvider);
   return calendarService.isConnected;
 });
+
+/// State for calendar sync operations.
+class CalendarSyncState {
+  final bool isSyncing;
+  final DateTime? lastSyncTime;
+  final String? syncError;
+  final CalendarSyncResult? lastSyncResult;
+
+  const CalendarSyncState({
+    this.isSyncing = false,
+    this.lastSyncTime,
+    this.syncError,
+    this.lastSyncResult,
+  });
+
+  CalendarSyncState copyWith({
+    bool? isSyncing,
+    DateTime? lastSyncTime,
+    String? syncError,
+    CalendarSyncResult? lastSyncResult,
+    bool clearSyncError = false,
+    bool clearLastSyncResult = false,
+  }) {
+    return CalendarSyncState(
+      isSyncing: isSyncing ?? this.isSyncing,
+      lastSyncTime: lastSyncTime ?? this.lastSyncTime,
+      syncError: clearSyncError ? null : (syncError ?? this.syncError),
+      lastSyncResult: clearLastSyncResult ? null : (lastSyncResult ?? this.lastSyncResult),
+    );
+  }
+}
 
 /// Notifier for managing calendar connection state with loading/error states.
 class CalendarConnectionNotifier extends StateNotifier<AsyncValue<bool>> {
@@ -63,9 +98,154 @@ class CalendarConnectionNotifier extends StateNotifier<AsyncValue<bool>> {
   }
 }
 
+/// Notifier for managing calendar sync operations.
+class CalendarSyncNotifier extends StateNotifier<CalendarSyncState> {
+  final CalendarService _calendarService;
+  final FirestoreService _firestoreService;
+  final Ref _ref;
+
+  CalendarSyncNotifier(this._calendarService, this._firestoreService, this._ref)
+      : super(const CalendarSyncState()) {
+    _loadLastSyncTime();
+  }
+
+  /// Load the last sync time from storage.
+  Future<void> _loadLastSyncTime() async {
+    final lastSync = await _calendarService.getLastSyncTime();
+    state = state.copyWith(lastSyncTime: lastSync);
+  }
+
+  /// Syncs Google Calendar freebusy data to Firestore.
+  /// Implements replace strategy: deletes existing google-sourced blocks, then writes new ones.
+  /// Privacy-first: NEVER fetches or stores event titles.
+  Future<CalendarSyncResult> sync() async {
+    // Check if connected
+    final isConnected = await _calendarService.isConnected;
+    if (!isConnected) {
+      return CalendarSyncResult(
+        blocksFetched: 0,
+        blocksDeleted: 0,
+        blocksCreated: 0,
+        syncedAt: DateTime.now(),
+        error: 'Google Calendar is not connected',
+      );
+    }
+
+    // Get current user info
+    final authState = _ref.read(authStateProvider);
+    final userProfile = authState.profile;
+    final coupleId = userProfile?.coupleId;
+    final userId = authState.uid;
+
+    if (userProfile == null || coupleId == null || userId == null) {
+      return CalendarSyncResult(
+        blocksFetched: 0,
+        blocksDeleted: 0,
+        blocksCreated: 0,
+        syncedAt: DateTime.now(),
+        error: 'User not authenticated or not paired',
+      );
+    }
+
+    state = state.copyWith(isSyncing: true, clearSyncError: true);
+
+    try {
+      // 1. Fetch freebusy data from Google Calendar (privacy-first: no titles)
+      final busyIntervals = await _calendarService.fetchFreebusy();
+
+      // 2. Convert to TimeBlocks (with generic "Busy" title)
+      final newBlocks = _calendarService.convertToTimeBlocks(
+        busyIntervals,
+        userId: userId,
+        timezone: userProfile.timezone,
+      );
+
+      // 3. Delete existing google-sourced blocks (replace strategy)
+      final deletedCount = await _firestoreService.deleteGoogleSourcedBlocks(
+        coupleId,
+        userId,
+      );
+
+      // 4. Write new blocks
+      final createdCount = await _firestoreService.batchCreateBlocks(
+        coupleId,
+        newBlocks,
+      );
+
+      // 5. Update last sync time
+      await _calendarService.updateLastSyncTime();
+      final syncTime = DateTime.now();
+
+      final result = CalendarSyncResult(
+        blocksFetched: busyIntervals.length,
+        blocksDeleted: deletedCount,
+        blocksCreated: createdCount,
+        syncedAt: syncTime,
+      );
+
+      state = state.copyWith(
+        isSyncing: false,
+        lastSyncTime: syncTime,
+        lastSyncResult: result,
+      );
+
+      return result;
+    } catch (e) {
+      final errorMessage = e is CalendarException
+          ? e.message
+          : 'Failed to sync calendar: ${e.toString()}';
+
+      final result = CalendarSyncResult(
+        blocksFetched: 0,
+        blocksDeleted: 0,
+        blocksCreated: 0,
+        syncedAt: DateTime.now(),
+        error: errorMessage,
+      );
+
+      state = state.copyWith(
+        isSyncing: false,
+        syncError: errorMessage,
+        lastSyncResult: result,
+      );
+
+      return result;
+    }
+  }
+
+  /// Auto-sync if last sync was > 1 hour ago.
+  /// Returns null if sync was not needed, otherwise returns the sync result.
+  Future<CalendarSyncResult?> autoSyncIfNeeded() async {
+    final shouldSync = await _calendarService.shouldAutoSync();
+    if (!shouldSync) {
+      return null;
+    }
+
+    final isConnected = await _calendarService.isConnected;
+    if (!isConnected) {
+      return null;
+    }
+
+    return await sync();
+  }
+
+  /// Refresh the last sync time from storage.
+  Future<void> refreshLastSyncTime() async {
+    await _loadLastSyncTime();
+  }
+}
+
 /// Provider for the calendar connection notifier.
 final calendarConnectionNotifierProvider =
     StateNotifierProvider<CalendarConnectionNotifier, AsyncValue<bool>>((ref) {
   final calendarService = ref.watch(calendarServiceProvider);
   return CalendarConnectionNotifier(calendarService, ref);
+});
+
+/// Provider for the calendar sync notifier.
+final calendarSyncNotifierProvider =
+    StateNotifierProvider<CalendarSyncNotifier, CalendarSyncState>((ref) {
+  final calendarService = ref.watch(calendarServiceProvider);
+  final firestoreService = ref.watch(firestoreServiceProvider);
+  return CalendarSyncNotifier(calendarService, firestoreService, ref);
 });

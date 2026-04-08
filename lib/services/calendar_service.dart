@@ -3,13 +3,34 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:googleapis_auth/googleapis_auth.dart' as auth;
 import 'package:http/http.dart' as http;
+import '../core/models/time_block.dart';
 
 /// Service for handling Google Calendar OAuth and API operations.
 /// Manages secure token storage and calendar access with calendar.readonly scope.
+/// Result of a calendar sync operation.
+class CalendarSyncResult {
+  final int blocksFetched;
+  final int blocksDeleted;
+  final int blocksCreated;
+  final DateTime syncedAt;
+  final String? error;
+
+  const CalendarSyncResult({
+    required this.blocksFetched,
+    required this.blocksDeleted,
+    required this.blocksCreated,
+    required this.syncedAt,
+    this.error,
+  });
+
+  bool get isSuccess => error == null;
+}
+
 class CalendarService {
   static const String _accessTokenKey = 'google_calendar_access_token';
   static const String _refreshTokenKey = 'google_calendar_refresh_token';
   static const String _tokenExpiryKey = 'google_calendar_token_expiry';
+  static const String _lastSyncKey = 'google_calendar_last_sync';
   static const List<String> _calendarScopes = [
     'https://www.googleapis.com/auth/calendar.readonly',
   ];
@@ -208,6 +229,130 @@ class CalendarService {
     );
 
     return calendar.CalendarApi(httpClient);
+  }
+
+  /// Fetches freebusy intervals from Google Calendar for the next 14 days.
+  /// Returns a list of busy time intervals (start and end times in UTC).
+  /// Privacy-first: NEVER fetches or stores event titles.
+  Future<List<({DateTime start, DateTime end})>> fetchFreebusy() async {
+    try {
+      final calendarApi = await getCalendarApi();
+      if (calendarApi == null) {
+        throw const CalendarException(
+          code: 'not-connected',
+          message: 'Google Calendar is not connected. Please connect first.',
+        );
+      }
+
+      // Calculate time range: now to 14 days ahead
+      final now = DateTime.now().toUtc();
+      final timeMax = now.add(const Duration(days: 14));
+
+      // Build freebusy request
+      final request = calendar.FreeBusyRequest(
+        timeMin: now,
+        timeMax: timeMax,
+        items: [
+          calendar.FreeBusyRequestItem(
+            id: 'primary', // Use primary calendar
+          ),
+        ],
+      );
+
+      // Execute freebusy query
+      final response = await calendarApi.freebusy.query(request);
+
+      // Extract busy intervals from response
+      final busyIntervals = <({DateTime start, DateTime end})>[];
+
+      final calendars = response.calendars;
+      if (calendars != null) {
+        final primaryCalendar = calendars['primary'];
+        if (primaryCalendar != null) {
+          final busy = primaryCalendar.busy;
+          if (busy != null) {
+            for (final period in busy) {
+              final start = period.start;
+              final end = period.end;
+              if (start != null && end != null) {
+                busyIntervals.add((
+                  start: start,
+                  end: end,
+                ));
+              }
+            }
+          }
+        }
+      }
+
+      return busyIntervals;
+    } on CalendarException {
+      rethrow;
+    } catch (e) {
+      throw CalendarException(
+        code: 'freebusy-failed',
+        message: 'Failed to fetch calendar availability: ${_getUserFriendlyError(e)}',
+      );
+    }
+  }
+
+  /// Converts freebusy intervals to TimeBlocks.
+  /// Privacy-first: Uses generic title "Busy" - never includes event details.
+  List<TimeBlock> convertToTimeBlocks(
+    List<({DateTime start, DateTime end})> busyIntervals, {
+    required String userId,
+    required String timezone,
+  }) {
+    return busyIntervals.map((interval) {
+      return TimeBlock(
+        userId: userId,
+        title: 'Busy', // Privacy-first: generic title, no event details
+        type: TimeBlockType.busy,
+        category: TimeBlockCategory.other,
+        startUtc: interval.start.millisecondsSinceEpoch,
+        endUtc: interval.end.millisecondsSinceEpoch,
+        timezone: timezone,
+        source: TimeBlockSource.google,
+        visibility: TimeBlockVisibility.bothPartners,
+        createdAt: DateTime.now(),
+      );
+    }).toList();
+  }
+
+  /// Gets the last sync time.
+  /// Returns null if never synced.
+  Future<DateTime?> getLastSyncTime() async {
+    try {
+      final syncTimeStr = await _secureStorage.read(key: _lastSyncKey);
+      if (syncTimeStr == null || syncTimeStr.isEmpty) {
+        return null;
+      }
+      return DateTime.parse(syncTimeStr);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Updates the last sync time to now.
+  Future<void> updateLastSyncTime() async {
+    try {
+      await _secureStorage.write(
+        key: _lastSyncKey,
+        value: DateTime.now().toIso8601String(),
+      );
+    } catch (e) {
+      // Silently fail - not critical
+    }
+  }
+
+  /// Checks if auto-sync should run (last sync was > 1 hour ago).
+  Future<bool> shouldAutoSync() async {
+    final lastSync = await getLastSyncTime();
+    if (lastSync == null) {
+      return true; // Never synced, should sync
+    }
+    final oneHourAgo = DateTime.now().subtract(const Duration(hours: 1));
+    return lastSync.isBefore(oneHourAgo);
   }
 
   /// Converts error to user-friendly message.

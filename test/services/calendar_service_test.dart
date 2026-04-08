@@ -410,5 +410,152 @@ void main() {
         expect(e.toString(), 'CalendarException(test-code): Test message');
       });
     });
+
+    group('convertToTimeBlocks (STORY-019)', () {
+      test('returns empty list for empty intervals', () {
+        final blocks = calendarService.convertToTimeBlocks(
+          [],
+          userId: 'user-1',
+          timezone: 'America/New_York',
+        );
+
+        expect(blocks, isEmpty);
+      });
+
+      test('converts intervals to TimeBlocks with correct STORY-019 properties', () {
+        final now = DateTime.now().toUtc();
+        final end = now.add(const Duration(hours: 1));
+        final intervals = [(start: now, end: end)];
+
+        final blocks = calendarService.convertToTimeBlocks(
+          intervals,
+          userId: 'user-1',
+          timezone: 'America/New_York',
+        );
+
+        expect(blocks, hasLength(1));
+        final block = blocks.first;
+
+        // STORY-019 requirements: type=busy, source=google, visibility=bothPartners
+        expect(block.type.name, 'busy');
+        expect(block.source.name, 'google');
+        expect(block.visibility.name, 'bothPartners');
+
+        // Privacy-first: generic title, never event details
+        expect(block.title, 'Busy');
+
+        expect(block.userId, 'user-1');
+        expect(block.timezone, 'America/New_York');
+        expect(block.startUtc, now.millisecondsSinceEpoch);
+        expect(block.endUtc, end.millisecondsSinceEpoch);
+      });
+
+      test('converts multiple intervals preserving order', () {
+        final base = DateTime.utc(2026, 4, 8, 9);
+        final intervals = [
+          (start: base, end: base.add(const Duration(hours: 1))),
+          (start: base.add(const Duration(hours: 2)), end: base.add(const Duration(hours: 3))),
+          (start: base.add(const Duration(hours: 4)), end: base.add(const Duration(hours: 5))),
+        ];
+
+        final blocks = calendarService.convertToTimeBlocks(
+          intervals,
+          userId: 'user-2',
+          timezone: 'Europe/London',
+        );
+
+        expect(blocks, hasLength(3));
+        expect(blocks[0].startUtc, intervals[0].start.millisecondsSinceEpoch);
+        expect(blocks[1].startUtc, intervals[1].start.millisecondsSinceEpoch);
+        expect(blocks[2].startUtc, intervals[2].start.millisecondsSinceEpoch);
+
+        // All blocks must have google source and bothPartners visibility
+        for (final block in blocks) {
+          expect(block.source.name, 'google');
+          expect(block.visibility.name, 'bothPartners');
+          expect(block.type.name, 'busy');
+        }
+      });
+    });
+
+    group('getLastSyncTime (STORY-019)', () {
+      test('returns null when never synced', () async {
+        expect(await calendarService.getLastSyncTime(), isNull);
+      });
+
+      test('returns stored sync time after updateLastSyncTime', () async {
+        final before = DateTime.now().subtract(const Duration(seconds: 1));
+        await calendarService.updateLastSyncTime();
+        final after = DateTime.now().add(const Duration(seconds: 1));
+
+        final syncTime = await calendarService.getLastSyncTime();
+
+        expect(syncTime, isNotNull);
+        expect(syncTime!.isAfter(before), isTrue);
+        expect(syncTime.isBefore(after), isTrue);
+      });
+
+      test('returns null when storage throws', () async {
+        fakeSecureStorage.shouldThrow = true;
+
+        expect(await calendarService.getLastSyncTime(), isNull);
+      });
+    });
+
+    group('shouldAutoSync (STORY-019)', () {
+      test('returns true when never synced', () async {
+        expect(await calendarService.shouldAutoSync(), isTrue);
+      });
+
+      test('returns true when last sync was more than 1 hour ago', () async {
+        fakeSecureStorage._store['google_calendar_last_sync'] =
+            DateTime.now().subtract(const Duration(hours: 2)).toIso8601String();
+
+        expect(await calendarService.shouldAutoSync(), isTrue);
+      });
+
+      test('returns false when last sync was less than 1 hour ago', () async {
+        fakeSecureStorage._store['google_calendar_last_sync'] =
+            DateTime.now().subtract(const Duration(minutes: 30)).toIso8601String();
+
+        expect(await calendarService.shouldAutoSync(), isFalse);
+      });
+
+      test('returns true when last sync was exactly 1 hour ago', () async {
+        // Store a time that is exactly 1 hour in the past. By the time the
+        // shouldAutoSync check runs, the clock has advanced slightly, making
+        // the stored time fall before the new oneHourAgo threshold.
+        fakeSecureStorage._store['google_calendar_last_sync'] =
+            DateTime.now().subtract(const Duration(hours: 1)).toIso8601String();
+
+        expect(await calendarService.shouldAutoSync(), isTrue);
+      });
+    });
+
+    group('CalendarSyncResult', () {
+      test('isSuccess returns true when no error', () {
+        final result = CalendarSyncResult(
+          blocksFetched: 5,
+          blocksDeleted: 3,
+          blocksCreated: 5,
+          syncedAt: DateTime.now(),
+        );
+
+        expect(result.isSuccess, isTrue);
+      });
+
+      test('isSuccess returns false when error is set', () {
+        final result = CalendarSyncResult(
+          blocksFetched: 0,
+          blocksDeleted: 0,
+          blocksCreated: 0,
+          syncedAt: DateTime.now(),
+          error: 'Something went wrong',
+        );
+
+        expect(result.isSuccess, isFalse);
+        expect(result.error, 'Something went wrong');
+      });
+    });
   });
 }
