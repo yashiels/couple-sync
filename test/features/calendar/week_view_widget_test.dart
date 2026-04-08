@@ -213,6 +213,8 @@ void main() {
         userBlocks: [_makeBlock(startUtc: blockStart, endUtc: blockEnd)],
       ));
 
+      await tester.ensureVisible(find.byType(BlockEventWidget));
+      await tester.pumpAndSettle();
       await tester.tap(find.byType(BlockEventWidget));
       await tester.pumpAndSettle();
 
