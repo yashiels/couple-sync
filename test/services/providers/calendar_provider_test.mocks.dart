@@ -5,6 +5,7 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i3;
 
+import 'package:couple_sync/core/models/time_block.dart' as _i5;
 import 'package:couple_sync/services/calendar_service.dart' as _i2;
 import 'package:googleapis/calendar/v3.dart' as _i4;
 import 'package:mockito/mockito.dart' as _i1;
@@ -80,4 +81,56 @@ class MockCalendarService extends _i1.Mock implements _i2.CalendarService {
             returnValue: _i3.Future<_i4.CalendarApi?>.value(),
           )
           as _i3.Future<_i4.CalendarApi?>);
+
+  @override
+  _i3.Future<List<({DateTime end, DateTime start})>> fetchFreebusy() =>
+      (super.noSuchMethod(
+            Invocation.method(#fetchFreebusy, []),
+            returnValue:
+                _i3.Future<List<({DateTime end, DateTime start})>>.value(
+                  <({DateTime end, DateTime start})>[],
+                ),
+          )
+          as _i3.Future<List<({DateTime end, DateTime start})>>);
+
+  @override
+  List<_i5.TimeBlock> convertToTimeBlocks(
+    List<({DateTime end, DateTime start})>? busyIntervals, {
+    required String? userId,
+    required String? timezone,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #convertToTimeBlocks,
+              [busyIntervals],
+              {#userId: userId, #timezone: timezone},
+            ),
+            returnValue: <_i5.TimeBlock>[],
+          )
+          as List<_i5.TimeBlock>);
+
+  @override
+  _i3.Future<DateTime?> getLastSyncTime() =>
+      (super.noSuchMethod(
+            Invocation.method(#getLastSyncTime, []),
+            returnValue: _i3.Future<DateTime?>.value(),
+          )
+          as _i3.Future<DateTime?>);
+
+  @override
+  _i3.Future<void> updateLastSyncTime() =>
+      (super.noSuchMethod(
+            Invocation.method(#updateLastSyncTime, []),
+            returnValue: _i3.Future<void>.value(),
+            returnValueForMissingStub: _i3.Future<void>.value(),
+          )
+          as _i3.Future<void>);
+
+  @override
+  _i3.Future<bool> shouldAutoSync() =>
+      (super.noSuchMethod(
+            Invocation.method(#shouldAutoSync, []),
+            returnValue: _i3.Future<bool>.value(false),
+          )
+          as _i3.Future<bool>);
 }

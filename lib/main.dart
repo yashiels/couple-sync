@@ -1,8 +1,19 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'firebase_options.dart';
+
+/// Top-level background message handler for FCM.
+/// Must be a top-level function (not a class method) and registered before runApp.
+/// The OS invokes this in a separate isolate when the app is in the background.
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Background messages are displayed as system notifications by the OS automatically.
+  // No additional handling needed — the notification is shown by FCM infrastructure.
+  debugPrint('FCM background message: ${message.messageId}');
+}
 
 void main() async {
   // Ensure Flutter bindings are initialized before any Firebase operations
@@ -14,16 +25,18 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
   } on FirebaseException catch (e) {
-    // Handle Firebase-specific initialization errors
     _handleInitializationError(
       'Firebase initialization failed: ${e.message ?? e.code}',
     );
     return;
   } catch (e) {
-    // Handle any other unexpected errors
     _handleInitializationError('Unexpected error during initialization: $e');
     return;
   }
+
+  // Register FCM background message handler before runApp.
+  // Must be called after Firebase.initializeApp().
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   runApp(
     const ProviderScope(

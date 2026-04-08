@@ -1054,6 +1054,25 @@ class MockFirestoreService extends _i1.Mock implements _i10.FirestoreService {
           as _i7.Future<void>);
 
   @override
+  _i7.Future<int> deleteGoogleSourcedBlocks(String? coupleId, String? userId) =>
+      (super.noSuchMethod(
+            Invocation.method(#deleteGoogleSourcedBlocks, [coupleId, userId]),
+            returnValue: _i7.Future<int>.value(0),
+          )
+          as _i7.Future<int>);
+
+  @override
+  _i7.Future<int> batchCreateBlocks(
+    String? coupleId,
+    List<_i11.TimeBlock>? blocks,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#batchCreateBlocks, [coupleId, blocks]),
+            returnValue: _i7.Future<int>.value(0),
+          )
+          as _i7.Future<int>);
+
+  @override
   _i7.Future<_i11.OverlapResult?> getOverlap(String? coupleId) =>
       (super.noSuchMethod(
             Invocation.method(#getOverlap, [coupleId]),
