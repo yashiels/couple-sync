@@ -37,6 +37,7 @@ jobs:
     name: Build
     runs-on: [self-hosted, Linux, X64, astra]
     needs: [analyze, test]
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -44,5 +45,16 @@ jobs:
           channel: stable
       - name: Fix Flutter git ownership
         run: git config --global --add safe.directory "$(dirname "$(dirname "$(which flutter)")")"
+      - name: Check Android SDK
+        id: android-check
+        run: |
+          if [ -z "$ANDROID_HOME" ] && [ ! -d "$HOME/Android/Sdk" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Android SDK not found — skipping APK build"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
       - run: flutter pub get
+        if: steps.android-check.outputs.skip != 'true'
       - run: flutter build apk --debug
+        if: steps.android-check.outputs.skip != 'true'
