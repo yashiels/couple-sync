@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../calendar_service.dart';
 import '../firestore_service.dart';
-import '../../core/models/time_block.dart';
 import 'auth_state_provider.dart';
 import 'firestore_provider.dart';
 

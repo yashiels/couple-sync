@@ -1,6 +1,5 @@
 import 'package:couple_sync/core/models/user_model.dart';
 import 'package:couple_sync/features/settings/screens/settings_screen.dart';
-import 'package:couple_sync/features/settings/widgets/settings_section_widget.dart';
 import 'package:couple_sync/services/providers/auth_state_provider.dart';
 import 'package:couple_sync/services/providers/calendar_provider.dart';
 import 'package:flutter/material.dart';

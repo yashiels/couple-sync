@@ -451,7 +451,6 @@ class _RoutineWizardScreenState extends ConsumerState<RoutineWizardScreen> {
   }
 
   Widget _buildSkipNextButtons() {
-    final theme = Theme.of(context);
     return Row(
       children: [
         Expanded(

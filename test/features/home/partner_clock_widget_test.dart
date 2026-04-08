@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:couple_sync/core/utils/timezone_helper.dart';
 import 'package:couple_sync/features/home/partner_clock_widget.dart';
 import 'package:flutter/material.dart';
@@ -67,11 +65,7 @@ void main() {
     testWidgets('has a vertical divider between clocks', (tester) async {
       await tester.pumpWidget(_buildSubject());
 
-      // The divider is a Container with width 1
-      final container = tester.widgetList<Container>(find.byType(Container)).where(
-        (c) => c.constraints?.maxWidth == 1 && c.constraints?.maxHeight == 60,
-      );
-      // Should find the divider container via decoration color
+      // Should find the divider container
       expect(find.byType(Container), findsWidgets);
     });
 

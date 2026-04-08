@@ -1,4 +1,3 @@
-import 'package:couple_sync/core/models/time_block.dart';
 import 'package:couple_sync/core/models/user_model.dart';
 import 'package:couple_sync/features/blocks/screens/block_form_screen.dart';
 import 'package:couple_sync/core/router/routes.dart';

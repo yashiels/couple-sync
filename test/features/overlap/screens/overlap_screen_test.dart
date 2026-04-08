@@ -1,4 +1,3 @@
-import 'package:couple_sync/core/models/overlap_result.dart';
 import 'package:couple_sync/features/overlap/screens/overlap_screen.dart';
 import 'package:couple_sync/features/overlap/widgets/window_card_widget.dart';
 import 'package:flutter/material.dart';

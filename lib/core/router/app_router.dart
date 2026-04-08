@@ -192,8 +192,9 @@ final routerProvider = Provider<GoRouter>((ref) {
 /// Listenable that notifies when auth state changes.
 /// Used by GoRouter to refresh routes on auth changes.
 class AuthStateListenable extends ChangeNotifier {
+  // ignore: unused_field
   final AuthState _authState;
-  
+
   AuthStateListenable(this._authState) {
     // Notify listeners when auth state changes
     // The router will re-evaluate redirects on change
