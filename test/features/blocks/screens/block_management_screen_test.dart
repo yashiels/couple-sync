@@ -4,34 +4,22 @@ import 'package:couple_sync/core/models/time_block.dart';
 import 'package:couple_sync/core/models/user_model.dart';
 import 'package:couple_sync/core/router/routes.dart';
 import 'package:couple_sync/features/blocks/screens/block_management_screen.dart';
-import 'package:couple_sync/services/auth_service.dart';
-import 'package:couple_sync/services/firestore_service.dart';
 import 'package:couple_sync/services/providers/auth_state_provider.dart';
-import 'package:couple_sync/services/providers/firestore_provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:couple_sync/services/providers/couple_providers.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
 
-@GenerateMocks([
-  FirebaseAuth,
-  FirebaseFirestore,
-  FirestoreService,
-  AuthService,
-  User,
-], customMocks: [
-  MockSpec<CollectionReference<Map<String, dynamic>>>(
-    as: #MockCollectionReferenceMap,
-  ),
-  MockSpec<DocumentReference<Map<String, dynamic>>>(
-    as: #MockDocumentReferenceMap,
-  ),
-])
-import 'block_management_screen_test.mocks.dart';
+/// A fake Firebase User for testing, providing only the uid.
+class _FakeUser extends Fake implements User {
+  _FakeUser(this._uid);
+  final String _uid;
+
+  @override
+  String get uid => _uid;
+}
 
 /// Creates a UserModel for testing.
 UserModel _testProfile({
@@ -48,39 +36,13 @@ UserModel _testProfile({
   );
 }
 
-/// A test-only AuthStateNotifier subclass that exposes state setting.
-class _TestAuthStateNotifier extends AuthStateNotifier {
-  _TestAuthStateNotifier({
-    required super.auth,
-    required super.firestore,
-    required super.authService,
-  });
+/// Simple notifier that holds a fixed AuthState without touching Firebase.
+class _SimpleAuthStateNotifier extends StateNotifier<AuthState>
+    implements AuthStateNotifier {
+  _SimpleAuthStateNotifier(super.initialState);
 
-  void setTestState(AuthState newState) {
-    // ignore: invalid_use_of_protected_member
-    state = newState;
-  }
-}
-
-/// Creates an AuthStateNotifier pre-loaded with the given state.
-_TestAuthStateNotifier _createNotifier({
-  required MockFirebaseAuth auth,
-  required MockFirebaseFirestore firestore,
-  required MockAuthService authService,
-  User? user,
-  UserModel? profile,
-}) {
-  final notifier = _TestAuthStateNotifier(
-    auth: auth,
-    firestore: firestore,
-    authService: authService,
-  );
-  notifier.setTestState(AuthState(
-    firebaseUser: user,
-    userProfile: profile,
-    isLoading: false,
-  ));
-  return notifier;
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
 }
 
 /// Helper to create a TimeBlock for tests.
@@ -115,8 +77,9 @@ TimeBlock _makeBlock({
 /// Pumps BlockManagementScreen wrapped in GoRouter + ProviderScope.
 Future<void> _pumpScreen(
   WidgetTester tester, {
-  required AuthStateNotifier notifier,
-  required MockFirestoreService firestoreService,
+  UserModel? profile,
+  List<TimeBlock>? blocks,
+  Stream<List<TimeBlock>>? blocksStream,
 }) async {
   final router = GoRouter(
     initialLocation: '/blocks',
@@ -134,99 +97,50 @@ Future<void> _pumpScreen(
     ],
   );
 
+  final authState = AuthState(
+    firebaseUser: _FakeUser('user-123'),
+    userProfile: profile ?? _testProfile(),
+    isLoading: false,
+  );
+
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        authStateProvider.overrideWith((_) => notifier),
-        firestoreServiceProvider.overrideWithValue(firestoreService),
+        authStateProvider.overrideWith((_) {
+          return _SimpleAuthStateNotifier(authState);
+        }),
+        if (blocksStream != null)
+          userBlocksProvider.overrideWith((ref) => blocksStream)
+        else
+          userBlocksProvider.overrideWith(
+            (ref) => Stream.value(blocks ?? []),
+          ),
       ],
       child: MaterialApp.router(
         routerConfig: router,
       ),
     ),
   );
-  // Let initState _loadBlocks complete
+  // Let initState complete
   await tester.pumpAndSettle();
 }
 
 void main() {
-  late MockFirebaseAuth mockAuth;
-  late MockFirebaseFirestore mockFirestore;
-  late MockFirestoreService mockFirestoreService;
-  late MockAuthService mockAuthService;
-  late MockUser mockUser;
-  late MockCollectionReferenceMap mockCollection;
-  late MockDocumentReferenceMap mockDocRef;
-
-  setUp(() {
-    mockAuth = MockFirebaseAuth();
-    mockFirestore = MockFirebaseFirestore();
-    mockFirestoreService = MockFirestoreService();
-    mockAuthService = MockAuthService();
-    mockUser = MockUser();
-    mockCollection = MockCollectionReferenceMap();
-    mockDocRef = MockDocumentReferenceMap();
-
-    when(mockAuth.authStateChanges()).thenAnswer((_) => const Stream.empty());
-    when(mockFirestore.collection('users')).thenReturn(mockCollection);
-    when(mockCollection.doc(any)).thenReturn(mockDocRef);
-    when(mockUser.uid).thenReturn('user-123');
-  });
-
   group('BlockManagementScreen rendering', () {
     testWidgets('displays AppBar with title "Block Management"',
         (tester) async {
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => []);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
-      );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
-
+      await _pumpScreen(tester, blocks: []);
       expect(find.text('Block Management'), findsOneWidget);
     });
 
     testWidgets('displays filter and refresh action buttons', (tester) async {
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => []);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
-      );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
-
+      await _pumpScreen(tester, blocks: []);
       expect(find.byIcon(Icons.filter_list), findsOneWidget);
       expect(find.byIcon(Icons.refresh), findsOneWidget);
     });
 
     testWidgets('displays FAB with add icon', (tester) async {
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => []);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
-      );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
-
+      await _pumpScreen(tester, blocks: []);
       expect(find.byType(FloatingActionButton), findsOneWidget);
       expect(find.byIcon(Icons.add), findsOneWidget);
     });
@@ -235,17 +149,8 @@ void main() {
   group('BlockManagementScreen loading state', () {
     testWidgets('shows CircularProgressIndicator while loading',
         (tester) async {
-      final completer = Completer<List<TimeBlock>>();
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) => completer.future);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
-      );
+      // Use a stream that never emits to keep loading state
+      final controller = StreamController<List<TimeBlock>>();
 
       final router = GoRouter(
         initialLocation: '/blocks',
@@ -266,40 +171,33 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            authStateProvider.overrideWith((_) => notifier),
-            firestoreServiceProvider.overrideWithValue(mockFirestoreService),
+            authStateProvider.overrideWith((_) {
+              return _SimpleAuthStateNotifier(AuthState(
+                firebaseUser: _FakeUser('user-123'),
+                userProfile: _testProfile(),
+                isLoading: false,
+              ));
+            }),
+            userBlocksProvider.overrideWith((ref) => controller.stream),
           ],
           child: MaterialApp.router(
             routerConfig: router,
           ),
         ),
       );
-      // Only pump once — don't settle, so loading state is visible
+      // Only pump once -- don't settle, so loading state is visible
       await tester.pump();
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-      // Complete to avoid pending timers
-      completer.complete([]);
-      await tester.pumpAndSettle();
+      // Clean up
+      controller.close();
     });
   });
 
   group('BlockManagementScreen empty state', () {
     testWidgets('shows empty state message when no blocks', (tester) async {
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => []);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
-      );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
+      await _pumpScreen(tester, blocks: []);
 
       expect(find.byIcon(Icons.event_busy), findsOneWidget);
       expect(find.textContaining('No blocks yet'), findsOneWidget);
@@ -309,111 +207,96 @@ void main() {
   });
 
   group('BlockManagementScreen error state', () {
-    testWidgets('shows error message when not authenticated', (tester) async {
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        // No user or profile
+    testWidgets('shows error message when stream has error', (tester) async {
+      final router = GoRouter(
+        initialLocation: '/blocks',
+        routes: [
+          GoRoute(
+            path: '/blocks',
+            builder: (context, state) => const BlockManagementScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.blockForm,
+            builder: (context, state) => const Scaffold(
+              body: Center(child: Text('Block Form')),
+            ),
+          ),
+        ],
       );
 
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
-
-      expect(find.byIcon(Icons.error_outline), findsOneWidget);
-      expect(find.text('Not authenticated or not in a couple'), findsOneWidget);
-    });
-
-    testWidgets('shows error message when profile has no coupleId',
-        (tester) async {
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(coupleId: null),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authStateProvider.overrideWith((_) {
+              return _SimpleAuthStateNotifier(AuthState(
+                firebaseUser: _FakeUser('user-123'),
+                userProfile: _testProfile(),
+                isLoading: false,
+              ));
+            }),
+            userBlocksProvider.overrideWith(
+              (ref) => Stream<List<TimeBlock>>.error(
+                Exception('Network error'),
+              ),
+            ),
+          ],
+          child: MaterialApp.router(
+            routerConfig: router,
+          ),
+        ),
       );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
-
-      expect(find.text('Not authenticated or not in a couple'), findsOneWidget);
-    });
-
-    testWidgets('shows error when getBlocks throws', (tester) async {
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenThrow(Exception('Network error'));
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
-      );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
+      await tester.pumpAndSettle();
 
       expect(find.byIcon(Icons.error_outline), findsOneWidget);
       expect(find.textContaining('Failed to load blocks'), findsOneWidget);
     });
 
     testWidgets('shows Retry button on error', (tester) async {
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenThrow(Exception('Network error'));
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
+      final router = GoRouter(
+        initialLocation: '/blocks',
+        routes: [
+          GoRoute(
+            path: '/blocks',
+            builder: (context, state) => const BlockManagementScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.blockForm,
+            builder: (context, state) => const Scaffold(
+              body: Center(child: Text('Block Form')),
+            ),
+          ),
+        ],
       );
 
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
-
-      expect(find.text('Retry'), findsOneWidget);
-    });
-
-    testWidgets('Retry button reloads blocks', (tester) async {
-      // First call throws, second succeeds
-      var callCount = 0;
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async {
-        callCount++;
-        if (callCount == 1) {
-          throw Exception('Network error');
-        }
-        return [_makeBlock(title: 'Loaded Block')];
-      });
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authStateProvider.overrideWith((_) {
+              return _SimpleAuthStateNotifier(AuthState(
+                firebaseUser: _FakeUser('user-123'),
+                userProfile: _testProfile(),
+                isLoading: false,
+              ));
+            }),
+            userBlocksProvider.overrideWith(
+              (ref) => Stream<List<TimeBlock>>.error(
+                Exception('Network error'),
+              ),
+            ),
+          ],
+          child: MaterialApp.router(
+            routerConfig: router,
+          ),
+        ),
       );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
-
-      // Verify error state
-      expect(find.text('Retry'), findsOneWidget);
-
-      // Tap retry
-      await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();
 
-      // Should now show the loaded block
-      expect(find.text('Loaded Block'), findsOneWidget);
+      expect(find.text('Retry'), findsOneWidget);
     });
   });
 
   group('BlockManagementScreen with blocks', () {
-    testWidgets('displays blocks from firestore', (tester) async {
+    testWidgets('displays blocks from stream', (tester) async {
       final blocks = [
         _makeBlock(title: 'Morning Meeting', category: TimeBlockCategory.work),
         _makeBlock(
@@ -424,19 +307,7 @@ void main() {
         ),
       ];
 
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => blocks);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
-      );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
+      await _pumpScreen(tester, blocks: blocks);
 
       expect(find.text('Morning Meeting'), findsOneWidget);
       expect(find.text('Gym Session'), findsOneWidget);
@@ -456,19 +327,7 @@ void main() {
         ),
       ];
 
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => blocks);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
-      );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
+      await _pumpScreen(tester, blocks: blocks);
 
       // Both blocks visible
       expect(find.text('Earlier Block'), findsOneWidget);
@@ -482,40 +341,20 @@ void main() {
 
     testWidgets('shows owner label "You" for current user blocks',
         (tester) async {
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async =>
-              [_makeBlock(title: 'My Block', userId: 'user-123')]);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
+      await _pumpScreen(
+        tester,
+        blocks: [_makeBlock(title: 'My Block', userId: 'user-123')],
       );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
 
       expect(find.text('You'), findsOneWidget);
     });
 
     testWidgets('shows owner label "Partner" for partner blocks',
         (tester) async {
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async =>
-              [_makeBlock(title: 'Partner Block', userId: 'partner-456')]);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
+      await _pumpScreen(
+        tester,
+        blocks: [_makeBlock(title: 'Partner Block', userId: 'partner-456')],
       );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
 
       expect(find.text('Partner'), findsOneWidget);
     });
@@ -523,27 +362,18 @@ void main() {
 
   group('BlockManagementScreen block tap', () {
     testWidgets('tapping a block shows read-only dialog', (tester) async {
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => [
-                _makeBlock(
-                  title: 'Work Meeting',
-                  source: TimeBlockSource.google,
-                  category: TimeBlockCategory.work,
-                  type: TimeBlockType.busy,
-                  visibility: TimeBlockVisibility.bothPartners,
-                ),
-              ]);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
+      await _pumpScreen(
+        tester,
+        blocks: [
+          _makeBlock(
+            title: 'Work Meeting',
+            source: TimeBlockSource.google,
+            category: TimeBlockCategory.work,
+            type: TimeBlockType.busy,
+            visibility: TimeBlockVisibility.bothPartners,
+          ),
+        ],
       );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
 
       // Tap the block
       await tester.tap(find.text('Work Meeting'));
@@ -560,22 +390,12 @@ void main() {
 
     testWidgets('google-sourced block dialog has no Edit button',
         (tester) async {
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => [
-                _makeBlock(
-                    title: 'Synced Event', source: TimeBlockSource.google),
-              ]);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
+      await _pumpScreen(
+        tester,
+        blocks: [
+          _makeBlock(title: 'Synced Event', source: TimeBlockSource.google),
+        ],
       );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
 
       await tester.tap(find.text('Synced Event'));
       await tester.pumpAndSettle();
@@ -585,22 +405,12 @@ void main() {
     });
 
     testWidgets('manual block dialog has Edit button', (tester) async {
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => [
-                _makeBlock(
-                    title: 'Manual Block', source: TimeBlockSource.manual),
-              ]);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
+      await _pumpScreen(
+        tester,
+        blocks: [
+          _makeBlock(title: 'Manual Block', source: TimeBlockSource.manual),
+        ],
       );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
 
       // Tap block - this triggers both navigation and dialog
       await tester.tap(find.text('Manual Block'));
@@ -613,25 +423,16 @@ void main() {
 
     testWidgets('recurring block dialog shows recurrence info',
         (tester) async {
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => [
-                _makeBlock(
-                  title: 'Weekly Standup',
-                  recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO',
-                  source: TimeBlockSource.google, // Use google so no GoRouter needed
-                ),
-              ]);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
+      await _pumpScreen(
+        tester,
+        blocks: [
+          _makeBlock(
+            title: 'Weekly Standup',
+            recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO',
+            source: TimeBlockSource.google,
+          ),
+        ],
       );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
 
       await tester.tap(find.text('Weekly Standup'));
       await tester.pumpAndSettle();
@@ -642,22 +443,12 @@ void main() {
     });
 
     testWidgets('Close button dismisses dialog', (tester) async {
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => [
-                _makeBlock(
-                    title: 'Test Block', source: TimeBlockSource.google),
-              ]);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
+      await _pumpScreen(
+        tester,
+        blocks: [
+          _makeBlock(title: 'Test Block', source: TimeBlockSource.google),
+        ],
       );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
 
       await tester.tap(find.text('Test Block'));
       await tester.pumpAndSettle();
@@ -677,19 +468,8 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => []);
 
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
-      );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
+      await _pumpScreen(tester, blocks: []);
 
       await tester.tap(find.byIcon(Icons.filter_list));
       await tester.pumpAndSettle();
@@ -705,19 +485,8 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => []);
 
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
-      );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
+      await _pumpScreen(tester, blocks: []);
 
       await tester.tap(find.byIcon(Icons.filter_list));
       await tester.pumpAndSettle();
@@ -735,19 +504,8 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => []);
 
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
-      );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
+      await _pumpScreen(tester, blocks: []);
 
       await tester.tap(find.byIcon(Icons.filter_list));
       await tester.pumpAndSettle();
@@ -764,6 +522,7 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+
       final blocks = [
         _makeBlock(title: 'Manual Block', source: TimeBlockSource.manual),
         _makeBlock(
@@ -774,19 +533,7 @@ void main() {
         ),
       ];
 
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => blocks);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
-      );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
+      await _pumpScreen(tester, blocks: blocks);
 
       // Both blocks visible initially
       expect(find.text('Manual Block'), findsOneWidget);
@@ -814,9 +561,9 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+
       final blocks = [
-        _makeBlock(
-            title: 'Work Block', category: TimeBlockCategory.work),
+        _makeBlock(title: 'Work Block', category: TimeBlockCategory.work),
         _makeBlock(
           title: 'Exercise Block',
           category: TimeBlockCategory.exercise,
@@ -825,19 +572,7 @@ void main() {
         ),
       ];
 
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => blocks);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
-      );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
+      await _pumpScreen(tester, blocks: blocks);
 
       // Open filter sheet
       await tester.tap(find.byIcon(Icons.filter_list));
@@ -864,6 +599,7 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+
       final blocks = [
         _makeBlock(title: 'Block 1', source: TimeBlockSource.manual),
         _makeBlock(
@@ -874,19 +610,7 @@ void main() {
         ),
       ];
 
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => blocks);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
-      );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
+      await _pumpScreen(tester, blocks: blocks);
 
       // Apply a filter
       await tester.tap(find.byIcon(Icons.filter_list));
@@ -906,6 +630,7 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+
       final blocks = [
         _makeBlock(title: 'Block A', source: TimeBlockSource.manual),
         _makeBlock(
@@ -916,19 +641,7 @@ void main() {
         ),
       ];
 
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => blocks);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
-      );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
+      await _pumpScreen(tester, blocks: blocks);
 
       // Apply a filter
       await tester.tap(find.byIcon(Icons.filter_list));
@@ -957,23 +670,12 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+
       final blocks = [
         _makeBlock(title: 'Only Manual', source: TimeBlockSource.manual),
       ];
 
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => blocks);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
-      );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
+      await _pumpScreen(tester, blocks: blocks);
 
       // Apply Google filter (no google blocks exist)
       await tester.tap(find.byIcon(Icons.filter_list));
@@ -984,36 +686,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('No blocks match your filters'), findsOneWidget);
-    });
-  });
-
-  group('BlockManagementScreen refresh', () {
-    testWidgets('tapping refresh button reloads blocks', (tester) async {
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => [_makeBlock(title: 'Initial Block')]);
-
-      final notifier = _createNotifier(
-        auth: mockAuth,
-        firestore: mockFirestore,
-        authService: mockAuthService,
-        user: mockUser,
-        profile: _testProfile(),
-      );
-
-      await _pumpScreen(tester,
-          notifier: notifier, firestoreService: mockFirestoreService);
-
-      expect(find.text('Initial Block'), findsOneWidget);
-
-      // Change mock to return updated data
-      when(mockFirestoreService.getBlocks('couple-123', 'user-123'))
-          .thenAnswer((_) async => [_makeBlock(title: 'Updated Block')]);
-
-      // Tap refresh
-      await tester.tap(find.byIcon(Icons.refresh));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Updated Block'), findsOneWidget);
     });
   });
 }

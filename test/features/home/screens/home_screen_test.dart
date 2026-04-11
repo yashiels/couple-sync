@@ -1,13 +1,99 @@
+import 'package:couple_sync/core/models/overlap_result.dart';
+import 'package:couple_sync/core/models/user_model.dart';
 import 'package:couple_sync/features/home/screens/home_screen.dart';
 import 'package:couple_sync/features/home/partner_clock_widget.dart';
 import 'package:couple_sync/features/home/next_window_card_widget.dart';
+import 'package:couple_sync/services/providers/auth_state_provider.dart';
+import 'package:couple_sync/services/providers/couple_providers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 
-Widget _buildSubject() {
-  return const MaterialApp(
-    home: HomeScreen(),
+/// Generate mock overlap windows for testing.
+OverlapResult _generateMockOverlapResult() {
+  final now = DateTime.now();
+  final windows = <OverlapWindow>[];
+
+  for (int i = 0; i < 6; i++) {
+    final start = now.add(Duration(days: i + 1, hours: 18));
+    final end = start.add(const Duration(hours: 2));
+
+    windows.add(OverlapWindow(
+      startUtc: start.millisecondsSinceEpoch,
+      endUtc: end.millisecondsSinceEpoch,
+      durationMinutes: 120,
+      score: 0.85 - (i * 0.05),
+      reasonableBoth: true,
+    ));
+  }
+
+  return OverlapResult(
+    windows: windows,
+    computedAt: now,
+    blockHashA: 'mock_hash_a',
+    blockHashB: 'mock_hash_b',
+  );
+}
+
+/// Mock user profile for the current user.
+final _mockUserProfile = UserModel(
+  email: 'user@test.com',
+  displayName: 'Test User',
+  timezone: 'Africa/Johannesburg',
+  coupleId: 'couple123',
+  fcmTokens: [],
+  createdAt: DateTime(2024, 1, 1),
+);
+
+/// Mock partner profile.
+final _mockPartnerProfile = UserModel(
+  email: 'partner@test.com',
+  displayName: 'Partner',
+  timezone: 'Europe/London',
+  coupleId: 'couple123',
+  fcmTokens: [],
+  createdAt: DateTime(2024, 1, 1),
+);
+
+/// Build the subject under test with provider overrides that supply mock data.
+Widget _buildSubject({
+  UserModel? userProfile,
+  UserModel? partnerProfile,
+  OverlapResult? overlapResult,
+}) {
+  final effectiveUserProfile = userProfile ?? _mockUserProfile;
+  final effectivePartnerProfile = partnerProfile ?? _mockPartnerProfile;
+  final effectiveOverlapResult = overlapResult ?? _generateMockOverlapResult();
+
+  return ProviderScope(
+    overrides: [
+      currentUserProfileProvider.overrideWithValue(effectiveUserProfile),
+      partnerProfileProvider
+          .overrideWith((ref) async => effectivePartnerProfile),
+      overlapWindowsProvider
+          .overrideWith((ref) => Stream.value(effectiveOverlapResult)),
+    ],
+    child: const MaterialApp(
+      home: HomeScreen(),
+    ),
+  );
+}
+
+/// Build with no couple (coupleId is null) to test the "no partner" state.
+Widget _buildNoCoupleSubject() {
+  final noCoupleProfile = _mockUserProfile.copyWith(clearCoupleId: true);
+
+  return ProviderScope(
+    overrides: [
+      currentUserProfileProvider.overrideWithValue(noCoupleProfile),
+      partnerProfileProvider.overrideWith((ref) async => null),
+      overlapWindowsProvider
+          .overrideWith((ref) => Stream.value(null)),
+    ],
+    child: const MaterialApp(
+      home: HomeScreen(),
+    ),
   );
 }
 
@@ -19,38 +105,65 @@ void main() {
   group('HomeScreen rendering', () {
     testWidgets('displays app bar with "Couple Sync" title', (tester) async {
       await tester.pumpWidget(_buildSubject());
+      await tester.pumpAndSettle();
       expect(find.text('Couple Sync'), findsOneWidget);
     });
 
     testWidgets('displays settings icon in app bar', (tester) async {
       await tester.pumpWidget(_buildSubject());
+      await tester.pumpAndSettle();
       expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
     });
 
     testWidgets('displays PartnerClockWidget', (tester) async {
       await tester.pumpWidget(_buildSubject());
+      await tester.pumpAndSettle();
       expect(find.byType(PartnerClockWidget), findsOneWidget);
     });
 
     testWidgets('displays NextWindowCard', (tester) async {
       await tester.pumpWidget(_buildSubject());
+      await tester.pumpAndSettle();
       expect(find.byType(NextWindowCard), findsOneWidget);
     });
 
     testWidgets('displays "Upcoming Windows" section header', (tester) async {
       await tester.pumpWidget(_buildSubject());
+      await tester.pumpAndSettle();
       expect(find.text('Upcoming Windows'), findsOneWidget);
     });
 
     testWidgets('displays FAB with add icon', (tester) async {
       await tester.pumpWidget(_buildSubject());
+      await tester.pumpAndSettle();
       expect(find.byType(FloatingActionButton), findsOneWidget);
       expect(find.byIcon(Icons.add), findsOneWidget);
     });
 
     testWidgets('has a RefreshIndicator for pull-to-refresh', (tester) async {
       await tester.pumpWidget(_buildSubject());
+      await tester.pumpAndSettle();
       expect(find.byType(RefreshIndicator), findsOneWidget);
+    });
+  });
+
+  group('HomeScreen no couple state', () {
+    testWidgets('shows "No partner yet" when user has no coupleId',
+        (tester) async {
+      await tester.pumpWidget(_buildNoCoupleSubject());
+      await tester.pumpAndSettle();
+      expect(find.text('No partner yet'), findsOneWidget);
+    });
+
+    testWidgets('shows pairing message when user has no coupleId',
+        (tester) async {
+      await tester.pumpWidget(_buildNoCoupleSubject());
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+            'Pair with your partner to start finding mutual free time.'),
+        findsOneWidget,
+      );
     });
   });
 
@@ -58,6 +171,7 @@ void main() {
     testWidgets('tapping FAB shows bottom sheet with actions',
         (tester) async {
       await tester.pumpWidget(_buildSubject());
+      await tester.pumpAndSettle();
 
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pumpAndSettle();
@@ -70,6 +184,7 @@ void main() {
     testWidgets('bottom sheet shows subtitles for each action',
         (tester) async {
       await tester.pumpWidget(_buildSubject());
+      await tester.pumpAndSettle();
 
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pumpAndSettle();
@@ -81,6 +196,7 @@ void main() {
 
     testWidgets('bottom sheet shows icons for each action', (tester) async {
       await tester.pumpWidget(_buildSubject());
+      await tester.pumpAndSettle();
 
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pumpAndSettle();
@@ -93,6 +209,7 @@ void main() {
     testWidgets('tapping Sync Calendar dismisses bottom sheet',
         (tester) async {
       await tester.pumpWidget(_buildSubject());
+      await tester.pumpAndSettle();
 
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pumpAndSettle();
@@ -108,6 +225,7 @@ void main() {
   group('HomeScreen pull-to-refresh', () {
     testWidgets('shows loading indicator during refresh', (tester) async {
       await tester.pumpWidget(_buildSubject());
+      await tester.pumpAndSettle();
 
       // Trigger pull-to-refresh by dragging down
       await tester.fling(
@@ -126,6 +244,7 @@ void main() {
     testWidgets('renders upcoming window cards with score percentages',
         (tester) async {
       await tester.pumpWidget(_buildSubject());
+      await tester.pumpAndSettle();
 
       // Mock data generates 6 windows; first is nextWindow, remaining 5 are upcoming
       // Each has a score displayed as percentage
@@ -135,6 +254,7 @@ void main() {
 
     testWidgets('renders upcoming window cards with duration', (tester) async {
       await tester.pumpWidget(_buildSubject());
+      await tester.pumpAndSettle();
 
       // All mock windows have 120 minutes duration
       expect(find.text('2 hr'), findsWidgets);

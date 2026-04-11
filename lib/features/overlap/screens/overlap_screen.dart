@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:timezone/timezone.dart' as tz;
 import '../../../core/models/overlap_result.dart';
+import '../../../services/providers/couple_providers.dart';
+import '../../../services/providers/auth_state_provider.dart';
 import '../widgets/window_card_widget.dart';
 
 /// Overlap screen displaying mutual free time windows with filtering and sorting.
-/// 
-/// TODO: Replace mock data with Firestore queries when Cloud Functions are implemented:
-/// - Query: Firestore.instance.collection('overlaps').doc(coupleId).collection('windows').doc('latest')
-/// - Listen to real-time updates with snapshots()
-/// - Filter/sort on client side after fetching
+///
+/// Reads real data from Firestore via providers:
+/// - currentUserProfileProvider for user timezone
+/// - partnerProfileProvider for partner timezone
+/// - overlapWindowsProvider for real overlap windows
 class OverlapScreen extends ConsumerStatefulWidget {
   const OverlapScreen({super.key});
 
@@ -22,112 +25,225 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
   int? _minDurationMinutes;
   double? _minScore;
   String _sortBy = 'date'; // 'date', 'duration', 'score'
-  
-  // TODO: Get from user provider when implemented
-  final String _userTimezone = 'Africa/Johannesburg';
-  final String _partnerTimezone = 'America/New_York';
-  
-  // TODO: Replace with Firestore provider when Cloud Functions implemented
-  List<OverlapWindow> get _mockWindows => _generateMockWindows();
-  
-  List<OverlapWindow> _generateMockWindows() {
-    // Generate mock overlap windows for testing
-    final now = DateTime.now();
-    final windows = <OverlapWindow>[];
-    
-    for (int i = 0; i < 15; i++) {
-      final startHour = 9 + (i * 24); // Daily windows at 9 AM
-      final start = now.add(Duration(hours: startHour, minutes: 0));
-      final duration = [30, 60, 90, 120, 180][i % 5]; // Varying durations
-      
-      windows.add(OverlapWindow(
-        startUtc: start.toUtc().millisecondsSinceEpoch,
-        endUtc: start.add(Duration(minutes: duration)).toUtc().millisecondsSinceEpoch,
-        durationMinutes: duration,
-        score: [0.3, 0.5, 0.7, 0.8, 0.9, 1.0][i % 6],
-        reasonableBoth: i % 2 == 0,
-      ));
-    }
-    
-    return windows;
-  }
-  
-  List<OverlapWindow> get _filteredAndSortedWindows {
-    var windows = _mockWindows;
-    
+
+  List<OverlapWindow> _filterAndSort(List<OverlapWindow> windows) {
+    var result = List<OverlapWindow>.from(windows);
+
     // Apply filters
     if (_minDurationMinutes != null) {
-      windows = windows.where((w) => w.durationMinutes >= _minDurationMinutes!).toList();
+      result =
+          result.where((w) => w.durationMinutes >= _minDurationMinutes!).toList();
     }
-    
+
     if (_minScore != null) {
-      windows = windows.where((w) => w.score >= _minScore!).toList();
+      result = result.where((w) => w.score >= _minScore!).toList();
     }
-    
+
     // Apply sorting
     switch (_sortBy) {
       case 'date':
-        windows.sort((a, b) => a.startUtc.compareTo(b.startUtc));
+        result.sort((a, b) => a.startUtc.compareTo(b.startUtc));
         break;
       case 'duration':
-        windows.sort((a, b) => b.durationMinutes.compareTo(a.durationMinutes));
+        result.sort((a, b) => b.durationMinutes.compareTo(a.durationMinutes));
         break;
       case 'score':
-        windows.sort((a, b) => b.score.compareTo(a.score));
+        result.sort((a, b) => b.score.compareTo(a.score));
         break;
     }
-    
-    // Limit to 10 windows (acceptance criteria says "up to 20" but story says "up to 10")
-    // Using 10 as specified in the task instructions
-    return windows.take(10).toList();
+
+    // Limit to 10 windows
+    return result.take(10).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final windows = _filteredAndSortedWindows;
-    
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mutual Free Time'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: () => _showFilterDialog(),
-            tooltip: 'Filter & Sort',
-          ),
-        ],
-      ),
-      body: windows.isEmpty
-          ? _buildEmptyState(theme)
-          : Column(
+
+    final userProfile = ref.watch(currentUserProfileProvider);
+    final partnerAsync = ref.watch(partnerProfileProvider);
+    final overlapAsync = ref.watch(overlapWindowsProvider);
+
+    // If the user has no couple yet, show a friendly message
+    if (userProfile?.coupleId == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Mutual Free Time')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Filter summary bar
-                _buildFilterSummary(theme),
-                
-                // Windows list
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: windows.length,
-                    itemBuilder: (context, index) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: WindowCardWidget(
-                          window: windows[index],
-                          userTimezone: _userTimezone,
-                          partnerTimezone: _partnerTimezone,
-                          onTap: () => _showWindowDetails(windows[index]),
-                        ),
-                      );
-                    },
+                Icon(
+                  Icons.people_outline,
+                  size: 64,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'No couple paired yet.',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Pair with your partner to see mutual free time.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
+          ),
+        ),
+      );
+    }
+
+    final userTimezone = userProfile?.timezone ?? 'UTC';
+    final partnerTimezone = partnerAsync.valueOrNull?.timezone ?? 'UTC';
+
+    return overlapAsync.when(
+      loading: () => Scaffold(
+        appBar: AppBar(
+          title: const Text('Mutual Free Time'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.filter_list),
+              onPressed: () => _showFilterDialog(),
+              tooltip: 'Filter & Sort',
+            ),
+          ],
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, stack) => Scaffold(
+        appBar: AppBar(title: const Text('Mutual Free Time')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: theme.colorScheme.error,
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Something went wrong.',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  error.toString(),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: () => ref.invalidate(overlapWindowsProvider),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      data: (overlapResult) {
+        final allWindows = overlapResult?.windows ?? [];
+        final windows = _filterAndSort(allWindows);
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Mutual Free Time'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.filter_list),
+                onPressed: () => _showFilterDialog(),
+                tooltip: 'Filter & Sort',
+              ),
+            ],
+          ),
+          body: allWindows.isEmpty
+              ? _buildNoOverlapsState(theme)
+              : windows.isEmpty
+                  ? _buildEmptyState(theme)
+                  : Column(
+                      children: [
+                        // Filter summary bar
+                        _buildFilterSummary(theme),
+
+                        // Windows list
+                        Expanded(
+                          child: ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: windows.length,
+                            itemBuilder: (context, index) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: WindowCardWidget(
+                                  window: windows[index],
+                                  userTimezone: userTimezone,
+                                  partnerTimezone: partnerTimezone,
+                                  onTap: () => _showWindowDetails(
+                                      windows[index], userTimezone, partnerTimezone),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+        );
+      },
     );
   }
-  
+
+  /// Shown when the provider returns data but there are zero overlap windows.
+  Widget _buildNoOverlapsState(ThemeData theme) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.event_busy,
+              size: 64,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'No overlap windows found.',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Try adding more availability blocks.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Shown when filters exclude all windows.
   Widget _buildEmptyState(ThemeData theme) {
     return Center(
       child: Padding(
@@ -149,7 +265,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Try adjusting your blocks.',
+              'Try adjusting your filters.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -167,14 +283,14 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
       ),
     );
   }
-  
+
   Widget _buildFilterSummary(ThemeData theme) {
     final hasFilters = _minDurationMinutes != null || _minScore != null;
-    
+
     if (!hasFilters) {
       return const SizedBox.shrink();
     }
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -215,7 +331,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
       ),
     );
   }
-  
+
   Widget _buildFilterChip(String label, VoidCallback onRemove) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -229,8 +345,8 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
           Text(
             label,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onPrimaryContainer,
-            ),
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                ),
           ),
           const SizedBox(width: 4),
           InkWell(
@@ -245,7 +361,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
       ),
     );
   }
-  
+
   void _showFilterDialog() {
     showDialog(
       context: context,
@@ -272,9 +388,9 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
                     _buildDurationChoice(120, '2h', setDialogState),
                   ],
                 ),
-                
+
                 const SizedBox(height: 24),
-                
+
                 // Minimum Score
                 Text(
                   'Minimum Score',
@@ -290,9 +406,9 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
                     _buildScoreChoice(0.8, '80%', setDialogState),
                   ],
                 ),
-                
+
                 const SizedBox(height: 24),
-                
+
                 // Sort By
                 Text(
                   'Sort By',
@@ -329,8 +445,9 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
       ),
     );
   }
-  
-  Widget _buildDurationChoice(int? minutes, String label, StateSetter setDialogState) {
+
+  Widget _buildDurationChoice(
+      int? minutes, String label, StateSetter setDialogState) {
     final isSelected = _minDurationMinutes == minutes;
     return ChoiceChip(
       label: Text(label),
@@ -341,8 +458,9 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
       },
     );
   }
-  
-  Widget _buildScoreChoice(double? score, String label, StateSetter setDialogState) {
+
+  Widget _buildScoreChoice(
+      double? score, String label, StateSetter setDialogState) {
     final isSelected = _minScore == score;
     return ChoiceChip(
       label: Text(label),
@@ -353,8 +471,9 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
       },
     );
   }
-  
-  Widget _buildSortChoice(String sortBy, String label, StateSetter setDialogState) {
+
+  Widget _buildSortChoice(
+      String sortBy, String label, StateSetter setDialogState) {
     final isSelected = _sortBy == sortBy;
     return ChoiceChip(
       label: Text(label),
@@ -365,18 +484,28 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
       },
     );
   }
-  
-  void _showWindowDetails(OverlapWindow window) {
+
+  void _showWindowDetails(OverlapWindow window, String userTimezone,
+      String partnerTimezone) {
     showDialog(
       context: context,
       builder: (context) {
         final theme = Theme.of(context);
         final dateFormat = DateFormat('EEEE, MMMM d, yyyy');
         final timeFormat = DateFormat('h:mm a');
-        
-        final userStart = window.startDateTime.toLocal();
-        final userEnd = window.endDateTime.toLocal();
-        
+
+        // Convert UTC start/end to user's timezone
+        final userLocation = tz.getLocation(userTimezone);
+        final userStart = tz.TZDateTime.from(window.startDateTime, userLocation);
+        final userEnd = tz.TZDateTime.from(window.endDateTime, userLocation);
+
+        // Convert UTC start/end to partner's timezone
+        final partnerLocation = tz.getLocation(partnerTimezone);
+        final partnerStart =
+            tz.TZDateTime.from(window.startDateTime, partnerLocation);
+        final partnerEnd =
+            tz.TZDateTime.from(window.endDateTime, partnerLocation);
+
         return AlertDialog(
           title: const Text('Window Details'),
           content: Column(
@@ -391,7 +520,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // Time ranges
               _buildDetailRow(
                 'Your Time',
@@ -401,13 +530,12 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
               const SizedBox(height: 8),
               _buildDetailRow(
                 'Partner\'s Time',
-                // TODO: Calculate actual partner time using TZDateTime
-                '${timeFormat.format(userStart)} - ${timeFormat.format(userEnd)}',
+                '${timeFormat.format(partnerStart)} - ${timeFormat.format(partnerEnd)}',
                 theme,
               ),
-              
+
               const Divider(height: 32),
-              
+
               // Duration
               _buildDetailRow(
                 'Duration',
@@ -415,7 +543,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
                 theme,
               ),
               const SizedBox(height: 8),
-              
+
               // Score breakdown
               Text(
                 'Score Breakdown',
@@ -424,15 +552,15 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              
+
               _buildScoreRow('Overall Score', window.score, theme),
               const SizedBox(height: 8),
               _buildScoreRow('Duration Score', window.score * 0.8, theme),
               const SizedBox(height: 8),
               _buildScoreRow('Timing Score', window.score * 0.9, theme),
-              
+
               const SizedBox(height: 16),
-              
+
               // Reasonable hours
               Row(
                 children: [
@@ -462,7 +590,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
       },
     );
   }
-  
+
   Widget _buildDetailRow(String label, String value, ThemeData theme) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -487,11 +615,11 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
       ],
     );
   }
-  
+
   Widget _buildScoreRow(String label, double score, ThemeData theme) {
     final scorePercent = (score * 100).round();
     final color = _getScoreColor(score);
-    
+
     return Row(
       children: [
         Expanded(
@@ -522,14 +650,14 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
       ],
     );
   }
-  
+
   void _clearFilters() {
     setState(() {
       _minDurationMinutes = null;
       _minScore = null;
     });
   }
-  
+
   String _formatDuration(int minutes) {
     if (minutes < 60) {
       return '$minutes min';
@@ -541,7 +669,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
     }
     return '$hours hr $mins min';
   }
-  
+
   Color _getScoreColor(double score) {
     if (score >= 0.8) return Colors.green;
     if (score >= 0.6) return Colors.lightGreen;

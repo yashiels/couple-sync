@@ -2,6 +2,7 @@ import 'package:couple_sync/core/models/user_model.dart';
 import 'package:couple_sync/features/settings/screens/settings_screen.dart';
 import 'package:couple_sync/services/providers/auth_state_provider.dart';
 import 'package:couple_sync/services/providers/calendar_provider.dart';
+import 'package:couple_sync/services/providers/couple_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,9 +42,15 @@ Widget _buildSubject({
       calendarConnectionNotifierProvider.overrideWith((ref) {
         return _SimpleCalendarNotifier(calendarConnected);
       }),
+      calendarSyncNotifierProvider.overrideWith((ref) {
+        return _SimpleCalendarSyncNotifier();
+      }),
       notificationSettingsProvider.overrideWith((ref) {
         return NotificationSettingsNotifier();
       }),
+      // Override coupleProvider to avoid hitting Firestore
+      coupleProvider.overrideWith((ref) async => null),
+      partnerProfileProvider.overrideWith((ref) async => null),
     ],
     child: MaterialApp(
       home: MediaQuery(
@@ -68,6 +75,16 @@ class _SimpleCalendarNotifier extends StateNotifier<AsyncValue<bool>>
     implements CalendarConnectionNotifier {
   _SimpleCalendarNotifier(bool connected)
       : super(AsyncValue.data(connected));
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+/// Simple notifier that holds a fixed calendar sync state.
+class _SimpleCalendarSyncNotifier extends StateNotifier<CalendarSyncState>
+    implements CalendarSyncNotifier {
+  _SimpleCalendarSyncNotifier([CalendarSyncState? initialState])
+      : super(initialState ?? const CalendarSyncState());
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;

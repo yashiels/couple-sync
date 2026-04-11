@@ -183,14 +183,26 @@ class _RoutineWizardScreenState extends ConsumerState<RoutineWizardScreen> {
 
       // Save all blocks to Firestore
       final batch = FirebaseFirestore.instance.batch();
-      final coupleId = userProfile?.coupleId ?? 'solo';
+      final coupleId = userProfile?.coupleId;
 
       for (final block in blocks) {
-        final docRef = FirebaseFirestore.instance
-            .collection('timeblocks')
-            .doc(coupleId)
-            .collection('blocks')
-            .doc();
+        final DocumentReference docRef;
+        if (coupleId != null) {
+          // User is paired — save to shared timeblocks collection
+          docRef = FirebaseFirestore.instance
+              .collection('timeblocks')
+              .doc(coupleId)
+              .collection('blocks')
+              .doc();
+        } else {
+          // User is not yet paired — save to personal pending blocks
+          final blockUid = uid;
+          docRef = FirebaseFirestore.instance
+              .collection('users')
+              .doc(blockUid)
+              .collection('pendingBlocks')
+              .doc();
+        }
         batch.set(docRef, block.toJson());
       }
 

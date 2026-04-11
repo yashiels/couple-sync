@@ -1,11 +1,29 @@
+import 'package:couple_sync/core/models/time_block.dart';
 import 'package:couple_sync/features/calendar/screens/calendar_screen.dart';
 import 'package:couple_sync/features/calendar/week_view_screen.dart';
+import 'package:couple_sync/services/providers/auth_state_provider.dart';
+import 'package:couple_sync/services/providers/couple_providers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Widget _buildSubject() {
-  return const MaterialApp(
-    home: CalendarScreen(),
+  return ProviderScope(
+    overrides: [
+      currentUserIdProvider.overrideWithValue('test-user-123'),
+      userBlocksProvider.overrideWith(
+        (ref) => Stream.value(<TimeBlock>[]),
+      ),
+      partnerBlocksProvider.overrideWith(
+        (ref) => Stream.value(<TimeBlock>[]),
+      ),
+      overlapWindowsProvider.overrideWith(
+        (ref) => Stream.value(null),
+      ),
+    ],
+    child: const MaterialApp(
+      home: CalendarScreen(),
+    ),
   );
 }
 
@@ -36,6 +54,7 @@ void main() {
       await tester.pumpWidget(_buildSubject());
       await tester.pumpAndSettle();
 
+      expect(find.text('No blocks yet'), findsOneWidget);
       expect(find.byIcon(Icons.today), findsOneWidget);
     });
 

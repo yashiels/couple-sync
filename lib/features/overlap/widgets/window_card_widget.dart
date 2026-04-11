@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:timezone/timezone.dart' as tz;
 import '../../../core/models/overlap_result.dart';
 import '../../../core/utils/timezone_helper.dart';
 
@@ -8,13 +9,13 @@ import '../../../core/utils/timezone_helper.dart';
 class WindowCardWidget extends StatelessWidget {
   /// The overlap window to display
   final OverlapWindow window;
-  
+
   /// User's timezone IANA ID
   final String userTimezone;
-  
+
   /// Partner's timezone IANA ID
   final String partnerTimezone;
-  
+
   /// Callback when card is tapped
   final VoidCallback? onTap;
 
@@ -29,7 +30,7 @@ class WindowCardWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -54,14 +55,14 @@ class WindowCardWidget extends StatelessWidget {
                   _buildScoreBadge(theme),
                 ],
               ),
-              
+
               const SizedBox(height: 16),
-              
+
               // Time ranges
               _buildTimeRanges(theme),
-              
+
               const SizedBox(height: 16),
-              
+
               // Duration and reasonable hours indicator
               Row(
                 children: [
@@ -87,11 +88,11 @@ class WindowCardWidget extends StatelessWidget {
       ),
     );
   }
-  
+
   Widget _buildScoreBadge(ThemeData theme) {
     final scorePercent = (window.score * 100).round();
     final color = _getScoreColor(window.score);
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: 12,
@@ -122,19 +123,23 @@ class WindowCardWidget extends StatelessWidget {
       ),
     );
   }
-  
+
   Widget _buildTimeRanges(ThemeData theme) {
     final userTz = TimezoneHelper.getCurrentOffset(userTimezone);
     final partnerTz = TimezoneHelper.getCurrentOffset(partnerTimezone);
-    
+
     final timeFormat = DateFormat('h:mm a');
-    
-    // TODO: Use TZDateTime from timezone package for proper timezone conversion
-    // when Cloud Functions provide overlap data with correct UTC timestamps
-    // For now, using local time conversion (simplified)
-    final userStart = window.startDateTime.toLocal();
-    final userEnd = window.endDateTime.toLocal();
-    
+
+    // Convert UTC timestamps to user's timezone using TZDateTime
+    final userLocation = tz.getLocation(userTimezone);
+    final userStart = tz.TZDateTime.from(window.startDateTime, userLocation);
+    final userEnd = tz.TZDateTime.from(window.endDateTime, userLocation);
+
+    // Convert UTC timestamps to partner's timezone using TZDateTime
+    final partnerLocation = tz.getLocation(partnerTimezone);
+    final partnerStart = tz.TZDateTime.from(window.startDateTime, partnerLocation);
+    final partnerEnd = tz.TZDateTime.from(window.endDateTime, partnerLocation);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -173,9 +178,7 @@ class WindowCardWidget extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Text(
-              // TODO: Calculate actual partner time using TZDateTime
-              // Currently showing same time with partner timezone offset
-              '${timeFormat.format(userStart)} - ${timeFormat.format(userEnd)}',
+              '${timeFormat.format(partnerStart)} - ${timeFormat.format(partnerEnd)}',
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w500,
               ),
@@ -192,7 +195,7 @@ class WindowCardWidget extends StatelessWidget {
       ],
     );
   }
-  
+
   Widget _buildInfoChip({
     required ThemeData theme,
     required IconData icon,
@@ -200,7 +203,7 @@ class WindowCardWidget extends StatelessWidget {
     Color? color,
   }) {
     final chipColor = color ?? theme.colorScheme.onSurfaceVariant;
-    
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -219,12 +222,14 @@ class WindowCardWidget extends StatelessWidget {
       ],
     );
   }
-  
+
   String _formatDate() {
     final dateFormat = DateFormat('EEEE, MMMM d');
-    return dateFormat.format(window.startDateTime.toLocal());
+    final userLocation = tz.getLocation(userTimezone);
+    final userStart = tz.TZDateTime.from(window.startDateTime, userLocation);
+    return dateFormat.format(userStart);
   }
-  
+
   String _formatDuration(int minutes) {
     if (minutes < 60) {
       return '$minutes min';
@@ -236,7 +241,7 @@ class WindowCardWidget extends StatelessWidget {
     }
     return '$hours hr $mins min';
   }
-  
+
   Color _getScoreColor(double score) {
     if (score >= 0.8) return Colors.green;
     if (score >= 0.6) return Colors.lightGreen;

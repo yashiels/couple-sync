@@ -1,77 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/models/overlap_result.dart';
 import '../../../core/router/routes.dart';
+import '../../../services/providers/auth_state_provider.dart';
+import '../../../services/providers/couple_providers.dart';
 import '../partner_clock_widget.dart';
 import '../next_window_card_widget.dart';
 
 /// Home screen displaying partner clocks, next free window, and upcoming windows.
 /// Pull-to-refresh triggers calendar sync and overlap refresh.
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _isRefreshing = false;
-  
-  // TODO: Replace with actual data from Firestore/Auth service (STORY-019, STORY-026)
-  // Mock data for development
-  final String _userTimezone = 'Africa/Johannesburg';
-  final String _partnerTimezone = 'Europe/London';
-  final String _partnerName = 'Partner';
-  
-  // TODO: Replace with actual overlap data from Cloud Functions (STORY-026)
-  // Mock overlap windows for development
-  late final OverlapResult _mockOverlapResult;
-
-  @override
-  void initState() {
-    super.initState();
-    _mockOverlapResult = _generateMockWindows();
-  }
-
-  OverlapResult _generateMockWindows() {
-    // Generate mock windows starting from tomorrow
-    final now = DateTime.now();
-    final windows = <OverlapWindow>[];
-    
-    for (int i = 0; i < 6; i++) {
-      final start = now.add(Duration(days: i + 1, hours: 18));
-      final end = start.add(const Duration(hours: 2));
-      
-      windows.add(OverlapWindow(
-        startUtc: start.millisecondsSinceEpoch,
-        endUtc: end.millisecondsSinceEpoch,
-        durationMinutes: 120,
-        score: 0.85 - (i * 0.05),
-        reasonableBoth: true,
-      ));
-    }
-    
-    return OverlapResult(
-      windows: windows,
-      computedAt: now,
-      blockHashA: 'mock_hash_a',
-      blockHashB: 'mock_hash_b',
-    );
-  }
 
   Future<void> _handleRefresh() async {
     setState(() => _isRefreshing = true);
-    
-    // TODO: Trigger calendar sync (STORY-019)
-    // await _calendarService.syncCalendars();
-    
-    // TODO: Trigger overlap recalculation via Cloud Functions (STORY-026)
-    // await _overlapService.refreshOverlaps();
-    
-    // Simulate network delay
-    await Future.delayed(const Duration(seconds: 2));
-    
+
+    // Invalidate providers to trigger re-fetch
+    ref.invalidate(partnerProfileProvider);
+    ref.invalidate(overlapWindowsProvider);
+
+    // Allow time for providers to refresh
+    await Future.delayed(const Duration(seconds: 1));
+
     setState(() => _isRefreshing = false);
   }
 
@@ -92,12 +51,62 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final nextWindow = _mockOverlapResult.nextWindow;
-    final upcomingWindows = _mockOverlapResult.windowsByTime
-        .where((w) => w != nextWindow)
-        .take(5)
-        .toList();
 
+    // Read current user profile (synchronous — Provider<UserModel?>)
+    final userProfile = ref.watch(currentUserProfileProvider);
+    // Read partner profile (async — FutureProvider<UserModel?>)
+    final partnerAsync = ref.watch(partnerProfileProvider);
+    // Read overlap windows (async — StreamProvider<OverlapResult?>)
+    final overlapAsync = ref.watch(overlapWindowsProvider);
+
+    // Determine user timezone (fallback to UTC if profile not loaded)
+    final userTimezone = userProfile?.timezone ?? 'UTC';
+
+    // If user has no couple, show a "no couple" message
+    if (userProfile != null && userProfile.coupleId == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Couple Sync'),
+          automaticallyImplyLeading: false,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.settings_outlined),
+              onPressed: () => context.go(AppRoutes.settings),
+            ),
+          ],
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.favorite_border,
+                  size: 64,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No partner yet',
+                  style: theme.textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Pair with your partner to start finding mutual free time.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Build the main content based on async states
     return Scaffold(
       appBar: AppBar(
         title: const Text('Couple Sync'),
@@ -113,57 +122,121 @@ class _HomeScreenState extends State<HomeScreen> {
         onRefresh: _handleRefresh,
         child: _isRefreshing
             ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Partner clocks
-                    PartnerClockWidget(
-                      userTimezone: _userTimezone,
-                      partnerTimezone: _partnerTimezone,
-                      partnerName: _partnerName,
-                    ),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // Next window card
-                    NextWindowCard(
-                      window: nextWindow,
-                      userTimezone: _userTimezone,
-                      partnerTimezone: _partnerTimezone,
-                    ),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // Upcoming windows header
-                    Text(
-                      'Upcoming Windows',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 12),
-                    
-                    // Upcoming windows list
-                    if (upcomingWindows.isEmpty)
-                      _buildEmptyUpcoming(theme)
-                    else
-                      ...upcomingWindows.map(
-                        (window) => _UpcomingWindowCard(
-                          window: window,
-                          userTimezone: _userTimezone,
-                        ),
-                      ),
-                  ],
+            : partnerAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, stack) => _buildErrorState(
+                  theme,
+                  'Failed to load partner data',
+                  () => ref.invalidate(partnerProfileProvider),
                 ),
+                data: (partner) {
+                  final partnerTimezone = partner?.timezone ?? 'UTC';
+                  final partnerName = partner?.displayName ?? 'Partner';
+
+                  return overlapAsync.when(
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (error, stack) => _buildErrorState(
+                      theme,
+                      'Failed to load overlap data',
+                      () => ref.invalidate(overlapWindowsProvider),
+                    ),
+                    data: (overlapResult) {
+                      final nextWindow = overlapResult?.nextWindow;
+                      final upcomingWindows = overlapResult?.windowsByTime
+                              .where((w) => w != nextWindow)
+                              .take(5)
+                              .toList() ??
+                          [];
+
+                      return SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Partner clocks
+                            PartnerClockWidget(
+                              userTimezone: userTimezone,
+                              partnerTimezone: partnerTimezone,
+                              partnerName: partnerName,
+                            ),
+
+                            const SizedBox(height: 24),
+
+                            // Next window card
+                            NextWindowCard(
+                              window: nextWindow,
+                              userTimezone: userTimezone,
+                              partnerTimezone: partnerTimezone,
+                            ),
+
+                            const SizedBox(height: 24),
+
+                            // Upcoming windows header
+                            Text(
+                              'Upcoming Windows',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            // Upcoming windows list
+                            if (upcomingWindows.isEmpty)
+                              _buildEmptyUpcoming(theme)
+                            else
+                              ...upcomingWindows.map(
+                                (window) => _UpcomingWindowCard(
+                                  window: window,
+                                  userTimezone: userTimezone,
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
               ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showQuickActions(context),
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(
+      ThemeData theme, String message, VoidCallback onRetry) {
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.6,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 48,
+                color: theme.colorScheme.error,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                style: theme.textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -240,10 +313,10 @@ class _UpcomingWindowCard extends StatelessWidget {
     final theme = Theme.of(context);
     final dateFormat = DateFormat('EEE, MMM d');
     final timeFormat = DateFormat('h:mm a');
-    
+
     final start = window.startDateTime.toLocal();
     final end = window.endDateTime.toLocal();
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(

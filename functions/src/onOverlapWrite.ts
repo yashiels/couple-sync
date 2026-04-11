@@ -65,7 +65,7 @@ export async function handleOnOverlapWrite(
 // ─── Cloud Function export ────────────────────────────────────────────────────
 
 export const onOverlapWrite = onDocumentWritten(
-  'overlaps/{coupleId}/windows/latest',
+  { document: 'overlaps/{coupleId}/windows/latest', region: 'us-central1' },
   async (event) => {
     const db = admin.firestore();
     const messaging = admin.messaging();

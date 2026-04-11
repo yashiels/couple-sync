@@ -23,9 +23,14 @@ service cloud.firestore {
     // - Read: Owner or partner (via coupleId lookup)
     // - Write: Only owner (coupleId is written by Cloud Functions via admin SDK)
     match /users/{uid} {
-      allow read: if request.auth != null && 
+      allow read: if request.auth != null &&
                      (request.auth.uid == uid || isPartnerOf(uid));
       allow write: if request.auth != null && request.auth.uid == uid;
+
+      // Pre-pairing blocks stored before user has a couple
+      match /pendingBlocks/{blockId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
     }
 
     // 2. couples/{coupleId}

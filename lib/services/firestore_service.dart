@@ -217,6 +217,43 @@ class FirestoreService {
     }
   }
 
+  /// Watches time blocks for a couple, optionally filtered by userId.
+  Stream<List<TimeBlock>> watchBlocks(String coupleId, {String? userId}) {
+    try {
+      Query<Map<String, dynamic>> query = _firestore
+          .collection('timeblocks')
+          .doc(coupleId)
+          .collection('blocks');
+
+      if (userId != null) {
+        query = query.where('userId', isEqualTo: userId);
+      }
+
+      return query.snapshots().map((snapshot) {
+        return snapshot.docs
+            .map((doc) => TimeBlock.fromJson(doc.data()))
+            .toList();
+      }).handleError((error) {
+        if (error is FirebaseException) {
+          throw _mapFirebaseException(error, 'Failed to watch blocks');
+        }
+        throw FirestoreException(
+          code: 'unknown',
+          message: 'An unexpected error occurred while watching blocks',
+          originalError: error,
+        );
+      });
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to watch blocks');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while watching blocks',
+        originalError: e,
+      );
+    }
+  }
+
   /// Create a new time block.
   /// Uses server timestamp for createdAt.
   /// Returns the block ID.
@@ -378,6 +415,39 @@ class FirestoreService {
       throw FirestoreException(
         code: 'unknown',
         message: 'An unexpected error occurred while fetching overlap',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Watches the latest overlap result for a couple.
+  Stream<OverlapResult?> watchOverlap(String coupleId) {
+    try {
+      return _firestore
+          .collection('overlaps')
+          .doc(coupleId)
+          .collection('windows')
+          .doc('latest')
+          .snapshots()
+          .map((snapshot) {
+        if (!snapshot.exists) return null;
+        return OverlapResult.fromJson(snapshot.data()!);
+      }).handleError((error) {
+        if (error is FirebaseException) {
+          throw _mapFirebaseException(error, 'Failed to watch overlap');
+        }
+        throw FirestoreException(
+          code: 'unknown',
+          message: 'An unexpected error occurred while watching overlap',
+          originalError: error,
+        );
+      });
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to watch overlap');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while watching overlap',
         originalError: e,
       );
     }

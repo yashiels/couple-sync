@@ -33,10 +33,55 @@ jobs:
       - run: flutter pub get
       - run: flutter test
 
+  functions-lint-test:
+    name: Functions Lint & Test
+    runs-on: [self-hosted, Linux, X64, astra]
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+  integration-test:
+    name: Integration Test
+    runs-on: [self-hosted, Linux, X64, astra]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Fix Flutter git ownership
+        run: git config --global --add safe.directory "$(dirname "$(dirname "$(which flutter)")")"
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+      - name: Install function dependencies
+        run: cd functions && npm ci
+      - name: Start Firebase Emulator Suite
+        run: firebase emulators:start --only auth,firestore,functions &
+        env:
+          FIREBASE_PROJECT: nexion-ai-prod
+      - name: Wait for emulators
+        run: sleep 10
+      - run: flutter pub get
+      - name: Run integration tests
+        run: flutter test integration_test/
+      - name: Stop emulators
+        if: always()
+        run: pkill -f "firebase" || true
+
   build:
     name: Build
     runs-on: [self-hosted, Linux, X64, astra, android]
-    needs: [analyze, test]
+    needs: [analyze, test, functions-lint-test]
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2

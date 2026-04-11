@@ -25,7 +25,7 @@ export async function handleCleanupExpiredInvites(deps: CleanupDeps): Promise<vo
 // ─── Cloud Function export ────────────────────────────────────────────────────
 
 export const cleanupExpiredInvites = onSchedule(
-  { schedule: '0 3 * * *', timeZone: 'UTC' },
+  { schedule: '0 3 * * *', region: 'us-central1', timeZone: 'UTC' },
   async () => {
     const db = admin.firestore();
 

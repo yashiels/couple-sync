@@ -51,7 +51,7 @@ export async function handleBlockWrite(
 // ─── Cloud Function export ────────────────────────────────────────────────────
 
 export const onBlockWrite = onDocumentWritten(
-  'timeblocks/{coupleId}/blocks/{blockId}',
+  { document: 'timeblocks/{coupleId}/blocks/{blockId}', region: 'us-central1', memory: '512MiB', timeoutSeconds: 120 },
   async (event) => {
     const db = admin.firestore();
     const { coupleId } = event.params;

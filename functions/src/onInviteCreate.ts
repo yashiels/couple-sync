@@ -18,7 +18,7 @@ export async function handleOnInviteCreate(
 // ─── Cloud Function export ────────────────────────────────────────────────────
 
 export const onInviteCreate = onDocumentCreated(
-  'invites/{code}',
+  { document: 'invites/{code}', region: 'us-central1' },
   async (event) => {
     const db = admin.firestore();
     const { code } = event.params;
