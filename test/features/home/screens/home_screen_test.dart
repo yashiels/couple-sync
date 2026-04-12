@@ -4,6 +4,8 @@ import 'package:couple_sync/features/home/screens/home_screen.dart';
 import 'package:couple_sync/features/home/partner_clock_widget.dart';
 import 'package:couple_sync/features/home/next_window_card_widget.dart';
 import 'package:couple_sync/services/providers/auth_state_provider.dart';
+import 'package:couple_sync/services/calendar_service.dart';
+import 'package:couple_sync/services/providers/calendar_provider.dart';
 import 'package:couple_sync/services/providers/couple_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -73,6 +75,9 @@ Widget _buildSubject({
           .overrideWith((ref) async => effectivePartnerProfile),
       overlapWindowsProvider
           .overrideWith((ref) => Stream.value(effectiveOverlapResult)),
+      calendarSyncNotifierProvider.overrideWith(
+        (ref) => _NoOpCalendarSyncNotifier(),
+      ),
     ],
     child: const MaterialApp(
       home: HomeScreen(),
@@ -90,6 +95,9 @@ Widget _buildNoCoupleSubject() {
       partnerProfileProvider.overrideWith((ref) async => null),
       overlapWindowsProvider
           .overrideWith((ref) => Stream.value(null)),
+      calendarSyncNotifierProvider.overrideWith(
+        (ref) => _NoOpCalendarSyncNotifier(),
+      ),
     ],
     child: const MaterialApp(
       home: HomeScreen(),
@@ -260,4 +268,23 @@ void main() {
       expect(find.text('2 hr'), findsWidgets);
     });
   });
+}
+
+class _NoOpCalendarSyncNotifier extends StateNotifier<CalendarSyncState>
+    implements CalendarSyncNotifier {
+  _NoOpCalendarSyncNotifier() : super(const CalendarSyncState());
+
+  @override
+  Future<CalendarSyncResult?> autoSyncIfNeeded() async => null;
+
+  @override
+  Future<CalendarSyncResult> sync() async => CalendarSyncResult(
+        blocksFetched: 0,
+        blocksDeleted: 0,
+        blocksCreated: 0,
+        syncedAt: DateTime.now(),
+      );
+
+  @override
+  Future<void> refreshLastSyncTime() async {}
 }

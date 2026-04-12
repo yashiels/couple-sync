@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/models/overlap_result.dart';
 import '../../../core/router/routes.dart';
 import '../../../services/providers/auth_state_provider.dart';
+import '../../../services/providers/calendar_provider.dart';
 import '../../../services/providers/couple_providers.dart';
 import '../partner_clock_widget.dart';
 import '../next_window_card_widget.dart';
@@ -20,6 +21,19 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _isRefreshing = false;
+  bool _autoSyncTriggered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto-sync calendar on first load if connected and due
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_autoSyncTriggered) {
+        _autoSyncTriggered = true;
+        ref.read(calendarSyncNotifierProvider.notifier).autoSyncIfNeeded();
+      }
+    });
+  }
 
   Future<void> _handleRefresh() async {
     setState(() => _isRefreshing = true);
