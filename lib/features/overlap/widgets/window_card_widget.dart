@@ -90,7 +90,7 @@ class WindowCardWidget extends StatelessWidget {
   }
 
   Widget _buildScoreBadge(ThemeData theme) {
-    final scorePercent = (window.score * 100).round();
+    final scoreDisplay = window.score.round();
     final color = _getScoreColor(window.score);
 
     return Container(
@@ -113,7 +113,7 @@ class WindowCardWidget extends StatelessWidget {
           ),
           const SizedBox(width: 4),
           Text(
-            '$scorePercent%',
+            '$scoreDisplay',
             style: theme.textTheme.bodySmall?.copyWith(
               color: color,
               fontWeight: FontWeight.bold,
@@ -243,9 +243,10 @@ class WindowCardWidget extends StatelessWidget {
   }
 
   Color _getScoreColor(double score) {
-    if (score >= 0.8) return Colors.green;
-    if (score >= 0.6) return Colors.lightGreen;
-    if (score >= 0.4) return Colors.orange;
+    // Score range is 0-60+ (composite of duration, time-of-day, recency)
+    if (score >= 40) return Colors.green;
+    if (score >= 25) return Colors.lightGreen;
+    if (score >= 15) return Colors.orange;
     return Colors.red;
   }
 }

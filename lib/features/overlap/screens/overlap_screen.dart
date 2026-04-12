@@ -321,7 +321,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
                   ),
                 if (_minScore != null)
                   _buildFilterChip(
-                    'Min ${(_minScore! * 100).round()}% score',
+                    'Min score ${_minScore!.round()}',
                     () => setState(() => _minScore = null),
                   ),
               ],
@@ -401,9 +401,9 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
                   spacing: 8,
                   children: [
                     _buildScoreChoice(null, 'Any', setDialogState),
-                    _buildScoreChoice(0.4, '40%', setDialogState),
-                    _buildScoreChoice(0.6, '60%', setDialogState),
-                    _buildScoreChoice(0.8, '80%', setDialogState),
+                    _buildScoreChoice(15, '15+', setDialogState),
+                    _buildScoreChoice(25, '25+', setDialogState),
+                    _buildScoreChoice(40, '40+', setDialogState),
                   ],
                 ),
 
@@ -617,7 +617,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
   }
 
   Widget _buildScoreRow(String label, double score, ThemeData theme) {
-    final scorePercent = (score * 100).round();
+    final scoreDisplay = score.round();
     final color = _getScoreColor(score);
 
     return Row(
@@ -632,7 +632,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
               ),
               const SizedBox(height: 4),
               LinearProgressIndicator(
-                value: score,
+                value: (score / 60).clamp(0.0, 1.0),
                 backgroundColor: color.withOpacity(0.2),
                 valueColor: AlwaysStoppedAnimation(color),
               ),
@@ -641,7 +641,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
         ),
         const SizedBox(width: 12),
         Text(
-          '$scorePercent%',
+          '$scoreDisplay',
           style: theme.textTheme.bodyMedium?.copyWith(
             fontWeight: FontWeight.bold,
             color: color,
@@ -671,9 +671,9 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
   }
 
   Color _getScoreColor(double score) {
-    if (score >= 0.8) return Colors.green;
-    if (score >= 0.6) return Colors.lightGreen;
-    if (score >= 0.4) return Colors.orange;
+    if (score >= 40) return Colors.green;
+    if (score >= 25) return Colors.lightGreen;
+    if (score >= 15) return Colors.orange;
     return Colors.red;
   }
 }

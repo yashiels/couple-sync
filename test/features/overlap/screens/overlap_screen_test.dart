@@ -41,7 +41,7 @@ List<OverlapWindow> _generateMockWindows() {
       endUtc:
           start.add(Duration(minutes: duration)).toUtc().millisecondsSinceEpoch,
       durationMinutes: duration,
-      score: [0.3, 0.5, 0.7, 0.8, 0.9, 1.0][i % 6],
+      score: [10, 20, 30, 40, 50, 55][i % 6].toDouble(),
       reasonableBoth: i % 2 == 0,
     ));
   }
@@ -211,9 +211,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Minimum Score'), findsOneWidget);
-      expect(find.text('40%'), findsOneWidget);
-      expect(find.text('60%'), findsOneWidget);
-      expect(find.text('80%'), findsOneWidget);
+      expect(find.text('15+'), findsOneWidget);
+      expect(find.text('25+'), findsOneWidget);
+      expect(find.text('40+'), findsOneWidget);
     });
 
     testWidgets('filter dialog shows sort choices', (tester) async {
@@ -281,14 +281,14 @@ void main() {
       await tester.tap(find.byIcon(Icons.filter_list).first);
       await tester.pumpAndSettle();
 
-      // Select 60% score filter
-      await tester.tap(find.text('60%'));
+      // Select 25+ score filter
+      await tester.tap(find.text('25+'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Apply'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Min 60% score'), findsOneWidget);
+      expect(find.text('Min score 25'), findsOneWidget);
     });
   });
 

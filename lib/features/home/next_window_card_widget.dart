@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:timezone/timezone.dart' as tz;
 import '../../../core/models/overlap_result.dart';
 import '../../../core/utils/timezone_helper.dart';
 import '../../../core/router/routes.dart';
@@ -139,7 +140,7 @@ class _NextWindowCardState extends State<NextWindowCard> {
                   const SizedBox(width: 12),
                   _buildInfoChip(
                     icon: Icons.star,
-                    label: 'Score: ${(widget.window!.score * 100).toStringAsFixed(0)}%',
+                    label: 'Score: ${widget.window!.score.toStringAsFixed(0)}',
                   ),
                 ],
               ),
@@ -200,10 +201,13 @@ class _NextWindowCardState extends State<NextWindowCard> {
     final dateFormat = DateFormat('EEE, MMM d');
     final timeFormat = DateFormat('h:mm a');
     
-    // Convert to local times in respective timezones
-    // Note: This is simplified - in production, use TZDateTime from timezone package
-    final userStart = window.startDateTime.toLocal();
-    final userEnd = window.endDateTime.toLocal();
+    // Convert to each user's timezone using TZDateTime
+    final userLocation = tz.getLocation(widget.userTimezone);
+    final partnerLocation = tz.getLocation(widget.partnerTimezone);
+    final userStart = tz.TZDateTime.from(window.startDateTime, userLocation);
+    final userEnd = tz.TZDateTime.from(window.endDateTime, userLocation);
+    final partnerStart = tz.TZDateTime.from(window.startDateTime, partnerLocation);
+    final partnerEnd = tz.TZDateTime.from(window.endDateTime, partnerLocation);
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -242,9 +246,7 @@ class _NextWindowCardState extends State<NextWindowCard> {
             ),
             const SizedBox(width: 4),
             Text(
-              // TODO: Calculate actual partner time using TZDateTime when Cloud Functions provide overlap data
-              // For now, showing placeholder with offset indicator
-              '${timeFormat.format(userStart)} - ${timeFormat.format(userEnd)} ($partnerTz)',
+              '${timeFormat.format(partnerStart)} - ${timeFormat.format(partnerEnd)} ($partnerTz)',
               style: theme.textTheme.bodyMedium,
             ),
           ],

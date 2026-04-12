@@ -6,7 +6,7 @@ import 'package:timezone/data/latest.dart' as tz_data;
 
 OverlapWindow _createWindow({
   int durationMinutes = 60,
-  double score = 0.8,
+  double score = 45,
   bool reasonableBoth = true,
 }) {
   final now = DateTime.now().toUtc();
@@ -57,10 +57,10 @@ void main() {
 
     testWidgets('displays score badge', (tester) async {
       await tester.pumpWidget(_buildSubject(
-        window: _createWindow(score: 0.85),
+        window: _createWindow(score: 45),
       ));
-      // 0.85 * 100 = 85%
-      expect(find.text('85%'), findsOneWidget);
+      // Raw score displayed as integer
+      expect(find.text('45'), findsOneWidget);
     });
 
     testWidgets('displays star icon in score badge', (tester) async {
@@ -129,32 +129,32 @@ void main() {
   });
 
   group('WindowCardWidget score colors', () {
-    testWidgets('high score (>=0.8) uses green', (tester) async {
+    testWidgets('high score (>=40) uses green', (tester) async {
       await tester.pumpWidget(_buildSubject(
-        window: _createWindow(score: 0.9),
+        window: _createWindow(score: 45),
       ));
-      expect(find.text('90%'), findsOneWidget);
+      expect(find.text('45'), findsOneWidget);
     });
 
-    testWidgets('medium score (>=0.6) renders', (tester) async {
+    testWidgets('medium score (>=25) renders', (tester) async {
       await tester.pumpWidget(_buildSubject(
-        window: _createWindow(score: 0.65),
+        window: _createWindow(score: 30),
       ));
-      expect(find.text('65%'), findsOneWidget);
+      expect(find.text('30'), findsOneWidget);
     });
 
-    testWidgets('low score (>=0.4) renders', (tester) async {
+    testWidgets('low score (>=15) renders', (tester) async {
       await tester.pumpWidget(_buildSubject(
-        window: _createWindow(score: 0.45),
+        window: _createWindow(score: 20),
       ));
-      expect(find.text('45%'), findsOneWidget);
+      expect(find.text('20'), findsOneWidget);
     });
 
-    testWidgets('very low score (<0.4) renders', (tester) async {
+    testWidgets('very low score (<15) renders', (tester) async {
       await tester.pumpWidget(_buildSubject(
-        window: _createWindow(score: 0.2),
+        window: _createWindow(score: 10),
       ));
-      expect(find.text('20%'), findsOneWidget);
+      expect(find.text('10'), findsOneWidget);
     });
   });
 

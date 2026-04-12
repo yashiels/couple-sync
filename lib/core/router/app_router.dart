@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'main_shell.dart';
 import 'routes.dart';
 import '../../services/providers/auth_state_provider.dart';
 import '../../features/auth/screens/auth_screen.dart';
@@ -9,7 +10,7 @@ import '../../features/onboarding/screens/routine_wizard_screen.dart';
 import '../../features/onboarding/screens/pairing_screen.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/calendar/screens/calendar_screen.dart';
-import '../../features/blocks/screens/blocks_screen.dart';
+import '../../features/blocks/screens/block_management_screen.dart';
 import '../../features/blocks/screens/block_form_screen.dart';
 import '../../features/overlap/screens/overlap_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
@@ -118,21 +119,59 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const PairingScreen(),
       ),
 
-      // Main App
-      GoRoute(
-        path: AppRoutes.home,
-        name: RouteNames.home,
-        builder: (context, state) => const HomeScreen(),
+      // Main App — wrapped in bottom navigation shell
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) =>
+            MainShell(navigationShell: navigationShell),
+        branches: [
+          // Tab 0: Home
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.home,
+                name: RouteNames.home,
+                builder: (context, state) => const HomeScreen(),
+              ),
+            ],
+          ),
+          // Tab 1: Calendar
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.calendar,
+                name: RouteNames.calendar,
+                builder: (context, state) => const CalendarScreen(),
+              ),
+            ],
+          ),
+          // Tab 2: Overlap
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.overlap,
+                name: RouteNames.overlap,
+                builder: (context, state) => const OverlapScreen(),
+              ),
+            ],
+          ),
+          // Tab 3: Settings
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.settings,
+                name: RouteNames.settings,
+                builder: (context, state) => const SettingsScreen(),
+              ),
+            ],
+          ),
+        ],
       ),
-      GoRoute(
-        path: AppRoutes.calendar,
-        name: RouteNames.calendar,
-        builder: (context, state) => const CalendarScreen(),
-      ),
+
+      // Standalone routes (pushed on top of shell)
       GoRoute(
         path: AppRoutes.blocks,
         name: RouteNames.blocks,
-        builder: (context, state) => const BlocksScreen(),
+        builder: (context, state) => const BlockManagementScreen(),
       ),
       GoRoute(
         path: AppRoutes.blockForm,
@@ -141,16 +180,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           final args = state.extra as BlockFormArgs?;
           return BlockFormScreen(args: args);
         },
-      ),
-      GoRoute(
-        path: AppRoutes.overlap,
-        name: RouteNames.overlap,
-        builder: (context, state) => const OverlapScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.settings,
-        name: RouteNames.settings,
-        builder: (context, state) => const SettingsScreen(),
       ),
     ],
 

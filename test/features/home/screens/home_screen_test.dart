@@ -23,7 +23,7 @@ OverlapResult _generateMockOverlapResult() {
       startUtc: start.millisecondsSinceEpoch,
       endUtc: end.millisecondsSinceEpoch,
       durationMinutes: 120,
-      score: 0.85 - (i * 0.05),
+      score: 45 - (i * 3).toDouble(),
       reasonableBoth: true,
     ));
   }
@@ -241,15 +241,15 @@ void main() {
   });
 
   group('HomeScreen upcoming windows list', () {
-    testWidgets('renders upcoming window cards with score percentages',
+    testWidgets('renders upcoming window cards with score numbers',
         (tester) async {
       await tester.pumpWidget(_buildSubject());
       await tester.pumpAndSettle();
 
       // Mock data generates 6 windows; first is nextWindow, remaining 5 are upcoming
-      // Each has a score displayed as percentage
-      final scoreFinder = find.textContaining('%');
-      expect(scoreFinder, findsWidgets);
+      // Each has a raw score displayed as a number (e.g. 45, 42, 39...)
+      // The first window (score 45) is in the NextWindowCard, others in list
+      expect(find.text('42'), findsAtLeast(1));
     });
 
     testWidgets('renders upcoming window cards with duration', (tester) async {

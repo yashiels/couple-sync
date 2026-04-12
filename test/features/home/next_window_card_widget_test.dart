@@ -8,7 +8,7 @@ import 'package:timezone/data/latest.dart' as tz_data;
 OverlapWindow _makeFutureWindow({
   int daysFromNow = 2,
   int durationMinutes = 120,
-  double score = 0.85,
+  double score = 45,
 }) {
   final now = DateTime.now();
   final start = now.add(Duration(days: daysFromNow, hours: 18));
@@ -33,7 +33,7 @@ OverlapWindow _makePastWindow() {
     startUtc: start.toUtc().millisecondsSinceEpoch,
     endUtc: end.toUtc().millisecondsSinceEpoch,
     durationMinutes: 120,
-    score: 0.9,
+    score: 50,
     reasonableBoth: true,
   );
 }
@@ -93,9 +93,9 @@ void main() {
 
     testWidgets('displays score chip', (tester) async {
       await tester.pumpWidget(
-        _buildSubject(window: _makeFutureWindow(score: 0.85)),
+        _buildSubject(window: _makeFutureWindow(score: 45)),
       );
-      expect(find.text('Score: 85%'), findsOneWidget);
+      expect(find.text('Score: 45'), findsOneWidget);
     });
 
     testWidgets('displays "Tap to see all windows" hint', (tester) async {
