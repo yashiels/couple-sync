@@ -258,7 +258,8 @@ void main() {
       final notifier = createNotifier();
 
       authStreamController.add(mockUser);
-      await Future.delayed(const Duration(milliseconds: 50));
+      // Wait for retry delay (1.5s) + buffer
+      await Future.delayed(const Duration(milliseconds: 2000));
 
       expect(notifier.state.isAuthenticated, isTrue);
       expect(notifier.state.userProfile, isNull);
@@ -275,7 +276,7 @@ void main() {
       final notifier = createNotifier();
 
       authStreamController.add(mockUser);
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future.delayed(const Duration(milliseconds: 2000));
 
       expect(notifier.state.isAuthenticated, isTrue);
       expect(notifier.state.userProfile, isNull);

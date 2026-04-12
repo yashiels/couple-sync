@@ -3,6 +3,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
+import 'core/utils/timezone_helper.dart';
 import 'firebase_options.dart';
 
 /// Top-level background message handler for FCM.
@@ -33,6 +34,9 @@ void main() async {
     _handleInitializationError('Unexpected error during initialization: $e');
     return;
   }
+
+  // Initialize timezone database before any TZDateTime operations
+  await TimezoneHelper.initialize();
 
   // Register FCM background message handler before runApp.
   // Must be called after Firebase.initializeApp().

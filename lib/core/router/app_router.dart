@@ -37,29 +37,21 @@ String? computeRedirect(AuthState authState, String currentPath) {
     if (currentPath == AppRoutes.timezoneSetup) {
       return null; // Stay on timezone setup
     }
-    // Allow auth screen to show sign-out option
-    if (currentPath == AppRoutes.auth) {
-      return null;
-    }
     return AppRoutes.timezoneSetup;
   }
 
-  // Guard 3: Has timezone but no coupleId → redirect to /routine-setup (then /pairing)
+  // Guard 3: Has timezone but no coupleId → redirect to /pairing
   if (!authState.hasCouple) {
     if (currentPath == AppRoutes.pairing) {
       return null; // Stay on pairing screen
     }
     if (currentPath == AppRoutes.routineSetup) {
-      return null; // Allow routine wizard
+      return null; // Allow routine wizard if navigated to explicitly
     }
     if (currentPath == AppRoutes.timezoneSetup) {
       return null; // Allow going back to timezone setup
     }
-    if (currentPath == AppRoutes.auth) {
-      return null; // Allow sign out
-    }
-    // Go to routine setup first, then pairing
-    return AppRoutes.routineSetup;
+    return AppRoutes.pairing;
   }
 
   // Guard 4: Has coupleId and navigating to /auth or /pairing → redirect to /home
@@ -76,18 +68,30 @@ String? computeRedirect(AuthState authState, String currentPath) {
 /// GoRouter configuration provider.
 /// Exposes the router via Riverpod for use in app.dart.
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
+  // Use a listenable that bridges Riverpod state changes to GoRouter refreshes.
+  final refreshNotifier = RouterRefreshNotifier();
+
+  // Eagerly read to ensure the provider is initialized and the auth listener starts.
+  ref.read(authStateProvider);
+
+  // Listen to auth state changes and notify the router to re-evaluate redirects.
+  ref.listen<AuthState>(authStateProvider, (prev, next) {
+    refreshNotifier.notify();
+  });
 
   return GoRouter(
     initialLocation: AppRoutes.home,
     debugLogDiagnostics: true,
 
-    // Redirect guards based on auth state
-    redirect: (context, state) =>
-        computeRedirect(authState, state.matchedLocation),
+    // Redirect guards based on auth state — reads current state at redirect time
+    redirect: (context, state) {
+      // Access the container's current auth state directly
+      final authState = ref.read(authStateProvider);
+      return computeRedirect(authState, state.matchedLocation);
+    },
 
     // Refresh router when auth state changes
-    refreshListenable: AuthStateListenable(authState),
+    refreshListenable: refreshNotifier,
 
     routes: [
       // Authentication
@@ -189,19 +193,8 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// Listenable that notifies when auth state changes.
-/// Used by GoRouter to refresh routes on auth changes.
-class AuthStateListenable extends ChangeNotifier {
-  // ignore: unused_field
-  final AuthState _authState;
-
-  AuthStateListenable(this._authState) {
-    // Notify listeners when auth state changes
-    // The router will re-evaluate redirects on change
-  }
-
-  /// Always return true to trigger refresh on every rebuild.
-  /// The redirect logic handles the actual state checking.
-  @override
-  bool get hasListeners => true;
+/// Bridges Riverpod state changes to GoRouter's refreshListenable.
+/// Call [notify] whenever the router should re-evaluate its redirects.
+class RouterRefreshNotifier extends ChangeNotifier {
+  void notify() => notifyListeners();
 }

@@ -1,14 +1,22 @@
 import 'package:couple_sync/features/onboarding/screens/pairing_screen.dart';
 import 'package:couple_sync/features/onboarding/widgets/share_code_tab.dart';
 import 'package:couple_sync/features/onboarding/widgets/enter_code_tab.dart';
+import 'package:couple_sync/services/providers/auth_state_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   Widget buildSubject() {
-    return const ProviderScope(
-      child: MaterialApp(
+    // PairingScreen reads authStateProvider.uid in initState for the Firestore listener.
+    // Override with a state that has no uid so the listener is skipped.
+    return ProviderScope(
+      overrides: [
+        authStateProvider.overrideWith(
+          (ref) => _TestAuthNotifier(),
+        ),
+      ],
+      child: const MaterialApp(
         home: PairingScreen(),
       ),
     );
@@ -86,4 +94,23 @@ void main() {
       expect(find.byType(EnterCodeTab), findsOneWidget);
     });
   });
+}
+
+/// Test-only notifier that doesn't call Firebase.
+class _TestAuthNotifier extends StateNotifier<AuthState>
+    implements AuthStateNotifier {
+  _TestAuthNotifier() : super(const AuthState(isLoading: false));
+
+  @override
+  Future<void> refreshProfile() async {}
+  @override
+  Future<bool> signInWithGoogle() async => false;
+  @override
+  Future<bool> signInWithApple() async => false;
+  @override
+  Future<void> signOut() async {}
+  @override
+  String? get lastError => null;
+  @override
+  void clearError() {}
 }

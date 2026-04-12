@@ -124,7 +124,7 @@ function firebaseDeps(
 
 // ─── Cloud Function export ────────────────────────────────────────────────────
 
-export const redeemInvite = onCall({ region: 'us-central1' }, async (request) => {
+export const redeemInvite = onCall({ region: 'us-central1', timeoutSeconds: 120 }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Must be signed in to redeem an invite');
   }

@@ -67,9 +67,13 @@ class NotificationService {
   /// Store or refresh an FCM token in the user's Firestore document.
   /// Uses arrayUnion so duplicate tokens are never written.
   Future<void> storeToken(String userId, String token) async {
-    await _firestore.collection('users').doc(userId).update({
-      'fcmTokens': FieldValue.arrayUnion([token]),
-    });
+    try {
+      await _firestore.collection('users').doc(userId).update({
+        'fcmTokens': FieldValue.arrayUnion([token]),
+      });
+    } catch (_) {
+      // Silently fail if user doc doesn't exist yet — token will be stored on next refresh
+    }
   }
 
   /// Handle a message received while the app is in the foreground.

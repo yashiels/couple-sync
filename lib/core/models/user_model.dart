@@ -31,7 +31,9 @@ class UserModel {
               ?.map((e) => e as String)
               .toList() ??
           [],
-      createdAt: (json['createdAt'] as Timestamp).toDate(),
+      createdAt: json['createdAt'] is Timestamp
+          ? (json['createdAt'] as Timestamp).toDate()
+          : DateTime.now(),
     );
   }
 

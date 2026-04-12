@@ -109,8 +109,8 @@ void main() {
       expect(computeRedirect(noTimezoneState, AppRoutes.timezoneSetup), isNull);
     });
 
-    test('stays on /auth to allow sign-out', () {
-      expect(computeRedirect(noTimezoneState, AppRoutes.auth), isNull);
+    test('redirects /auth to /timezone-setup', () {
+      expect(computeRedirect(noTimezoneState, AppRoutes.auth), AppRoutes.timezoneSetup);
     });
 
     test('redirects to /timezone-setup from /settings', () {
@@ -132,10 +132,10 @@ void main() {
       );
     });
 
-    test('redirects to /routine-setup from /home', () {
+    test('redirects to /pairing from /home', () {
       expect(
         computeRedirect(noCoupleState, AppRoutes.home),
-        AppRoutes.routineSetup,
+        AppRoutes.pairing,
       );
     });
 
@@ -151,8 +151,8 @@ void main() {
       expect(computeRedirect(noCoupleState, AppRoutes.timezoneSetup), isNull);
     });
 
-    test('stays on /auth to allow sign-out', () {
-      expect(computeRedirect(noCoupleState, AppRoutes.auth), isNull);
+    test('redirects /auth to /pairing', () {
+      expect(computeRedirect(noCoupleState, AppRoutes.auth), AppRoutes.pairing);
     });
   });
 
@@ -188,21 +188,17 @@ void main() {
     });
   });
 
-  group('AuthStateListenable', () {
-    test('hasListeners returns true by default', () {
-      final authState = makeAuthState();
-      final listenable = AuthStateListenable(authState);
-      expect(listenable.hasListeners, isTrue);
+  group('RouterRefreshNotifier', () {
+    test('notify triggers listeners', () {
+      final notifier = RouterRefreshNotifier();
+      var notified = false;
+      notifier.addListener(() => notified = true);
+      notifier.notify();
+      expect(notified, isTrue);
     });
 
-    test('can be constructed with loading state', () {
-      final authState = makeAuthState(isLoading: true);
-      expect(() => AuthStateListenable(authState), returnsNormally);
-    });
-
-    test('can be constructed with unauthenticated state', () {
-      final authState = makeAuthState(isAuthenticated: false);
-      expect(() => AuthStateListenable(authState), returnsNormally);
+    test('can be constructed', () {
+      expect(() => RouterRefreshNotifier(), returnsNormally);
     });
   });
 }
