@@ -83,3 +83,40 @@ jobs:
         run: git config --global --add safe.directory "$(dirname "$(dirname "$(which flutter)")")"
       - run: flutter pub get
       - run: flutter build apk --debug
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 7
+
+  ui-test-android:
+    name: UI Test (Maestro - Android)
+    runs-on: [self-hosted, Linux, X64, astra, android]
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: app-debug-apk
+          path: build/app/outputs/flutter-apk/
+      - name: Install Maestro
+        run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run UI tests on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          script: |
+            adb install -r build/app/outputs/flutter-apk/app-debug.apk
+            ~/.maestro/bin/maestro test .maestro/
