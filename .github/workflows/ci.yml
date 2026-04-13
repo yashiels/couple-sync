@@ -130,42 +130,5 @@ jobs:
       - name: Run Maestro UI tests
         run: ~/.maestro/bin/maestro test .maestro/ -e APP_ID=com.skynergroup.couple_sync
 
-  ui-test-ios:
-    name: UI Test (Maestro - iOS)
-    # Only run iOS tests on push to main, release tags, or when explicitly triggered.
-    # This avoids running on every PR since macOS runners are slow and the apex
-    # self-hosted Mac gets heavy wear. For PR validation, Android Maestro tests
-    # + Linux tests are sufficient.
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    # Use GitHub-hosted macOS runner to avoid overworking the apex Mac mini.
-    # On GitHub Teams: macOS minutes count 10x against the 3000/mo quota.
-    # To switch back to apex: runs-on: [self-hosted, macOS, apex]
-    runs-on: macos-14
-    needs: [analyze, test]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-      - name: Install Maestro
-        run: |
-          curl -Ls "https://get.maestro.mobile.dev" | bash
-          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
-      - run: flutter pub get
-      - name: Install CocoaPods dependencies
-        working-directory: ios
-        run: pod install
-      - name: Boot iOS simulator
-        run: |
-          xcrun simctl boot "iPhone 15" || xcrun simctl boot "iPhone 15 Pro" || true
-          xcrun simctl list devices booted
-      - name: Build iOS for simulator
-        run: flutter build ios --simulator --debug
-      - name: Install app on simulator
-        run: |
-          xcrun simctl install booted build/ios/iphonesimulator/Runner.app
-      - name: Run Maestro UI tests
-        run: ~/.maestro/bin/maestro test .maestro/ -e APP_ID=com.skynergroup.coupleSync
-      - name: Shutdown simulator
-        if: always()
-        run: xcrun simctl shutdown all || true
+  # iOS UI tests are intentionally NOT run in CI.
+  # Run locally on a simulator: maestro test .maestro/ -e APP_ID=com.skynergroup.coupleSync
