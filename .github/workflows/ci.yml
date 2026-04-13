@@ -127,7 +127,7 @@ jobs:
       - name: Install APK
         run: adb install -r build/app/outputs/flutter-apk/app-debug.apk
       - name: Run Maestro UI tests
-        run: ~/.maestro/bin/maestro test .maestro/
+        run: ~/.maestro/bin/maestro test .maestro/ -e APP_ID=com.skynergroup.couple_sync
 
   ui-test-ios:
     name: UI Test (Maestro - iOS)
@@ -152,7 +152,7 @@ jobs:
         run: |
           xcrun simctl install booted build/ios/iphonesimulator/Runner.app
       - name: Run Maestro UI tests
-        run: ~/.maestro/bin/maestro test .maestro/
+        run: ~/.maestro/bin/maestro test .maestro/ -e APP_ID=com.skynergroup.coupleSync
       - name: Shutdown simulator
         if: always()
         run: xcrun simctl shutdown all || true

@@ -1,4 +1,4 @@
-appId: com.skynergroup.couple_sync
+appId: ${APP_ID}
 name: Timezone Setup Validation
 ---
 - launchApp
