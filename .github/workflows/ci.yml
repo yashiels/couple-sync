@@ -5,6 +5,7 @@ on:
     branches: [main]
   push:
     branches: [main]
+  workflow_dispatch:  # allow manual trigger (e.g. to run iOS tests on any branch)
 
 jobs:
   analyze:
@@ -131,13 +132,25 @@ jobs:
 
   ui-test-ios:
     name: UI Test (Maestro - iOS)
-    runs-on: [self-hosted, macOS, apex]
+    # Only run iOS tests on push to main, release tags, or when explicitly triggered.
+    # This avoids running on every PR since macOS runners are slow and the apex
+    # self-hosted Mac gets heavy wear. For PR validation, Android Maestro tests
+    # + Linux tests are sufficient.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    # Use GitHub-hosted macOS runner to avoid overworking the apex Mac mini.
+    # On GitHub Teams: macOS minutes count 10x against the 3000/mo quota.
+    # To switch back to apex: runs-on: [self-hosted, macOS, apex]
+    runs-on: macos-14
     needs: [analyze, test]
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+      - name: Install Maestro
+        run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
       - run: flutter pub get
       - name: Install CocoaPods dependencies
         working-directory: ios
