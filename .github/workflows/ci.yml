@@ -94,35 +94,60 @@ jobs:
     name: UI Test (Maestro - Android)
     runs-on: [self-hosted, Linux, X64, astra, android]
     needs: [build]
-    # This job requires an Android emulator or attached device on the runner.
-    # If neither is available, the job is skipped.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - name: Check for Android device
-        id: check_device
-        run: |
-          if adb devices | grep -q "device$"; then
-            echo "available=true" >> $GITHUB_OUTPUT
-            echo "Android device available"
-          else
-            echo "available=false" >> $GITHUB_OUTPUT
-            echo "No Android device — skipping UI tests"
-          fi
       - name: Download APK
-        if: steps.check_device.outputs.available == 'true'
         uses: actions/download-artifact@v4
         with:
           name: app-debug-apk
           path: build/app/outputs/flutter-apk/
       - name: Install Maestro
-        if: steps.check_device.outputs.available == 'true'
         run: |
           curl -Ls "https://get.maestro.mobile.dev" | bash
           echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+      - name: Connect to Android emulator container
+        run: |
+          adb connect android-emulator:5555 || adb connect host.docker.internal:5555 || true
+          adb wait-for-device
+          adb devices
+      - name: Wait for emulator boot
+        run: |
+          for i in $(seq 1 60); do
+            if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+              echo "Emulator booted"
+              break
+            fi
+            sleep 2
+          done
       - name: Install APK
-        if: steps.check_device.outputs.available == 'true'
         run: adb install -r build/app/outputs/flutter-apk/app-debug.apk
       - name: Run Maestro UI tests
-        if: steps.check_device.outputs.available == 'true'
         run: ~/.maestro/bin/maestro test .maestro/
+
+  ui-test-ios:
+    name: UI Test (Maestro - iOS)
+    runs-on: [self-hosted, macOS, apex]
+    needs: [analyze, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - name: Install CocoaPods dependencies
+        working-directory: ios
+        run: pod install
+      - name: Boot iOS simulator
+        run: |
+          xcrun simctl boot "iPhone 15" || xcrun simctl boot "iPhone 15 Pro" || true
+          xcrun simctl list devices booted
+      - name: Build iOS for simulator
+        run: flutter build ios --simulator --debug
+      - name: Install app on simulator
+        run: |
+          xcrun simctl install booted build/ios/iphonesimulator/Runner.app
+      - name: Run Maestro UI tests
+        run: ~/.maestro/bin/maestro test .maestro/
+      - name: Shutdown simulator
+        if: always()
+        run: xcrun simctl shutdown all || true
