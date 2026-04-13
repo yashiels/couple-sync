@@ -1,0 +1,8 @@
+appId: com.skynergroup.couple_sync
+name: App Launches Without Crash
+---
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 10000
+- assertVisible:
+    text: "Couple Sync|Home|Calendar|Pair with Partner|Set Your Timezone"

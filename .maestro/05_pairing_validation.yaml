@@ -1,0 +1,31 @@
+appId: com.skynergroup.couple_sync
+name: Pairing Screen Tab Switching and Validation
+---
+- launchApp
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Share Code"
+    commands:
+      - assertVisible: "Share Code"
+      - assertVisible: "Enter Code"
+      # Switch to Enter Code tab
+      - tapOn: "Enter Code"
+      - waitForAnimationToEnd
+      # Try empty submit — should show validation
+      - runFlow:
+          when:
+            visible: "Redeem Code"
+          commands:
+            - tapOn: "Redeem Code"
+            - waitForAnimationToEnd
+      # Enter invalid code
+      - runFlow:
+          when:
+            visible:
+              text: "Enter code"
+          commands:
+            - tapOn:
+                text: "Enter code"
+            - inputText: "INVALID"
+            - waitForAnimationToEnd

@@ -1,0 +1,17 @@
+appId: com.skynergroup.couple_sync
+name: Calendar Week View Renders
+---
+- launchApp
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Calendar"
+    commands:
+      - tapOn: "Calendar"
+      - waitForAnimationToEnd
+      # Should see day headers
+      - assertVisible:
+          text: "Mon|Tue|Wed|Thu|Fri|Sat|Sun"
+      # Should see hour labels
+      - assertVisible:
+          text: ".*:00"

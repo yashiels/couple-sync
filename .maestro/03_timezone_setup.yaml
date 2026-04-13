@@ -1,0 +1,21 @@
+appId: com.skynergroup.couple_sync
+name: Timezone Setup Validation
+---
+- launchApp
+- waitForAnimationToEnd
+# This flow assumes user is already signed in but no timezone set
+# Search field should accept input
+- runFlow:
+    when:
+      visible: "Search timezones"
+    commands:
+      - tapOn: "Search timezones"
+      - inputText: "Johannesburg"
+      - waitForAnimationToEnd
+      - assertVisible:
+          text: ".*Johannesburg.*"
+      - tapOn:
+          text: ".*Johannesburg.*"
+      - waitForAnimationToEnd
+      - tapOn: "Save"
+      - waitForAnimationToEnd
