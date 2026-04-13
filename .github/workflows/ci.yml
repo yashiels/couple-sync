@@ -49,31 +49,19 @@ jobs:
       - run: npm test
 
   integration-test:
-    name: Integration Test
+    name: Integration Test (E2E)
     runs-on: [self-hosted, Linux, X64, astra]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-      - name: Fix Flutter git ownership
-        run: git config --global --add safe.directory "$(dirname "$(dirname "$(which flutter)")")"
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
       - name: Install function dependencies
         run: cd functions && npm ci
-      - name: Start Firebase Emulator Suite
-        run: firebase emulators:start --only auth,firestore,functions &
-        env:
-          FIREBASE_PROJECT: nexion-ai-prod
-      - name: Wait for emulators
-        run: sleep 10
-      - run: flutter pub get
-      - name: Run integration tests
-        run: flutter test integration_test/
+      - name: Run E2E tests against Firebase Emulator
+        run: bash scripts/run-e2e-tests.sh
       - name: Stop emulators
         if: always()
         run: pkill -f "firebase" || true
