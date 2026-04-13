@@ -19,14 +19,14 @@ cleanup() {
 trap cleanup EXIT
 
 # Wait for emulators to be ready
-echo "==> Waiting for emulators..."
-for i in $(seq 1 30); do
+echo "==> Waiting for emulators (up to 120s, may need to download jar)..."
+for i in $(seq 1 120); do
   if curl -sf http://localhost:8080/ > /dev/null 2>&1 && curl -sf http://localhost:9099/ > /dev/null 2>&1; then
-    echo "==> Emulators ready"
+    echo "==> Emulators ready (after ${i}s)"
     break
   fi
-  if [ "$i" = "30" ]; then
-    echo "==> ERROR: Emulators failed to start"
+  if [ "$i" = "120" ]; then
+    echo "==> ERROR: Emulators failed to start within 120s"
     exit 1
   fi
   sleep 1

@@ -60,6 +60,11 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
+      - name: Cache Firebase Emulators
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
       - name: Install function dependencies
