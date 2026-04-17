@@ -117,6 +117,20 @@ jobs:
           curl -Ls "https://get.maestro.mobile.dev" | bash
           echo "$HOME/.maestro/bin" >> $GITHUB_PATH
 
+      - name: Set up Android SDK PATH
+        run: |
+          echo "ANDROID_HOME: $ANDROID_HOME"
+          ls -la "$ANDROID_HOME" || true
+          SDKMGR=$(find "$ANDROID_HOME" -type f -name sdkmanager 2>/dev/null | head -1)
+          if [ -z "$SDKMGR" ]; then
+            echo "::error::sdkmanager not found anywhere under $ANDROID_HOME"
+            exit 1
+          fi
+          echo "Found sdkmanager at: $SDKMGR"
+          echo "$(dirname "$SDKMGR")" >> $GITHUB_PATH
+          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+          echo "$ANDROID_HOME/emulator" >> $GITHUB_PATH
+
       - name: Install emulator & system image
         run: |
           yes | sdkmanager --licenses >/dev/null || true
