@@ -131,15 +131,29 @@ jobs:
           echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
           echo "$ANDROID_HOME/emulator" >> $GITHUB_PATH
 
-      - name: Install emulator & system image
+      - name: Install system image
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager --install "emulator" "platform-tools" "$SYSTEM_IMAGE"
+          # emulator and platform-tools are pre-installed in compscidr image; only install the system image
+          sdkmanager --install "$SYSTEM_IMAGE"
+
+      - name: Install emulator runtime libs
+        run: |
+          # Android emulator v36 needs these shared libs even with -no-window.
+          # Without them the emulator segfaults at "Could not open libX11-xcb.so.1".
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 \
+            libxi6 libxtst6 libxdamage1 libxrandr2 libxfixes3 \
+            libnss3 libasound2t64 libpulse0 libgl1 libglvnd0 libdrm2
 
       - name: Create AVD (idempotent)
         run: |
-          if ! avdmanager list avd | grep -q "^    Name: $AVD_NAME$"; then
+          if [ ! -f "$HOME/.android/avd/$AVD_NAME.ini" ]; then
+            echo "Creating AVD $AVD_NAME"
             echo "no" | avdmanager create avd -n "$AVD_NAME" -k "$SYSTEM_IMAGE" --device "pixel_5" --force
+          else
+            echo "AVD $AVD_NAME already exists, reusing"
           fi
 
       - name: Start emulator
