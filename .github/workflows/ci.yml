@@ -100,35 +100,61 @@ jobs:
     name: UI Test (Maestro - Android)
     runs-on: [self-hosted, Linux, X64, astra, android]
     needs: [build]
+    env:
+      AVD_NAME: ci-avd
+      SYSTEM_IMAGE: system-images;android-33;google_apis;x86_64
     steps:
       - uses: actions/checkout@v4
+
       - name: Download APK
         uses: actions/download-artifact@v4
         with:
           name: app-debug-apk
           path: build/app/outputs/flutter-apk/
+
       - name: Install Maestro
         run: |
           curl -Ls "https://get.maestro.mobile.dev" | bash
           echo "$HOME/.maestro/bin" >> $GITHUB_PATH
-      - name: Connect to Android emulator container
+
+      - name: Install emulator & system image
         run: |
-          adb connect android-emulator:5555 || adb connect host.docker.internal:5555 || true
-          adb wait-for-device
-          adb devices
-      - name: Wait for emulator boot
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install "emulator" "platform-tools" "$SYSTEM_IMAGE"
+
+      - name: Create AVD (idempotent)
         run: |
-          for i in $(seq 1 60); do
-            if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
-              echo "Emulator booted"
-              break
-            fi
-            sleep 2
-          done
+          if ! avdmanager list avd | grep -q "^    Name: $AVD_NAME$"; then
+            echo "no" | avdmanager create avd -n "$AVD_NAME" -k "$SYSTEM_IMAGE" --device "pixel_5" --force
+          fi
+
+      - name: Start emulator
+        run: |
+          nohup "$ANDROID_SDK_ROOT/emulator/emulator" @$AVD_NAME \
+            -no-boot-anim -no-window -no-audio -no-snapshot \
+            -gpu swiftshader_indirect -memory 2048 \
+            >/tmp/emulator.log 2>&1 &
+          echo $! > /tmp/emulator.pid
+          adb start-server
+          timeout 240 bash -c \
+            'until adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r" | grep -q 1; do sleep 3; done'
+          adb shell input keyevent 82  # unlock screen
+
       - name: Install APK
         run: adb install -r build/app/outputs/flutter-apk/app-debug.apk
+
       - name: Run Maestro UI tests
-        run: ~/.maestro/bin/maestro test .maestro/ -e APP_ID=com.skynergroup.couple_sync
+        run: maestro test .maestro/ -e APP_ID=com.skynergroup.couple_sync
+
+      - name: Stop emulator
+        if: always()
+        run: |
+          adb emu kill 2>/dev/null || true
+          [ -f /tmp/emulator.pid ] && kill "$(cat /tmp/emulator.pid)" 2>/dev/null || true
+
+      - name: Emulator log (on failure)
+        if: failure()
+        run: tail -100 /tmp/emulator.log || true
 
   # iOS UI tests are intentionally NOT run in CI.
   # Run locally on a simulator: maestro test .maestro/ -e APP_ID=com.skynergroup.coupleSync
