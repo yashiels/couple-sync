@@ -577,7 +577,7 @@ class _FakeUser extends Fake implements User {
 /// Extends StateNotifier directly to avoid triggering _init().
 class _FakeAuthStateNotifier extends StateNotifier<AuthState>
     implements AuthStateNotifier {
-  _FakeAuthStateNotifier(AuthState initialState) : super(initialState);
+  _FakeAuthStateNotifier(super.initialState);
 
   @override
   String? get lastError => null;

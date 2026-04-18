@@ -82,7 +82,7 @@ void main() {
         AppColors.categoryOtherLight,
       ];
       for (final color in lightCategories) {
-        expect(color.alpha, equals(255), reason: 'Expected full opacity for $color');
+        expect((color.a * 255.0).round().clamp(0, 255), equals(255), reason: 'Expected full opacity for $color');
       }
     });
 
@@ -99,7 +99,7 @@ void main() {
         AppColors.categoryOtherDark,
       ];
       for (final color in darkCategories) {
-        expect(color.alpha, equals(255), reason: 'Expected full opacity for $color');
+        expect((color.a * 255.0).round().clamp(0, 255), equals(255), reason: 'Expected full opacity for $color');
       }
     });
 
@@ -133,4 +133,7 @@ void main() {
 }
 
 /// Returns the sum of the red, green, and blue channel values (0–765).
-int _rgbSum(Color color) => color.red + color.green + color.blue;
+int _rgbSum(Color color) =>
+    (color.r * 255.0).round().clamp(0, 255) +
+    (color.g * 255.0).round().clamp(0, 255) +
+    (color.b * 255.0).round().clamp(0, 255);

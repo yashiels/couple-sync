@@ -633,7 +633,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
               const SizedBox(height: 4),
               LinearProgressIndicator(
                 value: (score / 60).clamp(0.0, 1.0),
-                backgroundColor: color.withOpacity(0.2),
+                backgroundColor: color.withValues(alpha: 0.2),
                 valueColor: AlwaysStoppedAnimation(color),
               ),
             ],

@@ -84,7 +84,7 @@ class _RecurrencePickerWidgetState extends State<RecurrencePickerWidget> {
           _count = int.tryParse(value);
           break;
         case 'UNTIL':
-          _until = DateTime.tryParse(value);
+          _until = _parseRruleUntil(value);
           break;
       }
     }
@@ -134,6 +134,33 @@ class _RecurrencePickerWidgetState extends State<RecurrencePickerWidget> {
     }
   }
 
+  /// Parse RRULE UNTIL format (YYYYMMDDTHHMMSSz) into a UTC DateTime.
+  /// Returns null if the value is not a valid RRULE UNTIL string.
+  static DateTime? _parseRruleUntil(String until) {
+    final regex = RegExp(r'(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?');
+    final match = regex.firstMatch(until);
+    if (match == null) return null;
+    return DateTime.utc(
+      int.parse(match[1]!),
+      int.parse(match[2]!),
+      int.parse(match[3]!),
+      int.parse(match[4]!),
+      int.parse(match[5]!),
+      int.parse(match[6]!),
+    );
+  }
+
+  /// Serialize a DateTime to the RRULE UNTIL compact format (YYYYMMDDTHHMMSSz).
+  static String _formatRruleUntil(DateTime dt) {
+    final utc = dt.toUtc();
+    return '${utc.year.toString().padLeft(4, '0')}'
+        '${utc.month.toString().padLeft(2, '0')}'
+        '${utc.day.toString().padLeft(2, '0')}'
+        'T${utc.hour.toString().padLeft(2, '0')}'
+        '${utc.minute.toString().padLeft(2, '0')}'
+        '${utc.second.toString().padLeft(2, '0')}Z';
+  }
+
   /// Generate RRULE string from current state
   String? _generateRRULE() {
     if (_frequency == RecurrenceFrequency.none) {
@@ -176,7 +203,7 @@ class _RecurrencePickerWidgetState extends State<RecurrencePickerWidget> {
     if (_count != null) {
       parts.add('COUNT=$_count');
     } else if (_until != null) {
-      parts.add('UNTIL=${_until!.toIso8601String()}');
+      parts.add('UNTIL=${_formatRruleUntil(_until!)}');
     }
 
     return parts.join(';');
@@ -201,7 +228,7 @@ class _RecurrencePickerWidgetState extends State<RecurrencePickerWidget> {
         
         // Frequency dropdown
         DropdownButtonFormField<RecurrenceFrequency>(
-          value: _frequency,
+          initialValue: _frequency,
           decoration: const InputDecoration(
             labelText: 'Repeat',
             border: OutlineInputBorder(),
@@ -275,7 +302,7 @@ class _RecurrencePickerWidgetState extends State<RecurrencePickerWidget> {
               const SizedBox(width: 8),
               Expanded(
                 child: DropdownButtonFormField<int>(
-                  value: _interval,
+                  initialValue: _interval,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                     contentPadding: EdgeInsets.symmetric(horizontal: 12),
