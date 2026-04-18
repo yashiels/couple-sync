@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -175,22 +176,18 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
 
-          // Routine Section
+          // Window Preferences Section
           SettingsSectionWidget(
-            title: 'Routine',
+            title: 'Window Preferences',
             icon: Icons.schedule,
             children: [
-              const SettingsItem(
-                title: 'Weekly Routine',
-                subtitle: 'Your weekly availability blocks',
-                trailing: Icon(Icons.info_outline, size: 20),
-              ),
-              SettingsButton(
-                title: 'Re-run Setup',
-                subtitle: 'Configure your weekly routine again',
-                label: 'Setup',
-                icon: Icons.refresh,
-                onTap: () => context.go(AppRoutes.routineSetup),
+              SettingsToggle(
+                title: 'Show late-night windows',
+                subtitle:
+                    'Include 23:00–07:00 local time in overlap windows',
+                value: userProfile?.showLateNightWindows ?? false,
+                onChanged: (value) =>
+                    _setLateNightWindows(context, ref, authState.uid, value),
               ),
             ],
           ),
@@ -260,6 +257,31 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _setLateNightWindows(
+    BuildContext context,
+    WidgetRef ref,
+    String? uid,
+    bool value,
+  ) async {
+    if (uid == null) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .update({'showLateNightWindows': value});
+      await ref.read(authStateProvider.notifier).refreshProfile();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update preference: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
   }
 
   /// Format the last sync time for display.

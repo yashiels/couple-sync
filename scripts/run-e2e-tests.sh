@@ -133,7 +133,7 @@ async function test() {
     if (!authed) return path === '/auth' ? null : '/auth';
     if (!hasTz) return path === '/timezone-setup' ? null : '/timezone-setup';
     if (!hasCouple) {
-      if (['/pairing','/routine-setup','/timezone-setup'].includes(path)) return null;
+      if (['/pairing','/timezone-setup'].includes(path)) return null;
       return '/pairing';
     }
     if (['/auth','/pairing'].includes(path)) return '/home';

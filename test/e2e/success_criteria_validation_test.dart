@@ -300,13 +300,12 @@ void main() {
   });
 
   // ─────────────────────────────────────────────────────────────────────────
-  // SC 9 — All 10 screens are functional and navigable
+  // SC 9 — All 9 screens are functional and navigable
   // ─────────────────────────────────────────────────────────────────────────
-  group('SC-9: All 10 app screens have defined routes', () {
+  group('SC-9: All 9 app screens have defined routes', () {
     final allRoutes = [
       AppRoutes.auth,
       AppRoutes.timezoneSetup,
-      AppRoutes.routineSetup,
       AppRoutes.pairing,
       AppRoutes.home,
       AppRoutes.calendar,
@@ -316,9 +315,9 @@ void main() {
       AppRoutes.settings,
     ];
 
-    test('exactly 10 distinct screen routes are defined', () {
-      expect(allRoutes.length, 10);
-      expect(allRoutes.toSet().length, 10, reason: 'all routes are unique');
+    test('exactly 9 distinct screen routes are defined', () {
+      expect(allRoutes.length, 9);
+      expect(allRoutes.toSet().length, 9, reason: 'all routes are unique');
     });
 
     test('all routes start with a leading slash', () {
@@ -332,7 +331,6 @@ void main() {
       expect(allRoutes, containsAll([
         '/auth',
         '/timezone-setup',
-        '/routine-setup',
         '/pairing',
       ]));
     });

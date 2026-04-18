@@ -10,3 +10,4 @@ export { onOverlapWrite } from './onOverlapWrite';
 export { onInviteCreate } from './onInviteCreate';
 export { redeemInvite } from './redeemInvite';
 export { cleanupExpiredInvites } from './cleanupExpiredInvites';
+export { onUserPrefsWrite } from './onUserPrefsWrite';

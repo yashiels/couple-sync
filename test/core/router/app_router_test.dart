@@ -139,10 +139,6 @@ void main() {
       );
     });
 
-    test('stays on /routine-setup', () {
-      expect(computeRedirect(noCoupleState, AppRoutes.routineSetup), isNull);
-    });
-
     test('stays on /pairing', () {
       expect(computeRedirect(noCoupleState, AppRoutes.pairing), isNull);
     });

@@ -6,7 +6,6 @@ import 'routes.dart';
 import '../../services/providers/auth_state_provider.dart';
 import '../../features/auth/screens/auth_screen.dart';
 import '../../features/onboarding/screens/timezone_setup_screen.dart';
-import '../../features/onboarding/screens/routine_wizard_screen.dart';
 import '../../features/onboarding/screens/pairing_screen.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/calendar/screens/calendar_screen.dart';
@@ -45,9 +44,6 @@ String? computeRedirect(AuthState authState, String currentPath) {
   if (!authState.hasCouple) {
     if (currentPath == AppRoutes.pairing) {
       return null; // Stay on pairing screen
-    }
-    if (currentPath == AppRoutes.routineSetup) {
-      return null; // Allow routine wizard if navigated to explicitly
     }
     if (currentPath == AppRoutes.timezoneSetup) {
       return null; // Allow going back to timezone setup
@@ -107,11 +103,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.timezoneSetup,
         name: RouteNames.timezoneSetup,
         builder: (context, state) => const TimezoneSetupScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.routineSetup,
-        name: RouteNames.routineSetup,
-        builder: (context, state) => const RoutineWizardScreen(),
       ),
       GoRoute(
         path: AppRoutes.pairing,

@@ -170,21 +170,35 @@ const HORIZON_DAYS = 14;
 const MIN_WINDOW_MINUTES = 30;
 const MAX_WINDOWS = 20;
 
+export interface PartnerPrefs {
+  showLateNightWindows?: boolean;
+}
+
 export function computeOverlap(
   blocksA: TimeBlock[],
   blocksB: TimeBlock[],
   timezoneA: string,
   timezoneB: string,
-  now = Date.now()
+  now = Date.now(),
+  prefsA: PartnerPrefs = {},
+  prefsB: PartnerPrefs = {}
 ): OverlapWindow[] {
   const windowEnd = now + HORIZON_DAYS * 24 * 60 * 60 * 1000;
 
   const freeA = computeFreeIntervals(blocksA, now, windowEnd);
   const freeB = computeFreeIntervals(blocksB, now, windowEnd);
 
-  // Intersect, then clip to waking hours in both timezones
-  const overlap = intersectIntervals(freeA, freeB);
-  const clipped = clipToWakingHours(clipToWakingHours(overlap, timezoneA), timezoneB);
+  // Intersect, then clip to waking hours per partner (skip clip if they opted into late-night)
+  let clipped = intersectIntervals(freeA, freeB);
+  if (!prefsA.showLateNightWindows) {
+    clipped = clipToWakingHours(clipped, timezoneA);
+  }
+  if (!prefsB.showLateNightWindows) {
+    clipped = clipToWakingHours(clipped, timezoneB);
+  }
+
+  const reasonableBoth =
+    !prefsA.showLateNightWindows && !prefsB.showLateNightWindows;
 
   const windows: OverlapWindow[] = clipped
     .map(([s, e]) => ({
@@ -192,7 +206,7 @@ export function computeOverlap(
       endUtc: e,
       durationMinutes: Math.round((e - s) / 60_000),
       score: scoreWindow(s, e, timezoneA, timezoneB, now),
-      reasonableBoth: true,
+      reasonableBoth,
     }))
     .filter((w) => w.durationMinutes >= MIN_WINDOW_MINUTES);
 

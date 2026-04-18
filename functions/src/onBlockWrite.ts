@@ -5,9 +5,14 @@ import { CoupleDoc, OverlapResult, TimeBlock } from './lib/types';
 
 // ─── Testable business logic ──────────────────────────────────────────────────
 
+interface UserForOverlap {
+  timezone: string;
+  showLateNightWindows?: boolean;
+}
+
 interface BlockWriteDeps {
   getCouple(id: string): Promise<CoupleDoc | null>;
-  getUser(uid: string): Promise<{ timezone: string } | null>;
+  getUser(uid: string): Promise<UserForOverlap | null>;
   getBlocks(coupleId: string): Promise<TimeBlock[]>;
   getCurrentOverlap(coupleId: string): Promise<{ blockHashA: string; blockHashB: string } | null>;
   saveOverlap(coupleId: string, result: OverlapResult): Promise<void>;
@@ -38,7 +43,15 @@ export async function handleBlockWrite(
 
   const timezoneA = userA?.timezone ?? 'UTC';
   const timezoneB = userB?.timezone ?? 'UTC';
-  const windows = computeOverlap(blocksA, blocksB, timezoneA, timezoneB);
+  const windows = computeOverlap(
+    blocksA,
+    blocksB,
+    timezoneA,
+    timezoneB,
+    Date.now(),
+    { showLateNightWindows: userA?.showLateNightWindows === true },
+    { showLateNightWindows: userB?.showLateNightWindows === true },
+  );
 
   await deps.saveOverlap(coupleId, {
     windows,
@@ -63,7 +76,9 @@ export const onBlockWrite = onDocumentWritten(
       },
       getUser: async (uid) => {
         const snap = await db.collection('users').doc(uid).get();
-        return snap.exists ? (snap.data() as { timezone: string }) : null;
+        if (!snap.exists) return null;
+        const d = snap.data() as { timezone: string; showLateNightWindows?: boolean };
+        return { timezone: d.timezone, showLateNightWindows: d.showLateNightWindows };
       },
       getBlocks: async (cId) => {
         const snap = await db.collection('timeblocks').doc(cId).collection('blocks').get();

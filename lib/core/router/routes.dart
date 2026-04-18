@@ -6,7 +6,6 @@ abstract class AppRoutes {
   // Authentication & Onboarding
   static const auth = '/auth';
   static const timezoneSetup = '/timezone-setup';
-  static const routineSetup = '/routine-setup';
   static const pairing = '/pairing';
 
   // Main App
@@ -22,7 +21,6 @@ abstract class AppRoutes {
 abstract class RouteNames {
   static const auth = 'auth';
   static const timezoneSetup = 'timezone-setup';
-  static const routineSetup = 'routine-setup';
   static const pairing = 'pairing';
   static const home = 'home';
   static const calendar = 'calendar';
@@ -58,7 +56,6 @@ class BlockFormArgs {
 extension GoRouterNavigation on GoRouter {
   void goToAuth() => go(AppRoutes.auth);
   void goToTimezoneSetup() => go(AppRoutes.timezoneSetup);
-  void goToRoutineSetup() => go(AppRoutes.routineSetup);
   void goToPairing() => go(AppRoutes.pairing);
   void goToHome() => go(AppRoutes.home);
   void goToCalendar() => go(AppRoutes.calendar);

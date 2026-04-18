@@ -6,7 +6,6 @@ void main() {
     test('auth/onboarding paths start with slash', () {
       expect(AppRoutes.auth, startsWith('/'));
       expect(AppRoutes.timezoneSetup, startsWith('/'));
-      expect(AppRoutes.routineSetup, startsWith('/'));
       expect(AppRoutes.pairing, startsWith('/'));
     });
 
@@ -22,7 +21,6 @@ void main() {
     test('auth/onboarding path values are correct', () {
       expect(AppRoutes.auth, '/auth');
       expect(AppRoutes.timezoneSetup, '/timezone-setup');
-      expect(AppRoutes.routineSetup, '/routine-setup');
       expect(AppRoutes.pairing, '/pairing');
     });
 
@@ -39,7 +37,6 @@ void main() {
       final paths = [
         AppRoutes.auth,
         AppRoutes.timezoneSetup,
-        AppRoutes.routineSetup,
         AppRoutes.pairing,
         AppRoutes.home,
         AppRoutes.calendar,
@@ -56,7 +53,6 @@ void main() {
     test('route name values are correct', () {
       expect(RouteNames.auth, 'auth');
       expect(RouteNames.timezoneSetup, 'timezone-setup');
-      expect(RouteNames.routineSetup, 'routine-setup');
       expect(RouteNames.pairing, 'pairing');
       expect(RouteNames.home, 'home');
       expect(RouteNames.calendar, 'calendar');
@@ -70,7 +66,6 @@ void main() {
       final names = [
         RouteNames.auth,
         RouteNames.timezoneSetup,
-        RouteNames.routineSetup,
         RouteNames.pairing,
         RouteNames.home,
         RouteNames.calendar,

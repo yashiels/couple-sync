@@ -51,17 +51,17 @@ void main() {
       expect(doc.data()!['timezone'], 'Africa/Johannesburg');
     });
 
-    testWidgets('routine blocks saved to pendingBlocks for unpaired user',
+    testWidgets('manual blocks saved to pendingBlocks for unpaired user',
         (tester) async {
       // Create unpaired user
       final credential =
           await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: 'routine@example.com',
+        email: 'pending@example.com',
         password: 'password123',
       );
       final uid = credential.user!.uid;
 
-      // Save routine blocks to pendingBlocks (since no coupleId)
+      // Save manual blocks to pendingBlocks (since no coupleId)
       final batch = FirebaseFirestore.instance.batch();
       final blocks = [
         {

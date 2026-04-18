@@ -125,11 +125,12 @@ void main() {
       expect(find.text('Timezone'), findsOneWidget);
     });
 
-    testWidgets('displays Routine section after scrolling', (tester) async {
+    testWidgets('displays Window Preferences section after scrolling',
+        (tester) async {
       await tester.pumpWidget(_buildSubject());
       await tester.pumpAndSettle();
-      await _scrollUntilVisible(tester, find.text('Routine'));
-      expect(find.text('Routine'), findsOneWidget);
+      await _scrollUntilVisible(tester, find.text('Window Preferences'));
+      expect(find.text('Window Preferences'), findsOneWidget);
     });
 
     testWidgets('displays Notifications section after scrolling',
@@ -205,19 +206,27 @@ void main() {
     });
   });
 
-  group('SettingsScreen Routine section', () {
-    testWidgets('shows Weekly Routine info', (tester) async {
+  group('SettingsScreen Window Preferences section', () {
+    testWidgets('shows late-night windows toggle', (tester) async {
       await tester.pumpWidget(_buildSubject());
       await tester.pumpAndSettle();
-      await _scrollUntilVisible(tester, find.text('Weekly Routine'));
-      expect(find.text('Weekly Routine'), findsOneWidget);
+      await _scrollUntilVisible(tester, find.text('Show late-night windows'));
+      expect(find.text('Show late-night windows'), findsOneWidget);
     });
 
-    testWidgets('shows Re-run Setup button', (tester) async {
+    testWidgets('late-night toggle defaults to off', (tester) async {
       await tester.pumpWidget(_buildSubject());
       await tester.pumpAndSettle();
-      await _scrollUntilVisible(tester, find.text('Re-run Setup'));
-      expect(find.text('Re-run Setup'), findsOneWidget);
+      await _scrollUntilVisible(tester, find.text('Show late-night windows'));
+      final switchFinder = find.descendant(
+        of: find.ancestor(
+          of: find.text('Show late-night windows'),
+          matching: find.byType(Card),
+        ),
+        matching: find.byType(Switch),
+      );
+      final switchWidget = tester.widget<Switch>(switchFinder);
+      expect(switchWidget.value, isFalse);
     });
   });
 
@@ -227,14 +236,20 @@ void main() {
       await tester.pumpAndSettle();
       await _scrollUntilVisible(tester, find.text('New Window Alerts'));
       expect(find.text('New Window Alerts'), findsOneWidget);
-      expect(find.byType(Switch), findsOneWidget);
     });
 
     testWidgets('notification toggle defaults to enabled', (tester) async {
       await tester.pumpWidget(_buildSubject());
       await tester.pumpAndSettle();
-      await _scrollUntilVisible(tester, find.byType(Switch));
-      final switchWidget = tester.widget<Switch>(find.byType(Switch));
+      await _scrollUntilVisible(tester, find.text('New Window Alerts'));
+      final switchFinder = find.descendant(
+        of: find.ancestor(
+          of: find.text('New Window Alerts'),
+          matching: find.byType(Card),
+        ),
+        matching: find.byType(Switch),
+      );
+      final switchWidget = tester.widget<Switch>(switchFinder);
       expect(switchWidget.value, isTrue);
     });
   });

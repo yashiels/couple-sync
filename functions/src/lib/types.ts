@@ -35,6 +35,7 @@ export interface UserDoc {
   coupleId?: string;
   fcmTokens: string[];
   createdAt: number;
+  showLateNightWindows?: boolean; // if true, skip 07:00–23:00 waking-hours clip for this partner
 }
 
 export interface CoupleDoc {
