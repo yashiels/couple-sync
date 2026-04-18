@@ -366,22 +366,6 @@ void main() {
       });
     });
 
-    group('getCalendarApi', () {
-      test('returns null when not connected', () async {
-        expect(await calendarService.getCalendarApi(), isNull);
-      });
-
-      test('returns CalendarApi when connected with valid token', () async {
-        fakeSecureStorage._store['google_calendar_access_token'] = 'valid-token';
-        fakeSecureStorage._store['google_calendar_token_expiry'] =
-            DateTime.now().add(const Duration(hours: 1)).toIso8601String();
-
-        final api = await calendarService.getCalendarApi();
-
-        expect(api, isNotNull);
-      });
-    });
-
     group('connectionStateChanges', () {
       test('emits true when connected', () async {
         fakeSecureStorage._store['google_calendar_access_token'] = 'some-token';

@@ -237,28 +237,6 @@ class CalendarService {
     }
   }
 
-  /// Gets the Google Calendar API client.
-  /// Returns null if not connected or token refresh failed.
-  /// The caller is responsible for closing the underlying HTTP client.
-  Future<calendar.CalendarApi?> getCalendarApi() async {
-    final accessToken = await getAccessToken();
-    if (accessToken == null) {
-      return null;
-    }
-
-    // Create an authenticated HTTP client
-    final httpClient = _AuthenticatedClient(
-      http.Client(),
-      auth.AccessToken(
-        'Bearer',
-        accessToken,
-        DateTime.now().toUtc().add(const Duration(hours: 1)),
-      ),
-    );
-
-    return calendar.CalendarApi(httpClient);
-  }
-
   /// Fetches freebusy intervals from Google Calendar for the next 14 days.
   /// Returns a list of busy time intervals (start and end times in UTC).
   /// Privacy-first: NEVER fetches or stores event titles.

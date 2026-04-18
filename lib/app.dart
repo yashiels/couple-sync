@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/router/app_router.dart';
 import 'core/router/routes.dart';
 import 'core/theme/app_theme.dart';
+import 'services/providers/notification_provider.dart';
 
 /// Theme mode provider for managing light/dark theme.
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
@@ -25,6 +26,10 @@ class _MyAppState extends ConsumerState<MyApp> {
   @override
   void initState() {
     super.initState();
+
+    // Eagerly instantiate NotificationService so it registers FCM listeners and
+    // calls initialize() as soon as an authenticated userId is available.
+    ref.read(notificationServiceProvider);
 
     // Handle notification tap when app was in background (not terminated).
     // Tapping the system notification opens the app and navigates to /overlap.
