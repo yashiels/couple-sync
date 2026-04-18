@@ -11,7 +11,7 @@ export async function handleOnInviteCreate(
   code: string,
   deps: InviteCreateDeps
 ): Promise<void> {
-  const deepLinkUrl = `coupleschedule://invite/${code}`;
+  const deepLinkUrl = `https://coupleschedule.app/invite/${code}`;
   await deps.updateDeepLink(code, deepLinkUrl);
 }
 

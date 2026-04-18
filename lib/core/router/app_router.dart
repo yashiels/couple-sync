@@ -24,10 +24,15 @@ String? computeRedirect(AuthState authState, String currentPath) {
   }
 
   // Guard 1: Not authenticated → redirect to /auth
-  // Allow access to auth screen when not authenticated
+  // Allow access to auth screen when not authenticated.
+  // Also allow /invite/* to pass through so the route-level redirect can
+  // forward to /pairing; the auth guard there will fire on subsequent navigation.
   if (!authState.isAuthenticated) {
     if (currentPath == AppRoutes.auth) {
       return null; // Stay on auth screen
+    }
+    if (currentPath.startsWith(AppRoutes.inviteBase)) {
+      return null; // Let the GoRoute redirect handle the invite path
     }
     return AppRoutes.auth;
   }
@@ -108,6 +113,23 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.pairing,
         name: RouteNames.pairing,
         builder: (context, state) => const PairingScreen(),
+      ),
+
+      // Universal Link / App Link handler
+      // iOS: https://coupleschedule.app/invite/<code>  (Associated Domains)
+      // Android: https://coupleschedule.app/invite/<code>  (App Links / autoVerify)
+      // go_router matches this path when the OS hands the HTTPS URL to the app.
+      // Unauthenticated users are redirected to /auth by computeRedirect; the
+      // code is passed through so the pairing screen can pre-fill it.
+      GoRoute(
+        path: '${AppRoutes.inviteBase}/:code',
+        name: RouteNames.invite,
+        redirect: (context, state) {
+          final code = state.pathParameters['code'] ?? '';
+          // Hand off to /pairing with the invite code as a query parameter so
+          // EnterCodeTab can auto-populate the field.
+          return '${AppRoutes.pairing}?code=${Uri.encodeComponent(code)}';
+        },
       ),
 
       // Main App — wrapped in bottom navigation shell
