@@ -5,18 +5,31 @@ import '../../../services/providers/auth_state_provider.dart';
 
 /// Tab for entering partner's invite code and redeeming it.
 /// Calls the redeemInvite Cloud Function and handles all error cases.
+///
+/// [initialCode] pre-fills the text field when the user arrives via a deep
+/// link (e.g. https://coupleschedule.app/invite/ABC123).
 class EnterCodeTab extends ConsumerStatefulWidget {
-  const EnterCodeTab({super.key});
+  final String? initialCode;
+
+  const EnterCodeTab({super.key, this.initialCode});
 
   @override
   ConsumerState<EnterCodeTab> createState() => _EnterCodeTabState();
 }
 
 class _EnterCodeTabState extends ConsumerState<EnterCodeTab> {
-  final _codeController = TextEditingController();
+  late final TextEditingController _codeController;
   bool _isLoading = false;
   String? _error;
   String? _success;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-fill the code field when arriving via deep link.
+    final preFill = widget.initialCode?.toUpperCase() ?? '';
+    _codeController = TextEditingController(text: preFill);
+  }
 
   @override
   void dispose() {
