@@ -121,7 +121,12 @@ class CalendarSyncNotifier extends StateNotifier<CalendarSyncState> {
   }
 
   /// Syncs Google Calendar freebusy data to Firestore.
-  /// Implements replace strategy: deletes existing google-sourced blocks, then writes new ones.
+  ///
+  /// Uses a single Firestore WriteBatch (atomic replace strategy): all deletes
+  /// of existing google-sourced blocks and all writes of new blocks are staged
+  /// together and committed in one shot. There is no window where the old
+  /// blocks are gone but the new ones have not yet been written.
+  ///
   /// Privacy-first: NEVER fetches or stores event titles.
   Future<CalendarSyncResult> sync() async {
     // Check if connected
@@ -154,9 +159,14 @@ class CalendarSyncNotifier extends StateNotifier<CalendarSyncState> {
 
     state = state.copyWith(isSyncing: true, clearSyncError: true);
 
+    // Track counts so the catch block can report accurate numbers when the
+    // error occurs after any partial work (e.g. during the atomic commit).
+    int blocksFetched = 0;
+
     try {
       // 1. Fetch freebusy data from Google Calendar (privacy-first: no titles)
       final busyIntervals = await _calendarService.fetchFreebusy();
+      blocksFetched = busyIntervals.length;
 
       // 2. Convert to TimeBlocks (with generic "Busy" title)
       final newBlocks = _calendarService.convertToTimeBlocks(
@@ -165,24 +175,22 @@ class CalendarSyncNotifier extends StateNotifier<CalendarSyncState> {
         timezone: userProfile.timezone,
       );
 
-      // 3. Delete existing google-sourced blocks (replace strategy)
-      final deletedCount = await _firestoreService.deleteGoogleSourcedBlocks(
+      // 3. Atomically delete existing google-sourced blocks and write new ones
+      //    in a single WriteBatch commit — eliminates the data-loss window that
+      //    existed when delete and write were two separate operations.
+      final (:deletedCount, :createdCount) =
+          await _firestoreService.atomicReplaceGoogleSourcedBlocks(
         coupleId,
         userId,
-      );
-
-      // 4. Write new blocks
-      final createdCount = await _firestoreService.batchCreateBlocks(
-        coupleId,
         newBlocks,
       );
 
-      // 5. Update last sync time
+      // 4. Update last sync time
       await _calendarService.updateLastSyncTime();
       final syncTime = DateTime.now();
 
       final result = CalendarSyncResult(
-        blocksFetched: busyIntervals.length,
+        blocksFetched: blocksFetched,
         blocksDeleted: deletedCount,
         blocksCreated: createdCount,
         syncedAt: syncTime,
@@ -200,8 +208,12 @@ class CalendarSyncNotifier extends StateNotifier<CalendarSyncState> {
           ? e.message
           : 'Failed to sync calendar: ${e.toString()}';
 
+      // Report the number of blocks that were fetched before the failure so
+      // the caller has accurate diagnostics. Because the replace is now atomic,
+      // blocksDeleted and blocksCreated are always both 0 on any error —
+      // the batch either fully commits or fully rolls back.
       final result = CalendarSyncResult(
-        blocksFetched: 0,
+        blocksFetched: blocksFetched,
         blocksDeleted: 0,
         blocksCreated: 0,
         syncedAt: DateTime.now(),
