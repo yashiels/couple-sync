@@ -1,18 +1,49 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
+import 'core/router/routes.dart';
+import 'core/theme/app_theme.dart';
 
 /// Theme mode provider for managing light/dark theme.
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
 
 /// Main application widget that provides the app shell.
 /// Uses Riverpod for state management and GoRouter for navigation.
-class MyApp extends ConsumerWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+
+    // Handle notification tap when app was in background (not terminated).
+    // Tapping the system notification opens the app and navigates to /overlap.
+    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      final router = ref.read(routerProvider);
+      router.go(AppRoutes.overlap);
+    });
+
+    // Handle notification tap when app was terminated.
+    // getInitialMessage() returns the message that launched the app if any.
+    FirebaseMessaging.instance.getInitialMessage().then((message) {
+      if (message != null && mounted) {
+        final router = ref.read(routerProvider);
+        // Use addPostFrameCallback so the router is ready before navigating
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          router.go(AppRoutes.overlap);
+        });
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final themeMode = ref.watch(themeModeProvider);
     final router = ref.watch(routerProvider);
 
@@ -20,15 +51,15 @@ class MyApp extends ConsumerWidget {
       // App configuration
       title: 'Couple Sync',
       debugShowCheckedModeBanner: false,
-      
+
       // Theme configuration
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
-      
+
       // Router configuration from Riverpod provider
       routerConfig: router,
-      
+
       // Accessibility
       builder: (context, child) {
         // Ensure text scaling respects user preferences

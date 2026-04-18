@@ -1,0 +1,14 @@
+appId: ${APP_ID}
+name: Overlap Screen Renders Windows
+---
+- launchApp
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Overlap"
+    commands:
+      - tapOn: "Overlap"
+      - waitForAnimationToEnd
+      # Either we see overlap windows or empty state
+      - assertVisible:
+          text: ".*overlap.*|.*window.*|.*free time.*"

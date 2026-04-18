@@ -74,7 +74,11 @@ class TimeBlock {
         (e) => e.name == json['visibility'],
         orElse: () => TimeBlockVisibility.bothPartners,
       ),
-      createdAt: (json['createdAt'] as Timestamp).toDate(),
+      createdAt: json['createdAt'] is Timestamp
+          ? (json['createdAt'] as Timestamp).toDate()
+          : json['createdAt'] is int
+              ? DateTime.fromMillisecondsSinceEpoch(json['createdAt'] as int)
+              : DateTime.now(),
     );
   }
 

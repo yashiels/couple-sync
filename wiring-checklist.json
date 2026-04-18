@@ -2,7 +2,7 @@
   {"file": "lib/main.dart", "pattern": "Firebase\\.initializeApp", "description": "main.dart initializes Firebase before runApp"},
   {"file": "lib/main.dart", "pattern": "firebase_options\\.dart", "description": "main.dart imports firebase_options.dart"},
   {"file": "lib/app.dart", "pattern": "MaterialApp\\.router", "description": "app.dart uses MaterialApp.router with go_router"},
-  {"file": "lib/app.dart", "pattern": "ProviderScope", "description": "app.dart wraps app in Riverpod ProviderScope"},
+  {"file": "lib/main.dart", "pattern": "ProviderScope", "description": "main.dart wraps app in Riverpod ProviderScope"},
   {"file": "lib/core/router/app_router.dart", "pattern": "GoRouter", "description": "router uses GoRouter with redirect guards"},
   {"file": "lib/core/router/app_router.dart", "pattern": "/auth", "description": "router defines /auth route"},
   {"file": "lib/core/router/app_router.dart", "pattern": "/home", "description": "router defines /home route"},

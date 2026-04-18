@@ -37,7 +37,7 @@ class BlockEventWidget extends StatelessWidget {
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
           color: displayColor,
           borderRadius: BorderRadius.circular(4),
@@ -48,32 +48,35 @@ class BlockEventWidget extends StatelessWidget {
             width: 1,
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              block.title,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: _getTextColor(categoryColor),
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            if (block.durationMinutes >= 30) ...[
-              const SizedBox(height: 2),
+        child: ClipRect(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
               Text(
-                '$startTime - $endTime',
+                block.title,
                 style: TextStyle(
-                  fontSize: 9,
-                  color: _getTextColor(categoryColor).withOpacity(0.9),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: _getTextColor(categoryColor),
                 ),
                 maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
+              if (block.durationMinutes >= 60) ...[
+                const SizedBox(height: 2),
+                Text(
+                  '$startTime - $endTime',
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: _getTextColor(categoryColor).withOpacity(0.9),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

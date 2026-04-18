@@ -94,7 +94,9 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
   }
 
   /// Fetches the user profile from Firestore and updates state.
-  Future<void> _fetchUserProfile(String uid) async {
+  /// Retries once after a short delay if doc not found (handles race with
+  /// _createOrUpdateUserDocument during initial sign-in).
+  Future<void> _fetchUserProfile(String uid, {bool isRetry = false}) async {
     try {
       final doc = await _firestore.collection('users').doc(uid).get();
 
@@ -104,8 +106,12 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
           userProfile: profile,
           isLoading: false,
         );
+      } else if (!isRetry) {
+        // Doc may still be creating — retry once after a short delay
+        await Future.delayed(const Duration(milliseconds: 1500));
+        return _fetchUserProfile(uid, isRetry: true);
       } else {
-        // No profile document yet - user is authenticated but needs onboarding
+        // No profile document after retry - user needs onboarding
         state = state.copyWith(
           userProfile: null,
           isLoading: false,

@@ -26,7 +26,11 @@ class InviteModel {
       code: json['code'] as String,
       createdByUid: json['createdByUid'] as String,
       coupleId: json['coupleId'] as String?,
-      expiresAt: (json['expiresAt'] as Timestamp).toDate(),
+      expiresAt: json['expiresAt'] is Timestamp
+          ? (json['expiresAt'] as Timestamp).toDate()
+          : json['expiresAt'] is int
+              ? DateTime.fromMillisecondsSinceEpoch(json['expiresAt'] as int)
+              : DateTime.now(),
       status: InviteStatus.values.firstWhere(
         (e) => e.name == json['status'],
         orElse: () => InviteStatus.pending,

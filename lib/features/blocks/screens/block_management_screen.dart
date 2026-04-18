@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/models/time_block.dart';
 import '../../../core/router/routes.dart';
 import '../../../services/providers/auth_state_provider.dart';
-import '../../../services/providers/firestore_provider.dart';
+import '../../../services/providers/couple_providers.dart';
 import '../widgets/block_list_tile_widget.dart';
 
 /// Block management screen with filtering and navigation to edit/view.
@@ -20,71 +20,24 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
   // Filter state
   TimeBlockSource? _sourceFilter; // null = all
   TimeBlockCategory? _categoryFilter; // null = all
-  
-  List<TimeBlock> _blocks = [];
-  bool _isLoading = true;
-  String? _error;
-  
-  @override
-  void initState() {
-    super.initState();
-    _loadBlocks();
-  }
-
-  /// Load all blocks for the couple
-  Future<void> _loadBlocks() async {
-    final authState = ref.read(authStateProvider);
-    final profile = authState.profile;
-    
-    if (profile?.coupleId == null || authState.uid == null) {
-      setState(() {
-        _isLoading = false;
-        _error = 'Not authenticated or not in a couple';
-      });
-      return;
-    }
-    
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-    
-    try {
-      final firestoreService = ref.read(firestoreServiceProvider);
-      final blocks = await firestoreService.getBlocks(
-        profile!.coupleId!,
-        authState.uid!,
-      );
-      
-      setState(() {
-        _blocks = blocks;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _error = 'Failed to load blocks: $e';
-      });
-    }
-  }
 
   /// Get filtered blocks based on current filter state
-  List<TimeBlock> get _filteredBlocks {
-    var filtered = _blocks;
-    
+  List<TimeBlock> _filterBlocks(List<TimeBlock> blocks) {
+    var filtered = blocks;
+
     // Apply source filter
     if (_sourceFilter != null) {
       filtered = filtered.where((b) => b.source == _sourceFilter).toList();
     }
-    
+
     // Apply category filter
     if (_categoryFilter != null) {
       filtered = filtered.where((b) => b.category == _categoryFilter).toList();
     }
-    
+
     // Sort by start time
     filtered.sort((a, b) => a.startUtc.compareTo(b.startUtc));
-    
+
     return filtered;
   }
 
@@ -175,10 +128,10 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
   String _formatDateTimeRange(TimeBlock block) {
     final start = block.startDateTime;
     final end = block.endDateTime;
-    
+
     final startStr = '${_formatDate(start)} ${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}';
     final endStr = '${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')}';
-    
+
     if (start.year == end.year && start.month == end.month && start.day == end.day) {
       return '$startStr - $endStr';
     } else {
@@ -187,7 +140,7 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
   }
 
   String _formatDate(DateTime dateTime) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return '${dateTime.day} ${months[dateTime.month - 1]} ${dateTime.year}';
   }
@@ -237,7 +190,7 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 16),
-              
+
               // Source filter
               Text(
                 'Source',
@@ -274,7 +227,7 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
                 ],
               ),
               const SizedBox(height: 24),
-              
+
               // Category filter
               Text(
                 'Category',
@@ -304,7 +257,7 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
                 ],
               ),
               const SizedBox(height: 24),
-              
+
               // Apply button
               SizedBox(
                 width: double.infinity,
@@ -336,7 +289,8 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
     final currentUserId = authState.uid;
-    
+    final blocksAsync = ref.watch(userBlocksProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Block Management'),
@@ -348,49 +302,45 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadBlocks,
+            onPressed: () => ref.invalidate(userBlocksProvider),
             tooltip: 'Refresh',
           ),
         ],
       ),
-      body: _buildBody(currentUserId),
+      body: blocksAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
+              Text(
+                'Failed to load blocks: $error',
+                style: const TextStyle(color: Colors.grey),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => ref.invalidate(userBlocksProvider),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+        data: (blocks) => _buildBlocksList(blocks, currentUserId),
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _navigateToBlockForm(),
-        child: const Icon(Icons.add),
         tooltip: 'Add new block',
+        child: const Icon(Icons.add),
       ),
     );
   }
 
-  Widget _buildBody(String? currentUserId) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    
-    if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.grey),
-            const SizedBox(height: 16),
-            Text(
-              _error!,
-              style: const TextStyle(color: Colors.grey),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _loadBlocks,
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      );
-    }
-    
-    final filteredBlocks = _filteredBlocks;
-    
+  Widget _buildBlocksList(List<TimeBlock> blocks, String? currentUserId) {
+    final filteredBlocks = _filterBlocks(blocks);
+
     if (filteredBlocks.isEmpty) {
       return Center(
         child: Column(
@@ -399,7 +349,7 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
             const Icon(Icons.event_busy, size: 64, color: Colors.grey),
             const SizedBox(height: 16),
             Text(
-              _blocks.isEmpty 
+              blocks.isEmpty
                 ? 'No blocks yet\nTap + to create your first block'
                 : 'No blocks match your filters',
               style: const TextStyle(color: Colors.grey),
@@ -409,10 +359,10 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
         ),
       );
     }
-    
+
     // Show active filters indicator
     final hasActiveFilters = _sourceFilter != null || _categoryFilter != null;
-    
+
     return Column(
       children: [
         if (hasActiveFilters)
@@ -429,7 +379,7 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Filters active: ${filteredBlocks.length} of ${_blocks.length} blocks',
+                    'Filters active: ${filteredBlocks.length} of ${blocks.length} blocks',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onPrimaryContainer,
                       fontSize: 12,
@@ -450,7 +400,7 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
           ),
         Expanded(
           child: RefreshIndicator(
-            onRefresh: _loadBlocks,
+            onRefresh: () async => ref.invalidate(userBlocksProvider),
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 8),
               itemCount: filteredBlocks.length,
