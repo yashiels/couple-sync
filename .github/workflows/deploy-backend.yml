@@ -3,7 +3,8 @@
 # Deploys Firebase Cloud Functions and Firestore rules/indexes.
 #
 # Required secrets:
-#   FIREBASE_TOKEN — Firebase CI token generated via `firebase login:ci`
+#   GCP_SA_KEY — JSON key for the github-deployer service account in
+#                nexion-ai-prod (see 1Password: Nexion-Deck / couple-sync/firebase/github-deployer-sa).
 
 name: Deploy Backend
 
@@ -34,7 +35,10 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
       - name: Deploy Functions and Firestore rules
-        run: firebase deploy --only functions,firestore --token "$FIREBASE_TOKEN"
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: firebase deploy --only functions,firestore --project nexion-ai-prod --non-interactive
