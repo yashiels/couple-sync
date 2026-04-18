@@ -1,0 +1,9 @@
+# GitHub CODEOWNERS
+# Docs: https://docs.github.com/en/repositories/managing-your-repositories-settings-and-customization/customizing-your-repository/about-code-owners
+#
+# Listed owners are auto-requested as reviewers on every PR that touches
+# matching paths. Combined with branch protection's "Require review from
+# Code Owners", their approval is required before merging to main.
+
+# Default owners for everything
+*                                   @yashiels @MphoCodes
