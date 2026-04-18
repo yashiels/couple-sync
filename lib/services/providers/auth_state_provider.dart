@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -59,6 +61,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
   final AuthService _authService;
 
   String? _lastError;
+  StreamSubscription<User?>? _authStateSubscription;
 
   AuthStateNotifier({
     FirebaseAuth? auth,
@@ -73,7 +76,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
 
   void _init() {
     // Listen to Firebase Auth state changes
-    _auth.authStateChanges().listen((user) async {
+    _authStateSubscription = _auth.authStateChanges().listen((user) async {
       if (user == null) {
         // User signed out - clear profile and reset state
         state = const AuthState(
@@ -180,6 +183,12 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
   /// Clear the last error message.
   void clearError() {
     _lastError = null;
+  }
+
+  @override
+  void dispose() {
+    _authStateSubscription?.cancel();
+    super.dispose();
   }
 }
 

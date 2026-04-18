@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,13 +20,15 @@ class MyApp extends ConsumerStatefulWidget {
 }
 
 class _MyAppState extends ConsumerState<MyApp> {
+  StreamSubscription<RemoteMessage>? _messageOpenedSub;
+
   @override
   void initState() {
     super.initState();
 
     // Handle notification tap when app was in background (not terminated).
     // Tapping the system notification opens the app and navigates to /overlap.
-    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+    _messageOpenedSub = FirebaseMessaging.onMessageOpenedApp.listen((message) {
       final router = ref.read(routerProvider);
       router.go(AppRoutes.overlap);
     });
@@ -40,6 +44,12 @@ class _MyAppState extends ConsumerState<MyApp> {
         });
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _messageOpenedSub?.cancel();
+    super.dispose();
   }
 
   @override
