@@ -53,10 +53,10 @@ class OverlapWindow {
   }
 
   /// Get start time as DateTime
-  DateTime get startDateTime => DateTime.fromMillisecondsSinceEpoch(startUtc, isUtc: true);
+  DateTime get startDateTime => DateTime.fromMillisecondsSinceEpoch(startUtc);
 
   /// Get end time as DateTime
-  DateTime get endDateTime => DateTime.fromMillisecondsSinceEpoch(endUtc, isUtc: true);
+  DateTime get endDateTime => DateTime.fromMillisecondsSinceEpoch(endUtc);
 
   /// Get duration as hours (decimal)
   double get durationHours => durationMinutes / 60.0;
