@@ -1,13 +1,12 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/models/couple_model.dart';
-import '../../../core/models/user_model.dart';
 import '../../../core/router/routes.dart';
 import '../../../services/calendar_service.dart';
 import '../../../services/providers/auth_state_provider.dart';
 import '../../../services/providers/calendar_provider.dart';
-import '../../../services/providers/firestore_provider.dart';
+import '../../../services/providers/couple_providers.dart';
 import '../widgets/settings_section_widget.dart';
 
 // TODO: STORY-019 - Implement Google Calendar sync functionality
@@ -37,6 +36,7 @@ class SettingsScreen extends ConsumerWidget {
     final authState = ref.watch(authStateProvider);
     final userProfile = authState.profile;
     final notificationsEnabled = ref.watch(notificationSettingsProvider);
+    final syncState = ref.watch(calendarSyncNotifierProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -80,13 +80,13 @@ class SettingsScreen extends ConsumerWidget {
                   );
                 },
               ),
-              // Last sync status (placeholder for STORY-019)
-              const SettingsStatusItem(
+              // Last sync status from calendarSyncNotifierProvider
+              SettingsStatusItem(
                 title: 'Last Sync',
                 subtitle: 'Last time your calendar was synced',
-                status: 'Never',
-                statusColor: Colors.grey,
-                statusIcon: Icons.sync_disabled,
+                status: _formatLastSyncTime(syncState.lastSyncTime),
+                statusColor: syncState.lastSyncTime != null ? Colors.green : Colors.grey,
+                statusIcon: syncState.lastSyncTime != null ? Icons.sync : Icons.sync_disabled,
               ),
               // Connect/Disconnect button
               Consumer(
@@ -130,28 +130,21 @@ class SettingsScreen extends ConsumerWidget {
                   );
                 },
               ),
-              // Manual Sync (disabled until OAuth implemented - STORY-019)
+              // Manual Sync
               Consumer(
                 builder: (context, ref, child) {
                   final connectionState =
                       ref.watch(calendarConnectionNotifierProvider);
                   final isConnected = connectionState.valueOrNull ?? false;
+                  final currentSyncState = ref.watch(calendarSyncNotifierProvider);
                   return SettingsButton(
                     title: 'Manual Sync',
                     subtitle: 'Force sync your calendar now',
-                    label: 'Sync',
+                    label: currentSyncState.isSyncing ? 'Syncing...' : 'Sync',
                     icon: Icons.sync,
-                    enabled: isConnected, // Enabled when connected
-                    onTap: isConnected
-                        ? () {
-                            // TODO: STORY-019 - Trigger manual sync
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content:
-                                    Text('Manual sync coming in STORY-019'),
-                              ),
-                            );
-                          }
+                    enabled: isConnected && !currentSyncState.isSyncing,
+                    onTap: isConnected && !currentSyncState.isSyncing
+                        ? () => _handleManualSync(context, ref)
                         : null,
                   );
                 },
@@ -183,22 +176,18 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
 
-          // Routine Section
+          // Window Preferences Section
           SettingsSectionWidget(
-            title: 'Routine',
+            title: 'Window Preferences',
             icon: Icons.schedule,
             children: [
-              const SettingsItem(
-                title: 'Weekly Routine',
-                subtitle: 'Your weekly availability blocks',
-                trailing: Icon(Icons.info_outline, size: 20),
-              ),
-              SettingsButton(
-                title: 'Re-run Setup',
-                subtitle: 'Configure your weekly routine again',
-                label: 'Setup',
-                icon: Icons.refresh,
-                onTap: () => context.go(AppRoutes.routineSetup),
+              SettingsToggle(
+                title: 'Show late-night windows',
+                subtitle:
+                    'Include 23:00–07:00 local time in overlap windows',
+                value: userProfile?.showLateNightWindows ?? false,
+                onChanged: (value) =>
+                    _setLateNightWindows(context, ref, authState.uid, value),
               ),
             ],
           ),
@@ -233,23 +222,7 @@ class SettingsScreen extends ConsumerWidget {
 
           // Couple Section (only show if paired)
           if (userProfile?.coupleId != null)
-            FutureBuilder<CoupleModel?>(
-              future: _fetchCouple(ref, userProfile!.coupleId!),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const SettingsSectionWidget(
-                    title: 'Couple',
-                    icon: Icons.favorite,
-                    children: [
-                      Center(child: CircularProgressIndicator()),
-                    ],
-                  );
-                }
-
-                final couple = snapshot.data!;
-                return _buildCoupleSection(context, ref, couple, userProfile);
-              },
-            ),
+            _buildCoupleSectionFromProvider(context, ref, userProfile!),
 
           // Account Section
           SettingsSectionWidget(
@@ -284,6 +257,225 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _setLateNightWindows(
+    BuildContext context,
+    WidgetRef ref,
+    String? uid,
+    bool value,
+  ) async {
+    if (uid == null) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .update({'showLateNightWindows': value});
+      await ref.read(authStateProvider.notifier).refreshProfile();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update preference: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Format the last sync time for display.
+  String _formatLastSyncTime(DateTime? lastSyncTime) {
+    if (lastSyncTime == null) return 'Never';
+    final now = DateTime.now();
+    final diff = now.difference(lastSyncTime);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${lastSyncTime.day}/${lastSyncTime.month}/${lastSyncTime.year}';
+  }
+
+  /// Build the Couple section using coupleProvider and partnerProfileProvider.
+  Widget _buildCoupleSectionFromProvider(
+    BuildContext context,
+    WidgetRef ref,
+    dynamic userProfile,
+  ) {
+    final coupleAsync = ref.watch(coupleProvider);
+
+    return coupleAsync.when(
+      loading: () => const SettingsSectionWidget(
+        title: 'Couple',
+        icon: Icons.favorite,
+        children: [
+          Center(child: CircularProgressIndicator()),
+        ],
+      ),
+      error: (error, _) => SettingsSectionWidget(
+        title: 'Couple',
+        icon: Icons.favorite,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'Failed to load couple data',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+          ),
+        ],
+      ),
+      data: (couple) {
+        if (couple == null) {
+          return const SettingsSectionWidget(
+            title: 'Couple',
+            icon: Icons.favorite,
+            children: [
+              Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Couple data not available',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+            ],
+          );
+        }
+        return _buildCoupleSection(context, ref, couple);
+      },
+    );
+  }
+
+  Widget _buildCoupleSection(
+    BuildContext context,
+    WidgetRef ref,
+    dynamic couple,
+  ) {
+    final partnerAsync = ref.watch(partnerProfileProvider);
+
+    return partnerAsync.when(
+      loading: () => SettingsSectionWidget(
+        title: 'Couple',
+        icon: Icons.favorite,
+        children: [
+          const SettingsStatusItem(
+            title: 'Partner Name',
+            subtitle: 'Your paired partner',
+            status: 'Loading...',
+            statusIcon: Icons.person,
+          ),
+          const SettingsStatusItem(
+            title: 'Partner Email',
+            subtitle: 'Partner\'s email address',
+            status: 'Loading...',
+            statusIcon: Icons.email,
+          ),
+          const SettingsStatusItem(
+            title: 'Partner Timezone',
+            subtitle: 'Partner\'s timezone',
+            status: 'Loading...',
+            statusIcon: Icons.public,
+          ),
+          const SizedBox(height: 8),
+          SettingsButton(
+            title: 'Unpair',
+            subtitle: 'Remove pairing with your partner',
+            label: 'Unpair',
+            icon: Icons.link_off,
+            isDestructive: true,
+            onTap: () => _showUnpairDialog(context, ref, couple),
+          ),
+        ],
+      ),
+      error: (error, _) => SettingsSectionWidget(
+        title: 'Couple',
+        icon: Icons.favorite,
+        children: [
+          const SettingsStatusItem(
+            title: 'Partner Name',
+            subtitle: 'Your paired partner',
+            status: 'Error loading',
+            statusIcon: Icons.person,
+          ),
+          const SizedBox(height: 8),
+          SettingsButton(
+            title: 'Unpair',
+            subtitle: 'Remove pairing with your partner',
+            label: 'Unpair',
+            icon: Icons.link_off,
+            isDestructive: true,
+            onTap: () => _showUnpairDialog(context, ref, couple),
+          ),
+        ],
+      ),
+      data: (partner) => SettingsSectionWidget(
+        title: 'Couple',
+        icon: Icons.favorite,
+        children: [
+          SettingsStatusItem(
+            title: 'Partner Name',
+            subtitle: 'Your paired partner',
+            status: partner?.displayName ?? 'Unknown',
+            statusIcon: Icons.person,
+          ),
+          SettingsStatusItem(
+            title: 'Partner Email',
+            subtitle: 'Partner\'s email address',
+            status: partner?.email ?? 'Unknown',
+            statusIcon: Icons.email,
+          ),
+          SettingsStatusItem(
+            title: 'Partner Timezone',
+            subtitle: 'Partner\'s timezone',
+            status: partner?.timezone ?? 'Unknown',
+            statusIcon: Icons.public,
+          ),
+          const SizedBox(height: 8),
+          SettingsButton(
+            title: 'Unpair',
+            subtitle: 'Remove pairing with your partner',
+            label: 'Unpair',
+            icon: Icons.link_off,
+            isDestructive: true,
+            onTap: () => _showUnpairDialog(context, ref, couple),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Handle manual calendar sync.
+  Future<void> _handleManualSync(BuildContext context, WidgetRef ref) async {
+    try {
+      final result = await ref.read(calendarSyncNotifierProvider.notifier).sync();
+      if (context.mounted) {
+        if (result.error != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Sync error: ${result.error}'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Sync complete: ${result.blocksCreated} blocks synced',
+              ),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to sync: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _handleCalendarConnection(
@@ -385,72 +577,7 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
-  Future<CoupleModel?> _fetchCouple(WidgetRef ref, String coupleId) async {
-    final firestore = ref.read(firestoreServiceProvider);
-    return firestore.getCouple(coupleId);
-  }
-
-  Widget _buildCoupleSection(
-    BuildContext context,
-    WidgetRef ref,
-    CoupleModel couple,
-    UserModel userProfile,
-  ) {
-    return FutureBuilder<UserModel?>(
-      future: _fetchPartner(ref, couple, userProfile),
-      builder: (context, snapshot) {
-        final partner = snapshot.data;
-        
-        return SettingsSectionWidget(
-          title: 'Couple',
-          icon: Icons.favorite,
-          children: [
-            SettingsStatusItem(
-              title: 'Partner Name',
-              subtitle: 'Your paired partner',
-              status: partner?.displayName ?? 'Loading...',
-              statusIcon: Icons.person,
-            ),
-            SettingsStatusItem(
-              title: 'Partner Email',
-              subtitle: 'Partner\'s email address',
-              status: partner?.email ?? 'Loading...',
-              statusIcon: Icons.email,
-            ),
-            SettingsStatusItem(
-              title: 'Partner Timezone',
-              subtitle: 'Partner\'s timezone',
-              status: partner?.timezone ?? 'Loading...',
-              statusIcon: Icons.public,
-            ),
-            const SizedBox(height: 8),
-            SettingsButton(
-              title: 'Unpair',
-              subtitle: 'Remove pairing with your partner',
-              label: 'Unpair',
-              icon: Icons.link_off,
-              isDestructive: true,
-              onTap: () => _showUnpairDialog(context, ref, couple),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<UserModel?> _fetchPartner(
-    WidgetRef ref,
-    CoupleModel couple,
-    UserModel userProfile,
-  ) async {
-    final partnerUid = couple.getPartnerUid(userProfile.email);
-    if (partnerUid == null) return null;
-    
-    final firestore = ref.read(firestoreServiceProvider);
-    return firestore.getUser(partnerUid);
-  }
-
-  void _showUnpairDialog(BuildContext context, WidgetRef ref, CoupleModel couple) {
+  void _showUnpairDialog(BuildContext context, WidgetRef ref, dynamic couple) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -479,26 +606,26 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _handleUnpair(BuildContext context, WidgetRef ref, CoupleModel couple) async {
+  Future<void> _handleUnpair(BuildContext context, WidgetRef ref, dynamic couple) async {
     try {
       final authState = ref.read(authStateProvider);
       final userProfile = authState.profile;
-      
+
       if (userProfile == null) return;
-      
+
       // TODO: STORY-011 - Implement unpair functionality in FirestoreService
       // This should:
       // 1. Update couple status to 'inactive'
       // 2. Add unpair history entry
       // 3. Clear coupleId from both users
       // 4. Optionally delete shared time blocks
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Unpair functionality coming soon'),
         ),
       );
-      
+
       // For now, just show a message
       // When implemented, navigate to pairing screen after unpair
       // context.go(AppRoutes.pairing);

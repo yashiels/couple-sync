@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "627959972375",
+    "project_id": "nexion-ai-prod",
+    "storage_bucket": "nexion-ai-prod.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:627959972375:android:8346ba3689eda0d574d252",
+        "android_client_info": {
+          "package_name": "com.skynergroup.couple_sync"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "627959972375-qo7clmgur5unvb82tv61n21c8d81pdht.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.skynergroup.couple_sync",
+            "certificate_hash": "1f5551f6daa7c4e82a7e55fde239d19a4354a6e5"
+          }
+        },
+        {
+          "client_id": "627959972375-03rl3c1nnajqeqn5u0n00tcor7q6krh7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCIu_32bk8aziHOj9SmQVSqj5QvfL5yI3A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "627959972375-03rl3c1nnajqeqn5u0n00tcor7q6krh7.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "627959972375-mhmkhjj5786p1dti1l38k41jpej1vjc0.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.skynergroup.coupleSync"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

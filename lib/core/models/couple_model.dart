@@ -12,7 +12,7 @@ class UnpairHistoryEntry {
 
   factory UnpairHistoryEntry.fromJson(Map<String, dynamic> json) {
     return UnpairHistoryEntry(
-      at: (json['at'] as Timestamp).toDate(),
+      at: _parseDateTime(json['at']),
       reason: json['reason'] as String,
     );
   }
@@ -78,12 +78,12 @@ class CoupleModel {
         (e) => e.name == json['status'],
         orElse: () => CoupleStatus.inactive,
       ),
-      pairedAt: (json['pairedAt'] as Timestamp).toDate(),
+      pairedAt: _parseDateTime(json['pairedAt']),
       unpairHistory: (json['unpairHistory'] as List<dynamic>?)
               ?.map((e) => UnpairHistoryEntry.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
-      createdAt: (json['createdAt'] as Timestamp).toDate(),
+      createdAt: _parseDateTime(json['createdAt']),
     );
   }
 
@@ -159,4 +159,11 @@ class CoupleModel {
     }
     return true;
   }
+}
+
+/// Parse a DateTime from either a Firestore Timestamp or UTC milliseconds int.
+DateTime _parseDateTime(dynamic value) {
+  if (value is Timestamp) return value.toDate();
+  if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
+  return DateTime.now();
 }

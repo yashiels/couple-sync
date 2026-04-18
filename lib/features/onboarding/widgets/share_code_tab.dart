@@ -164,7 +164,7 @@ class _ShareCodeTabState extends ConsumerState<ShareCodeTab> {
       await firestore.createInvite(code, {
         'code': code,
         'createdByUid': uid,
-        'expiresAt': DateTime.now().add(const Duration(days: 7)),
+        'expiresAt': DateTime.now().add(const Duration(days: 7)).millisecondsSinceEpoch,
         'status': 'pending',
       });
 

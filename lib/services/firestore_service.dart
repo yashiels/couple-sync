@@ -217,6 +217,43 @@ class FirestoreService {
     }
   }
 
+  /// Watches time blocks for a couple, optionally filtered by userId.
+  Stream<List<TimeBlock>> watchBlocks(String coupleId, {String? userId}) {
+    try {
+      Query<Map<String, dynamic>> query = _firestore
+          .collection('timeblocks')
+          .doc(coupleId)
+          .collection('blocks');
+
+      if (userId != null) {
+        query = query.where('userId', isEqualTo: userId);
+      }
+
+      return query.snapshots().map((snapshot) {
+        return snapshot.docs
+            .map((doc) => TimeBlock.fromJson(doc.data()))
+            .toList();
+      }).handleError((error) {
+        if (error is FirebaseException) {
+          throw _mapFirebaseException(error, 'Failed to watch blocks');
+        }
+        throw FirestoreException(
+          code: 'unknown',
+          message: 'An unexpected error occurred while watching blocks',
+          originalError: error,
+        );
+      });
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to watch blocks');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while watching blocks',
+        originalError: e,
+      );
+    }
+  }
+
   /// Create a new time block.
   /// Uses server timestamp for createdAt.
   /// Returns the block ID.
@@ -288,6 +325,72 @@ class FirestoreService {
     }
   }
 
+  /// Delete all google-sourced blocks for a user.
+  /// Used for replace strategy when syncing from Google Calendar.
+  Future<int> deleteGoogleSourcedBlocks(String coupleId, String userId) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('timeblocks')
+          .doc(coupleId)
+          .collection('blocks')
+          .where('userId', isEqualTo: userId)
+          .where('source', isEqualTo: 'google')
+          .get();
+
+      final batch = _firestore.batch();
+      for (final doc in querySnapshot.docs) {
+        batch.delete(doc.reference);
+      }
+
+      if (querySnapshot.docs.isNotEmpty) {
+        await batch.commit();
+      }
+
+      return querySnapshot.docs.length;
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to delete google-sourced blocks');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while deleting blocks',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Batch create multiple time blocks.
+  /// Used for efficiently writing multiple blocks at once.
+  Future<int> batchCreateBlocks(String coupleId, List<TimeBlock> blocks) async {
+    try {
+      if (blocks.isEmpty) return 0;
+
+      final batch = _firestore.batch();
+      final collection = _firestore
+          .collection('timeblocks')
+          .doc(coupleId)
+          .collection('blocks');
+
+      for (final block in blocks) {
+        final docRef = collection.doc();
+        batch.set(docRef, {
+          ...block.toJson(),
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
+      return blocks.length;
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to create blocks');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while creating blocks',
+        originalError: e,
+      );
+    }
+  }
+
   // ============================================================
   // OVERLAP
   // ============================================================
@@ -312,6 +415,39 @@ class FirestoreService {
       throw FirestoreException(
         code: 'unknown',
         message: 'An unexpected error occurred while fetching overlap',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Watches the latest overlap result for a couple.
+  Stream<OverlapResult?> watchOverlap(String coupleId) {
+    try {
+      return _firestore
+          .collection('overlaps')
+          .doc(coupleId)
+          .collection('windows')
+          .doc('latest')
+          .snapshots()
+          .map((snapshot) {
+        if (!snapshot.exists) return null;
+        return OverlapResult.fromJson(snapshot.data()!);
+      }).handleError((error) {
+        if (error is FirebaseException) {
+          throw _mapFirebaseException(error, 'Failed to watch overlap');
+        }
+        throw FirestoreException(
+          code: 'unknown',
+          message: 'An unexpected error occurred while watching overlap',
+          originalError: error,
+        );
+      });
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to watch overlap');
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message: 'An unexpected error occurred while watching overlap',
         originalError: e,
       );
     }

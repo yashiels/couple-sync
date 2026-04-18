@@ -9,6 +9,7 @@ class UserModel {
   final String? coupleId;
   final List<String> fcmTokens;
   final DateTime createdAt;
+  final bool showLateNightWindows;
 
   const UserModel({
     required this.email,
@@ -18,6 +19,7 @@ class UserModel {
     this.coupleId,
     required this.fcmTokens,
     required this.createdAt,
+    this.showLateNightWindows = false,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -31,7 +33,10 @@ class UserModel {
               ?.map((e) => e as String)
               .toList() ??
           [],
-      createdAt: (json['createdAt'] as Timestamp).toDate(),
+      createdAt: json['createdAt'] is Timestamp
+          ? (json['createdAt'] as Timestamp).toDate()
+          : DateTime.now(),
+      showLateNightWindows: json['showLateNightWindows'] as bool? ?? false,
     );
   }
 
@@ -44,6 +49,7 @@ class UserModel {
       'coupleId': coupleId,
       'fcmTokens': fcmTokens,
       'createdAt': Timestamp.fromDate(createdAt),
+      'showLateNightWindows': showLateNightWindows,
     };
   }
 
@@ -55,6 +61,7 @@ class UserModel {
     String? coupleId,
     List<String>? fcmTokens,
     DateTime? createdAt,
+    bool? showLateNightWindows,
     bool clearPhotoUrl = false,
     bool clearCoupleId = false,
   }) {
@@ -66,6 +73,8 @@ class UserModel {
       coupleId: clearCoupleId ? null : (coupleId ?? this.coupleId),
       fcmTokens: fcmTokens ?? List.from(this.fcmTokens),
       createdAt: createdAt ?? this.createdAt,
+      showLateNightWindows:
+          showLateNightWindows ?? this.showLateNightWindows,
     );
   }
 
@@ -80,7 +89,8 @@ class UserModel {
           timezone == other.timezone &&
           coupleId == other.coupleId &&
           _listEquals(fcmTokens, other.fcmTokens) &&
-          createdAt == other.createdAt;
+          createdAt == other.createdAt &&
+          showLateNightWindows == other.showLateNightWindows;
 
   @override
   int get hashCode => Object.hash(
@@ -91,11 +101,12 @@ class UserModel {
         coupleId,
         Object.hashAll(fcmTokens),
         createdAt,
+        showLateNightWindows,
       );
 
   @override
   String toString() =>
-      'UserModel(email: $email, displayName: $displayName, timezone: $timezone, coupleId: $coupleId)';
+      'UserModel(email: $email, displayName: $displayName, timezone: $timezone, coupleId: $coupleId, showLateNightWindows: $showLateNightWindows)';
 
   static bool _listEquals<T>(List<T> a, List<T> b) {
     if (a.length != b.length) return false;
