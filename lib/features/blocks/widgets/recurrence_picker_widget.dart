@@ -136,8 +136,13 @@ class _RecurrencePickerWidgetState extends State<RecurrencePickerWidget> {
 
   /// Parse RRULE UNTIL format (YYYYMMDDTHHMMSSz) into a UTC DateTime.
   /// Returns null if the value is not a valid RRULE UNTIL string.
+  ///
+  /// The regex is anchored (^ and $) so partial/mid-string matches are
+  /// rejected, keeping behaviour strictly RFC 5545-compliant.
+  /// Z? is intentionally lenient to handle any legacy non-Z values stored
+  /// before this fix was applied.
   static DateTime? _parseRruleUntil(String until) {
-    final regex = RegExp(r'(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?');
+    final regex = RegExp(r'^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?$');
     final match = regex.firstMatch(until);
     if (match == null) return null;
     return DateTime.utc(
