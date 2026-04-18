@@ -63,10 +63,10 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
   AuthStateNotifier({
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
-    AuthService? authService,
+    required AuthService authService,
   })  : _auth = auth ?? FirebaseAuth.instance,
         _firestore = firestore ?? FirebaseFirestore.instance,
-        _authService = authService ?? AuthService(),
+        _authService = authService,
         super(const AuthState()) {
     _init();
   }

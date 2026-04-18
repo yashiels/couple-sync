@@ -33,9 +33,6 @@ class CalendarService {
   static const String _refreshTokenKey = 'google_calendar_refresh_token';
   static const String _tokenExpiryKey = 'google_calendar_token_expiry';
   static const String _lastSyncKey = 'google_calendar_last_sync';
-  static const List<String> _calendarScopes = [
-    'https://www.googleapis.com/auth/calendar.readonly',
-  ];
 
   final GoogleSignIn _googleSignIn;
   final FlutterSecureStorage _secureStorage;
@@ -51,9 +48,9 @@ class CalendarService {
   );
 
   CalendarService({
-    GoogleSignIn? googleSignIn,
+    required GoogleSignIn googleSignIn,
     FlutterSecureStorage? secureStorage,
-  })  : _googleSignIn = googleSignIn ?? GoogleSignIn(scopes: _calendarScopes),
+  })  : _googleSignIn = googleSignIn,
         _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
   /// Stream of calendar connection state changes.
