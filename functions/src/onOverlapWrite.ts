@@ -89,10 +89,20 @@ export const onOverlapWrite = onDocumentWritten(
           notification: { title: notif.title, body: notif.body },
           data: notif.data,
         });
+        const INVALID_TOKEN_CODES = [
+          'messaging/invalid-registration-token',
+          'messaging/registration-token-not-registered',
+        ];
         const invalid: string[] = [];
-        response.responses.forEach((r, idx) => {
-          if (!r.success) invalid.push(tokens[idx]);
-        });
+        for (const [i, result] of response.responses.entries()) {
+          if (!result.success) {
+            const code = result.error?.code ?? '';
+            if (INVALID_TOKEN_CODES.includes(code)) {
+              invalid.push(tokens[i]);
+            }
+            // Transient errors (quota exceeded, internal error, etc.): log but don't prune
+          }
+        }
         return invalid;
       },
       updateFcmTokens: async (uid, validTokens) => {
