@@ -113,7 +113,9 @@ function firebaseDeps(
     },
 
     acceptInvite: async (code, coupleId) => {
-      txn.update(invitesRef.doc(code), { status: 'accepted', coupleId });
+      // status was already set to 'redeemed' in the compare-and-swap step;
+      // here we stamp the resulting coupleId onto the invite doc.
+      txn.update(invitesRef.doc(code), { coupleId });
     },
 
     linkUserToCouple: async (uid, coupleId) => {
@@ -145,23 +147,31 @@ export const redeemInvite = onCall({ region: 'us-central1', timeoutSeconds: 120 
       ? (inviteSnap.data() as InviteDoc)
       : null;
 
-    // 2. Read redeemer's user doc (needed for transaction consistency)
-    await txn.get(db.collection('users').doc(uid));
-
-    // 3. Read creator's user doc (if invite exists)
+    // 2. Read creator's user doc (if invite exists)
     const creatorUid = invite?.createdByUid;
     if (creatorUid) {
       await txn.get(db.collection('users').doc(creatorUid));
     }
 
-    // 4. Read pendingBlocks for both users
+    // 3. Read pendingBlocks for both users
     const redeemerPending = await readPendingBlocks(uid, txn, db);
     const creatorPending = creatorUid
       ? await readPendingBlocks(creatorUid, txn, db)
       : [];
 
     // ── Phase 2: ALL writes (via handleRedeemInvite + migration) ────────
-    // 5. Call handleRedeemInvite with Firestore-backed deps
+    // 5a. Compare-and-swap: atomically claim the invite by marking it
+    //     'redeemed' as the very first write in the transaction. Two
+    //     concurrent transactions will both read status === 'pending' in
+    //     Phase 1, but only one can commit the conflicting update on the
+    //     same invite doc — Firestore will abort and retry the loser.
+    //     handleRedeemInvite (below) still validates the status and all
+    //     other preconditions before any further writes occur.
+    if (invite) {
+      txn.update(db.collection('invites').doc(code), { status: 'redeemed' });
+    }
+
+    // 5b. Call handleRedeemInvite with Firestore-backed deps
     let result: { coupleId: string };
     try {
       result = await handleRedeemInvite(
