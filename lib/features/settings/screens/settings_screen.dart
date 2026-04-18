@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/models/couple_model.dart';
 import '../../../core/router/routes.dart';
 import '../../../services/calendar_service.dart';
 import '../../../services/providers/auth_state_provider.dart';
@@ -348,7 +349,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget _buildCoupleSection(
     BuildContext context,
     WidgetRef ref,
-    dynamic couple,
+    CoupleModel couple,
   ) {
     final partnerAsync = ref.watch(partnerProfileProvider);
 
@@ -577,7 +578,7 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
-  void _showUnpairDialog(BuildContext context, WidgetRef ref, dynamic couple) {
+  void _showUnpairDialog(BuildContext context, WidgetRef ref, CoupleModel couple) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -606,21 +607,36 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _handleUnpair(BuildContext context, WidgetRef ref, dynamic couple) async {
+  Future<void> _handleUnpair(BuildContext context, WidgetRef ref, CoupleModel couple) async {
     try {
       final authState = ref.read(authStateProvider);
       final userProfile = authState.profile;
+      final uid = authState.uid;
 
-      if (userProfile == null) return;
+      if (userProfile == null || uid == null) return;
 
-      // Clear coupleId from the current user's Firestore document.
-      // The couple doc and partner's coupleId are left for the partner to
-      // resolve — a full bilateral unpair can be promoted to a Cloud Function
-      // when STORY-011 is implemented.
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(authState.uid)
-          .update({'coupleId': FieldValue.delete()});
+      final coupleId = userProfile.coupleId;
+      if (coupleId == null) return;
+
+      final partnerUid = couple.getPartnerUid(uid);
+
+      final db = FirebaseFirestore.instance;
+
+      // Use a transaction to atomically clear both users' coupleId so neither
+      // user is left in an orphaned/permanently-paired state.
+      await db.runTransaction((txn) async {
+        txn.update(
+          db.collection('users').doc(uid),
+          {'coupleId': FieldValue.delete()},
+        );
+
+        if (partnerUid != null) {
+          txn.update(
+            db.collection('users').doc(partnerUid),
+            {'coupleId': FieldValue.delete()},
+          );
+        }
+      });
 
       // Refresh local profile so providers reflect the cleared coupleId.
       await ref.read(authStateProvider.notifier).refreshProfile();

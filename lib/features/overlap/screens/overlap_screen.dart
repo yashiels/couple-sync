@@ -556,7 +556,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
               ),
               const SizedBox(height: 12),
 
-              _buildScoreRow('Score', window.score, theme),
+              _buildScoreRow('Match Score', window.score, theme),
 
               const SizedBox(height: 16),
 
