@@ -1,5 +1,6 @@
 import * as admin from 'firebase-admin';
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
+import { logger } from 'firebase-functions';
 import { computeBlockHash, computeOverlap } from './lib/overlap';
 import { CoupleDoc, TimeBlock } from './lib/types';
 
@@ -36,6 +37,10 @@ export const onUserPrefsWrite = onDocumentUpdated(
 
     // The triggering user's data is already in the event — avoid a redundant read.
     const triggeringUid = event.params.uid as string;
+    if (triggeringUid !== couple.userAUid && triggeringUid !== couple.userBUid) {
+      logger.warn(`onUserPrefsWrite: uid ${triggeringUid} is not in couple ${coupleId}`);
+      return;
+    }
     const triggeringData = after as { timezone?: string; showLateNightWindows?: boolean };
     const otherUid =
       triggeringUid === couple.userAUid ? couple.userBUid : couple.userAUid;
