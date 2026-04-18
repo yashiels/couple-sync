@@ -34,16 +34,20 @@ export const onUserPrefsWrite = onDocumentUpdated(
     const blocksA = allBlocks.filter((b) => b.userId === couple.userAUid);
     const blocksB = allBlocks.filter((b) => b.userId === couple.userBUid);
 
-    const [userASnap, userBSnap] = await Promise.all([
-      db.collection('users').doc(couple.userAUid).get(),
-      db.collection('users').doc(couple.userBUid).get(),
-    ]);
-    const userA = userASnap.data() as
+    // The triggering user's data is already in the event — avoid a redundant read.
+    const triggeringUid = event.params.uid as string;
+    const triggeringData = after as { timezone?: string; showLateNightWindows?: boolean };
+    const otherUid =
+      triggeringUid === couple.userAUid ? couple.userBUid : couple.userAUid;
+    const otherSnap = await db.collection('users').doc(otherUid).get();
+    const otherData = otherSnap.data() as
       | { timezone?: string; showLateNightWindows?: boolean }
       | undefined;
-    const userB = userBSnap.data() as
-      | { timezone?: string; showLateNightWindows?: boolean }
-      | undefined;
+
+    const [userA, userB] =
+      triggeringUid === couple.userAUid
+        ? [triggeringData, otherData]
+        : [otherData, triggeringData];
 
     const windows = computeOverlap(
       blocksA,
