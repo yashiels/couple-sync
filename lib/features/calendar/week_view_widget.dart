@@ -333,16 +333,22 @@ class _WeekViewWidgetState extends State<WeekViewWidget> {
   
   /// Build an overlap window widget
   Widget _buildOverlapWidget(OverlapWindow overlap, DateTime dayStart) {
-    final overlapStart = overlap.startDateTime;
-    final overlapEnd = overlap.endDateTime;
-    
-    // Calculate position and height
-    final startMinutes = overlapStart.hour * 60 + overlapStart.minute;
-    final endMinutes = overlapEnd.hour * 60 + overlapEnd.minute;
+    final dayEnd = dayStart.add(const Duration(days: 1));
+
+    // Clip to day boundaries so multi-day windows (late-night mode) render correctly.
+    // Using difference() handles the 00:00–00:00-next-day case that hour/minute can't.
+    final clippedStart = overlap.startDateTime.isBefore(dayStart)
+        ? dayStart
+        : overlap.startDateTime;
+    final clippedEnd =
+        overlap.endDateTime.isAfter(dayEnd) ? dayEnd : overlap.endDateTime;
+
+    final startMinutes = clippedStart.difference(dayStart).inMinutes;
+    final endMinutes = clippedEnd.difference(dayStart).inMinutes;
     final duration = endMinutes - startMinutes;
-    
-    final top = (startMinutes / 60) * 60;
-    final height = (duration / 60) * 60;
+
+    final top = startMinutes.toDouble();
+    final height = duration.toDouble();
     
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
