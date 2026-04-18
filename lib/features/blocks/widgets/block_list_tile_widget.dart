@@ -20,7 +20,6 @@ class BlockListTileWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final categoryColor = _getCategoryColor(block.category, isDark);
-    final textColor = _getTextColor(categoryColor);
     final timeRange = _formatTimeRange();
 
     return Card(
@@ -174,12 +173,6 @@ class BlockListTileWidget extends StatelessWidget {
       case TimeBlockCategory.other:
         return isDark ? AppColors.categoryOtherDark : AppColors.categoryOtherLight;
     }
-  }
-
-  /// Get contrasting text color for background
-  Color _getTextColor(Color backgroundColor) {
-    final luminance = backgroundColor.computeLuminance();
-    return luminance > 0.5 ? Colors.black87 : Colors.white;
   }
 
   /// Format time range as "HH:mm - HH:mm"

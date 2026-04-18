@@ -76,13 +76,6 @@ class _WeekViewWidgetState extends State<WeekViewWidget> {
     return _currentWeekStart.add(Duration(days: weeksOffset * 7));
   }
   
-  /// Get page index for a given week start
-  int _getPageIndexFromWeekStart(DateTime weekStart) {
-    final daysDiff = weekStart.difference(_currentWeekStart).inDays;
-    final weeksDiff = daysDiff ~/ 7;
-    return _initialPage + weeksDiff;
-  }
-
   @override
   Widget build(BuildContext context) {
     return Stack(

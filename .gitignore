@@ -63,6 +63,12 @@ build/
 **/linux/flutter/generated_plugin_registrant.h
 **/linux/flutter/generated_plugins.cmake
 
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+
 # Coverage
 coverage/
 

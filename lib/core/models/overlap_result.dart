@@ -106,7 +106,11 @@ class OverlapResult {
               ?.map((e) => OverlapWindow.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
-      computedAt: (json['computedAt'] as Timestamp).toDate(),
+      computedAt: json['computedAt'] is Timestamp
+          ? (json['computedAt'] as Timestamp).toDate()
+          : json['computedAt'] is int
+              ? DateTime.fromMillisecondsSinceEpoch(json['computedAt'] as int)
+              : DateTime.now(),
       blockHashA: json['blockHashA'] as String,
       blockHashB: json['blockHashB'] as String,
     );

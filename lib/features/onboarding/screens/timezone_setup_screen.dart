@@ -88,8 +88,7 @@ class _TimezoneSetupScreenState extends ConsumerState<TimezoneSetupScreen> {
       await ref.read(authStateProvider.notifier).refreshProfile();
 
       if (mounted) {
-        // Navigate to routine setup screen (router will handle redirect based on state)
-        context.go(AppRoutes.routineSetup);
+        context.go(AppRoutes.pairing);
       }
     } on FirebaseException catch (e) {
       if (mounted) {

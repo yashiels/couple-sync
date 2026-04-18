@@ -1,0 +1,40 @@
+# Deploy Backend Workflow
+# Triggers on push to main when Cloud Functions or Firestore config files change.
+# Deploys Firebase Cloud Functions and Firestore rules/indexes.
+#
+# Required secrets:
+#   FIREBASE_TOKEN — Firebase CI token generated via `firebase login:ci`
+
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'functions/**'
+      - 'firestore.rules'
+      - 'firestore.indexes.json'
+  workflow_dispatch:  # manual trigger from Actions tab; pick any branch to deploy
+
+jobs:
+  deploy:
+    name: Deploy Functions & Firestore
+    runs-on: [self-hosted, Linux, X64, astra]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install function dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Deploy Functions and Firestore rules
+        run: firebase deploy --only functions,firestore --token "$FIREBASE_TOKEN"
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}

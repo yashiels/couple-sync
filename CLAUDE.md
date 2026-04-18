@@ -50,7 +50,7 @@ lib/
 │   └── utils/             # Timezone helpers, date formatters
 ├── features/
 │   ├── auth/              # AuthScreen
-│   ├── onboarding/        # TimezoneSetup, RoutineWizard
+│   ├── onboarding/        # TimezoneSetup
 │   ├── pairing/           # PairingScreen (share/enter code)
 │   ├── home/              # HomeScreen, clocks, next window
 │   ├── calendar/          # WeekView

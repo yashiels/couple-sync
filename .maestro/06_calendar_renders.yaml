@@ -1,0 +1,14 @@
+appId: ${APP_ID}
+name: Calendar Week View Renders
+---
+- launchApp
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Calendar"
+    commands:
+      - tapOn: "Calendar"
+      - waitForAnimationToEnd
+      # Should see at least one hour label (e.g. "09:00", "12:00")
+      - assertVisible:
+          text: "[0-9]{1,2}:00"

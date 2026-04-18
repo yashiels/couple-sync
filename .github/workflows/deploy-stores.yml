@@ -1,0 +1,71 @@
+# Deploy to Stores Workflow
+# Manual trigger (workflow_dispatch) to deploy a tagged release to app stores.
+# Downloads build artifacts produced by the build-release workflow, then uploads
+# to Play Store (internal track) and TestFlight.
+#
+# Required secrets (once Fastlane is configured):
+#   PLAY_STORE_SERVICE_ACCOUNT_JSON — Google Play service account key
+#   APP_STORE_CONNECT_API_KEY       — App Store Connect API key
+#   MATCH_PASSWORD                  — Fastlane match passphrase (iOS signing)
+#
+# NOTE: Fastlane is not yet set up. The upload steps contain TODO placeholders.
+
+name: Deploy to Stores
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Version tag to deploy (e.g. v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  deploy-play-store:
+    name: Deploy to Play Store
+    runs-on: [self-hosted, Linux, X64, astra]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Android artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-apk
+          path: artifacts/android
+          # The artifact must have been uploaded by the build-release workflow
+          # for the same tag specified in version_tag input.
+          run-id: ''
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload to Play Store (internal track)
+        run: |
+          echo "Deploying ${{ github.event.inputs.version_tag }} to Play Store internal track"
+          # TODO: Set up Fastlane and replace this placeholder with:
+          # cd android && fastlane supply \
+          #   --track internal \
+          #   --apk ../artifacts/android/app-release.apk \
+          #   --json_key_data "$PLAY_STORE_SERVICE_ACCOUNT_JSON"
+          echo "TODO: Fastlane supply not yet configured — skipping actual upload"
+
+  deploy-testflight:
+    name: Deploy to TestFlight
+    runs-on: [self-hosted, macOS, astra]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download iOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-ios
+          path: artifacts/ios
+          run-id: ''
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload to TestFlight
+        run: |
+          echo "Deploying ${{ github.event.inputs.version_tag }} to TestFlight"
+          # TODO: Set up Fastlane and replace this placeholder with:
+          # cd ios && fastlane pilot upload \
+          #   --ipa ../artifacts/ios/Runner.app \
+          #   --skip_waiting_for_build_processing true
+          echo "TODO: Fastlane pilot not yet configured — skipping actual upload"

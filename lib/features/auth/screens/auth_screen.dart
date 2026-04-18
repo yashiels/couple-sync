@@ -243,8 +243,7 @@ class _SignInButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    Theme.of(context);
 
     // Apple button uses black background, Google uses white/outline
     final backgroundColor = isAppleButton ? Colors.black : Colors.white;

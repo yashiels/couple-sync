@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
@@ -16,7 +17,10 @@ class AuthService {
     GoogleSignIn? googleSignIn,
   })  : _auth = auth ?? FirebaseAuth.instance,
         _firestore = firestore ?? FirebaseFirestore.instance,
-        _googleSignIn = googleSignIn ?? GoogleSignIn();
+        _googleSignIn = googleSignIn ??
+            GoogleSignIn(scopes: [
+              'https://www.googleapis.com/auth/calendar.readonly',
+            ]);
 
   /// Stream of authentication state changes from Firebase.
   Stream<User?> get authStateChanges => _auth.authStateChanges();
@@ -64,6 +68,19 @@ class AuthService {
           code: 'sign-in-failed',
           message: 'Failed to sign in with Google. Please try again.',
         );
+      }
+
+      // Store calendar access token so CalendarService is auto-connected
+      if (googleAuth.accessToken != null) {
+        try {
+          const storage = FlutterSecureStorage();
+          await storage.write(
+            key: 'google_calendar_access_token',
+            value: googleAuth.accessToken,
+          );
+        } catch (_) {
+          // Non-critical — calendar can be connected manually later
+        }
       }
 
       // Create or update user document in Firestore
