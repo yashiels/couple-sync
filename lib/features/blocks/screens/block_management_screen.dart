@@ -53,8 +53,7 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
   void _onBlockTap(TimeBlock block) {
     if (block.source == TimeBlockSource.manual) {
       // Manual blocks can be edited
-      _navigateToBlockForm(blockId: null); // TODO: Need block ID from Firestore
-      _showReadOnlyView(block);
+      _navigateToBlockForm(blockId: block.id);
     } else {
       // Google-sourced blocks are read-only
       _showReadOnlyView(block);
@@ -95,10 +94,7 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
             TextButton(
               onPressed: () {
                 Navigator.pop(context);
-                // TODO: Navigate to edit form with block ID
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Edit functionality coming soon')),
-                );
+                _navigateToBlockForm(blockId: block.id);
               },
               child: const Text('Edit'),
             ),

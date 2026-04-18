@@ -29,9 +29,9 @@ class BlockEventWidget extends StatelessWidget {
         ? categoryColor
         : categoryColor.withValues(alpha: 0.6);
     
-    // Format time range
-    final startTime = _formatTime(block.startDateTime);
-    final endTime = _formatTime(block.endDateTime);
+    // Format time range (convert to local for display)
+    final startTime = _formatTime(block.startDateTime.toLocal());
+    final endTime = _formatTime(block.endDateTime.toLocal());
     
     return GestureDetector(
       onTap: onTap,
@@ -138,9 +138,9 @@ class BlockDetailDialog extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final categoryColor = _getCategoryColor(block.category, isDark);
     
-    final startTime = _formatTime(block.startDateTime);
-    final endTime = _formatTime(block.endDateTime);
-    final date = _formatDate(block.startDateTime);
+    final startTime = _formatTime(block.startDateTime.toLocal());
+    final endTime = _formatTime(block.endDateTime.toLocal());
+    final date = _formatDate(block.startDateTime.toLocal());
     
     return AlertDialog(
       title: Row(

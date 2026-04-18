@@ -404,7 +404,7 @@ void main() {
       expect(find.text('Edit'), findsNothing);
     });
 
-    testWidgets('manual block dialog has Edit button', (tester) async {
+    testWidgets('tapping manual block navigates to block form', (tester) async {
       await _pumpScreen(
         tester,
         blocks: [
@@ -412,13 +412,12 @@ void main() {
         ],
       );
 
-      // Tap block - this triggers both navigation and dialog
+      // Tap block - manual blocks navigate directly to edit form
       await tester.tap(find.text('Manual Block'));
-      await tester.pump(); // Process tap and dialog show
-      await tester.pump(); // Let dialog animation start
+      await tester.pumpAndSettle();
 
-      // Edit button should be in the dialog actions
-      expect(find.text('Edit'), findsOneWidget);
+      // Should have navigated to the block form screen
+      expect(find.text('Block Form'), findsOneWidget);
     });
 
     testWidgets('recurring block dialog shows recurrence info',
