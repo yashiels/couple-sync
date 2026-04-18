@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/models/time_block.dart';
@@ -47,20 +49,37 @@ class WeekViewWidget extends StatefulWidget {
 class _WeekViewWidgetState extends State<WeekViewWidget> {
   late PageController _pageController;
   late DateTime _currentWeekStart;
-  
-  // Use a baseline date for page indexing
-  static const int _initialPage = 5200; // Large number to allow scrolling both directions
-  
+  final Map<int, ScrollController> _scrollControllers = {};
+
+  static const int _initialPage = 5200;
+  static const double _pixelsPerHour = 60.0;
+
+  double get _initialScrollOffset {
+    final now = DateTime.now();
+    // Scroll to 1 hour before current time, minimum 0
+    return math.max(0.0, (now.hour - 1) * _pixelsPerHour);
+  }
+
+  ScrollController _controllerForPage(int page) {
+    return _scrollControllers.putIfAbsent(
+      page,
+      () => ScrollController(initialScrollOffset: _initialScrollOffset),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     _currentWeekStart = _getWeekStart(widget.initialWeek ?? DateTime.now());
     _pageController = PageController(initialPage: _initialPage);
   }
-  
+
   @override
   void dispose() {
     _pageController.dispose();
+    for (final c in _scrollControllers.values) {
+      c.dispose();
+    }
     super.dispose();
   }
   
@@ -95,7 +114,7 @@ class _WeekViewWidgetState extends State<WeekViewWidget> {
                 onPageChanged: _onPageChanged,
                 itemBuilder: (context, index) {
                   final weekStart = _getWeekStartFromPageIndex(index);
-                  return _buildWeekContent(weekStart);
+                  return _buildWeekContent(weekStart, index);
                 },
               ),
             ),
@@ -183,8 +202,9 @@ class _WeekViewWidgetState extends State<WeekViewWidget> {
   }
   
   /// Build the week content with time grid and blocks
-  Widget _buildWeekContent(DateTime weekStart) {
+  Widget _buildWeekContent(DateTime weekStart, int pageIndex) {
     return SingleChildScrollView(
+      controller: _controllerForPage(pageIndex),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
