@@ -1,0 +1,50 @@
+name: Add Approver as Co-Author
+
+# When a PR is approved, append a `Co-authored-by:` line for the approver to
+# the PR body. With the repo's squash-merge commit message set to PR_BODY,
+# GitHub recognizes the approver as a co-author on the squash commit.
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  add-coauthor:
+    if: >-
+      github.event.review.state == 'approved' &&
+      github.event.review.user.login != github.event.pull_request.user.login
+    runs-on: [self-hosted, Linux, X64, astra]
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const approver = context.payload.review.user.login;
+            const approverId = context.payload.review.user.id;
+            const coauthor =
+              `Co-authored-by: ${approver} <${approverId}+${approver}@users.noreply.github.com>`;
+
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+            });
+
+            const body = pr.data.body || '';
+            if (body.includes(coauthor)) {
+              core.info(`Co-author already present: ${coauthor}`);
+              return;
+            }
+
+            const separator = body.endsWith('\n') ? '\n' : '\n\n';
+            const newBody = body + separator + coauthor + '\n';
+
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              body: newBody,
+            });
+            core.info(`Added co-author to PR body: ${coauthor}`);
