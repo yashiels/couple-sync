@@ -182,15 +182,30 @@ jobs:
             'until adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r" | grep -q 1; do sleep 3; done'
           adb shell input keyevent 82  # unlock screen
           # Wait for package manager + zygote to finish warmup.
-          # Without this, first-install dexopt can trip "System UI isn't responding" ANR.
           timeout 60 adb shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done' || true
           sleep 15
+          # Hide ANR dialogs — Flutter cold-starts on a weak emulator sometimes trip
+          # the System UI watchdog; the dialog blocks Maestro's UIAutomator view.
+          # Setting persists in the AVD so it survives snapshot save/load.
+          adb shell settings put global hide_error_dialogs 1 || true
 
       - name: Install APK
         run: |
           adb install -r build/app/outputs/flutter-apk/app-debug.apk
           # Force AOT compilation so first launch doesn't JIT under load.
           adb shell cmd package compile -f -m speed com.skynergroup.couple_sync || true
+
+      - name: Pre-warm app (burn Flutter first-launch cost before Maestro runs)
+        run: |
+          # Maestro's launchApp does force-stop + cold launch every time. On a freshly
+          # installed Flutter app the FIRST cold launch does heavy work (engine init,
+          # Dart VM snapshot, asset manifest) that can overwhelm System UI. Do one
+          # cold-launch ourselves, let it settle, then force-stop so Maestro starts
+          # from a now-warm state.
+          adb shell monkey -p com.skynergroup.couple_sync -c android.intent.category.LAUNCHER 1 || true
+          sleep 25
+          adb shell am force-stop com.skynergroup.couple_sync || true
+          sleep 3
 
       - name: Run Maestro UI tests
         run: maestro test .maestro/ -e APP_ID=com.skynergroup.couple_sync
