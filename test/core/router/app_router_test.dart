@@ -206,8 +206,10 @@ void main() {
       expect(computeRedirect(noCoupleState, AppRoutes.pairing), isNull);
     });
 
-    test('stays on /timezone-setup to allow going back', () {
-      expect(computeRedirect(noCoupleState, AppRoutes.timezoneSetup), isNull);
+    test('redirects /timezone-setup to /pairing (timezone already done, back nav not allowed)', () {
+      // The timezoneSetup carve-out was a dead guard — reaching Guard 3 means
+      // hasTimezone is true, so revisiting /timezone-setup should redirect forward.
+      expect(computeRedirect(noCoupleState, AppRoutes.timezoneSetup), AppRoutes.pairing);
     });
 
     test('redirects /auth to /pairing', () {

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/router/app_router.dart';
 import 'core/router/routes.dart';
 import 'core/theme/app_theme.dart';
+import 'services/providers/auth_state_provider.dart';
 
 /// Theme mode provider for managing light/dark theme.
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
@@ -18,6 +19,10 @@ class MyApp extends ConsumerStatefulWidget {
 }
 
 class _MyAppState extends ConsumerState<MyApp> {
+  /// Pending FCM route stored when a notification tap arrives before auth
+  /// is confirmed. Consumed once auth state settles as authenticated.
+  String? _pendingFcmRoute;
+
   @override
   void initState() {
     super.initState();
@@ -25,27 +30,50 @@ class _MyAppState extends ConsumerState<MyApp> {
     // Handle notification tap when app was in background (not terminated).
     // Tapping the system notification opens the app and navigates to /overlap.
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
-      final router = ref.read(routerProvider);
-      router.go(AppRoutes.overlap);
+      _navigateOrStoreFcmRoute(AppRoutes.overlap);
     });
 
     // Handle notification tap when app was terminated.
     // getInitialMessage() returns the message that launched the app if any.
     FirebaseMessaging.instance.getInitialMessage().then((message) {
       if (message != null && mounted) {
-        final router = ref.read(routerProvider);
-        // Use addPostFrameCallback so the router is ready before navigating
+        // Use addPostFrameCallback so the router is ready before navigating.
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          router.go(AppRoutes.overlap);
+          _navigateOrStoreFcmRoute(AppRoutes.overlap);
         });
       }
     });
+  }
+
+  /// Navigate to [route] immediately if auth is confirmed; otherwise store the
+  /// route so it can be consumed once the user finishes signing in.
+  void _navigateOrStoreFcmRoute(String route) {
+    if (!mounted) return;
+    final authState = ref.read(authStateProvider);
+    if (authState.isAuthenticated && !authState.isLoading) {
+      ref.read(routerProvider).go(route);
+    } else {
+      // Auth not yet confirmed — park the route. The router's own redirect
+      // guards will handle unauthenticated access; we consume it after auth.
+      _pendingFcmRoute = route;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeModeProvider);
     final router = ref.watch(routerProvider);
+
+    // Consume any pending FCM route once auth settles as authenticated.
+    ref.listen<AuthState>(authStateProvider, (prev, next) {
+      if (_pendingFcmRoute != null &&
+          next.isAuthenticated &&
+          !next.isLoading) {
+        final route = _pendingFcmRoute!;
+        _pendingFcmRoute = null;
+        router.go(route);
+      }
+    });
 
     return MaterialApp.router(
       // App configuration
