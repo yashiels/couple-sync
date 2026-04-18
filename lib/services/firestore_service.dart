@@ -391,12 +391,20 @@ class FirestoreService {
     }
   }
 
-  /// Atomically replaces all google-sourced blocks for a user with new blocks.
+  /// Replaces all google-sourced blocks for a user with [newBlocks].
   ///
-  /// Fetches existing google-sourced block refs, then stages all deletes and
-  /// all new writes into one or more WriteBatches (max 500 ops each) before
-  /// committing. No window exists where the old blocks are gone but the new
-  /// ones have not yet been written.
+  /// Deletes are staged before creates so the transition is as tight as
+  /// possible. Firestore batches are limited to 500 operations, so the total
+  /// work (deletes + creates) is chunked accordingly:
+  ///
+  /// - **Single batch (≤ 500 ops total):** the operation is fully atomic —
+  ///   both deletes and creates land in one commit or not at all.
+  /// - **Multiple batches (> 500 ops total):** batches are committed
+  ///   sequentially, which is NOT atomic across commits. A failure mid-way
+  ///   will leave the collection in a partial state.
+  ///
+  /// In practice, calendar sync intervals are well below 500 events, so the
+  /// single-batch (atomic) path is the common case.
   ///
   /// Returns a record of (deletedCount, createdCount).
   Future<({int deletedCount, int createdCount})> atomicReplaceGoogleSourcedBlocks(
