@@ -662,6 +662,57 @@ void main() {
     });
   });
 
+  group('watchBlocks', () {
+    test('emits list of TimeBlock with correct doc ID for a user', () async {
+      final mockSubCollection = MockCollectionReferenceMap();
+      final mockQuery = MockQueryMap();
+      final mockQuerySnapshot = MockQuerySnapshotMap();
+      final mockQueryDoc = MockQueryDocumentSnapshotMap();
+
+      stubCollection('timeblocks');
+      stubDoc('couple-1');
+      when(mockDocRef.collection('blocks')).thenReturn(mockSubCollection);
+      when(mockSubCollection.where('userId', isEqualTo: 'uid-a'))
+          .thenReturn(mockQuery);
+      when(mockQuery.snapshots())
+          .thenAnswer((_) => Stream.value(mockQuerySnapshot));
+      when(mockQuerySnapshot.docs).thenReturn([mockQueryDoc]);
+      when(mockQueryDoc.data()).thenReturn(timeBlockJson());
+      when(mockQueryDoc.id).thenReturn('block-doc-id');
+
+      final result = await service
+          .watchBlocks('couple-1', userId: 'uid-a')
+          .first;
+
+      expect(result, hasLength(1));
+      expect(result.first.id, 'block-doc-id');
+      expect(result.first.userId, 'uid-a');
+      expect(result.first.title, 'Work');
+      expect(result.first.type, TimeBlockType.busy);
+    });
+
+    test('emits empty list when no blocks exist', () async {
+      final mockSubCollection = MockCollectionReferenceMap();
+      final mockQuery = MockQueryMap();
+      final mockQuerySnapshot = MockQuerySnapshotMap();
+
+      stubCollection('timeblocks');
+      stubDoc('couple-1');
+      when(mockDocRef.collection('blocks')).thenReturn(mockSubCollection);
+      when(mockSubCollection.where('userId', isEqualTo: 'uid-a'))
+          .thenReturn(mockQuery);
+      when(mockQuery.snapshots())
+          .thenAnswer((_) => Stream.value(mockQuerySnapshot));
+      when(mockQuerySnapshot.docs).thenReturn([]);
+
+      final result = await service
+          .watchBlocks('couple-1', userId: 'uid-a')
+          .first;
+
+      expect(result, isEmpty);
+    });
+  });
+
   group('createBlock', () {
     test('adds block and returns generated ID', () async {
       final mockSubCollection = MockCollectionReferenceMap();
