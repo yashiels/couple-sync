@@ -170,18 +170,27 @@ jobs:
           # Default snapshot behavior: load if exists, save on graceful shutdown.
           # First run is a cold boot (~2-3 min); subsequent runs load the saved
           # snapshot and boot in ~30s. -no-metrics skips Google telemetry.
+          # -memory 3072 / -cores 4 give enough headroom that Android's System UI
+          # watchdog doesn't ANR during dexopt on first launch.
           nohup "$ANDROID_SDK_ROOT/emulator/emulator" @$AVD_NAME \
             -no-boot-anim -no-window -no-audio -no-metrics \
-            -gpu swiftshader_indirect -memory 2048 \
+            -gpu swiftshader_indirect -memory 3072 -cores 4 \
             >/tmp/emulator.log 2>&1 &
           echo $! > /tmp/emulator.pid
           adb start-server
           timeout 300 bash -c \
             'until adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r" | grep -q 1; do sleep 3; done'
           adb shell input keyevent 82  # unlock screen
+          # Wait for package manager + zygote to finish warmup.
+          # Without this, first-install dexopt can trip "System UI isn't responding" ANR.
+          timeout 60 adb shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done' || true
+          sleep 15
 
       - name: Install APK
-        run: adb install -r build/app/outputs/flutter-apk/app-debug.apk
+        run: |
+          adb install -r build/app/outputs/flutter-apk/app-debug.apk
+          # Force AOT compilation so first launch doesn't JIT under load.
+          adb shell cmd package compile -f -m speed com.skynergroup.couple_sync || true
 
       - name: Run Maestro UI tests
         run: maestro test .maestro/ -e APP_ID=com.skynergroup.couple_sync
@@ -204,6 +213,14 @@ jobs:
           # Wait briefly for snapshot save to complete before forcing kill.
           sleep 8
           [ -f /tmp/emulator.pid ] && kill "$(cat /tmp/emulator.pid)" 2>/dev/null || true
+
+      - name: Nuke snapshot on failure
+        if: failure()
+        run: |
+          # If this run failed, the saved snapshot may have captured a broken state
+          # (e.g. an ANR dialog). Clear it so the next run cold-boots fresh.
+          rm -rf "$HOME/.android/avd/$AVD_NAME.avd/snapshots/" 2>/dev/null || true
+          echo "Cleared snapshots for $AVD_NAME"
 
       - name: Emulator log (on failure)
         if: failure()
