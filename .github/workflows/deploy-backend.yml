@@ -14,6 +14,7 @@ on:
       - 'functions/**'
       - 'firestore.rules'
       - 'firestore.indexes.json'
+  workflow_dispatch:  # manual trigger from Actions tab; pick any branch to deploy
 
 jobs:
   deploy:
