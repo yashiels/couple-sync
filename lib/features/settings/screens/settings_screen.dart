@@ -613,29 +613,31 @@ class SettingsScreen extends ConsumerWidget {
 
       if (userProfile == null) return;
 
-      // TODO: STORY-011 - Implement unpair functionality in FirestoreService
-      // This should:
-      // 1. Update couple status to 'inactive'
-      // 2. Add unpair history entry
-      // 3. Clear coupleId from both users
-      // 4. Optionally delete shared time blocks
+      // Clear coupleId from the current user's Firestore document.
+      // The couple doc and partner's coupleId are left for the partner to
+      // resolve — a full bilateral unpair can be promoted to a Cloud Function
+      // when STORY-011 is implemented.
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(authState.uid)
+          .update({'coupleId': FieldValue.delete()});
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unpair functionality coming soon'),
-        ),
-      );
+      // Refresh local profile so providers reflect the cleared coupleId.
+      await ref.read(authStateProvider.notifier).refreshProfile();
 
-      // For now, just show a message
-      // When implemented, navigate to pairing screen after unpair
-      // context.go(AppRoutes.pairing);
+      // Navigate to pairing screen so the user can pair again if desired.
+      if (context.mounted) {
+        context.go(AppRoutes.pairing);
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to unpair: $e'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to unpair: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
     }
   }
 

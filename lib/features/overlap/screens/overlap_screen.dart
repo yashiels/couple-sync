@@ -478,9 +478,12 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
+      // Only update when a new chip is selected; ignore tap on the already-
+      // selected chip so the sort order never enters an unselected state.
       onSelected: (selected) {
-        setDialogState(() => _sortBy = selected ? sortBy : _sortBy);
-        setState(() => _sortBy = selected ? sortBy : _sortBy);
+        if (!selected) return;
+        setDialogState(() => _sortBy = sortBy);
+        setState(() => _sortBy = sortBy);
       },
     );
   }
@@ -544,20 +547,16 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
               ),
               const SizedBox(height: 8),
 
-              // Score breakdown
+              // Score
               Text(
-                'Score Breakdown',
+                'Score',
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 12),
 
-              _buildScoreRow('Overall Score', window.score, theme),
-              const SizedBox(height: 8),
-              _buildScoreRow('Duration Score', window.score * 0.8, theme),
-              const SizedBox(height: 8),
-              _buildScoreRow('Timing Score', window.score * 0.9, theme),
+              _buildScoreRow('Score', window.score, theme),
 
               const SizedBox(height: 16),
 

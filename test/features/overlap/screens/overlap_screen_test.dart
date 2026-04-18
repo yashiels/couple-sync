@@ -304,17 +304,17 @@ void main() {
       expect(find.text('Window Details'), findsOneWidget);
     });
 
-    testWidgets('details dialog shows score breakdown', (tester) async {
+    testWidgets('details dialog shows score', (tester) async {
       await tester.pumpWidget(_buildSubject());
       await tester.pumpAndSettle();
 
       await tester.tap(find.byType(WindowCardWidget).first);
       await tester.pumpAndSettle();
 
-      expect(find.text('Score Breakdown'), findsOneWidget);
-      expect(find.text('Overall Score'), findsOneWidget);
-      expect(find.text('Duration Score'), findsOneWidget);
-      expect(find.text('Timing Score'), findsOneWidget);
+      expect(find.text('Score'), findsWidgets);
+      // Fabricated sub-scores have been removed — only the real score is shown.
+      expect(find.text('Duration Score'), findsNothing);
+      expect(find.text('Timing Score'), findsNothing);
     });
 
     testWidgets('details dialog shows time info', (tester) async {
