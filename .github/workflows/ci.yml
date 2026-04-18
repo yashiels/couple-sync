@@ -7,6 +7,15 @@ on:
     branches: [main]
   workflow_dispatch:  # allow manual trigger (e.g. to run iOS tests on any branch)
 
+# Cancel older in-progress runs of the same ref when a new one starts.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Future-proof: force JS actions to Node 24 (Node 20 forced switch on 2026-06-02)
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   analyze:
     name: Analyze
@@ -158,13 +167,16 @@ jobs:
 
       - name: Start emulator
         run: |
+          # Default snapshot behavior: load if exists, save on graceful shutdown.
+          # First run is a cold boot (~2-3 min); subsequent runs load the saved
+          # snapshot and boot in ~30s. -no-metrics skips Google telemetry.
           nohup "$ANDROID_SDK_ROOT/emulator/emulator" @$AVD_NAME \
-            -no-boot-anim -no-window -no-audio -no-snapshot \
+            -no-boot-anim -no-window -no-audio -no-metrics \
             -gpu swiftshader_indirect -memory 2048 \
             >/tmp/emulator.log 2>&1 &
           echo $! > /tmp/emulator.pid
           adb start-server
-          timeout 240 bash -c \
+          timeout 300 bash -c \
             'until adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r" | grep -q 1; do sleep 3; done'
           adb shell input keyevent 82  # unlock screen
 
@@ -174,10 +186,23 @@ jobs:
       - name: Run Maestro UI tests
         run: maestro test .maestro/ -e APP_ID=com.skynergroup.couple_sync
 
+      - name: Upload Maestro test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-report
+          path: |
+            ~/.maestro/tests/**
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Stop emulator
         if: always()
         run: |
+          # adb emu kill triggers graceful shutdown — emulator saves snapshot for next run.
           adb emu kill 2>/dev/null || true
+          # Wait briefly for snapshot save to complete before forcing kill.
+          sleep 8
           [ -f /tmp/emulator.pid ] && kill "$(cat /tmp/emulator.pid)" 2>/dev/null || true
 
       - name: Emulator log (on failure)
