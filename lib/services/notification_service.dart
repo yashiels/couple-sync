@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
@@ -26,6 +28,9 @@ class NotificationService {
   final LocalNotificationDisplay? _display;
   final Stream<RemoteMessage> _messageStream;
   bool _suppressDisplay = false;
+
+  StreamSubscription<String>? _tokenRefreshSub;
+  StreamSubscription<RemoteMessage>? _foregroundMessageSub;
 
   NotificationService({
     FirebaseMessaging? messaging,
@@ -56,12 +61,12 @@ class NotificationService {
     }
 
     // Handle token refresh (device rotation, reinstall, etc.)
-    _messaging.onTokenRefresh.listen((newToken) {
+    _tokenRefreshSub = _messaging.onTokenRefresh.listen((newToken) {
       storeToken(userId, newToken);
     });
 
     // Handle messages received while app is in the foreground
-    _messageStream.listen(handleForegroundMessage);
+    _foregroundMessageSub = _messageStream.listen(handleForegroundMessage);
   }
 
   /// Store or refresh an FCM token in the user's Firestore document.
@@ -98,4 +103,10 @@ class NotificationService {
 
   /// Whether foreground notification display is currently suppressed.
   bool get isSuppressed => _suppressDisplay;
+
+  /// Cancel active subscriptions. Call when the service is no longer needed.
+  Future<void> dispose() async {
+    await _tokenRefreshSub?.cancel();
+    await _foregroundMessageSub?.cancel();
+  }
 }

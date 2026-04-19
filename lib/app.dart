@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/router/app_router.dart';
 import 'core/router/routes.dart';
 import 'core/theme/app_theme.dart';
+import 'services/providers/notification_provider.dart';
 
 /// Theme mode provider for managing light/dark theme.
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
@@ -18,13 +21,19 @@ class MyApp extends ConsumerStatefulWidget {
 }
 
 class _MyAppState extends ConsumerState<MyApp> {
+  StreamSubscription<RemoteMessage>? _messageOpenedSub;
+
   @override
   void initState() {
     super.initState();
 
+    // Eagerly instantiate NotificationService so it registers FCM listeners and
+    // calls initialize() as soon as an authenticated userId is available.
+    ref.read(notificationServiceProvider);
+
     // Handle notification tap when app was in background (not terminated).
     // Tapping the system notification opens the app and navigates to /overlap.
-    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+    _messageOpenedSub = FirebaseMessaging.onMessageOpenedApp.listen((message) {
       final router = ref.read(routerProvider);
       router.go(AppRoutes.overlap);
     });
@@ -40,6 +49,12 @@ class _MyAppState extends ConsumerState<MyApp> {
         });
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _messageOpenedSub?.cancel();
+    super.dispose();
   }
 
   @override
