@@ -1,7 +1,40 @@
 import { DateTime } from 'luxon';
 import * as admin from 'firebase-admin';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { logger } from 'firebase-functions';
 import { CoupleDoc, OverlapResult, OverlapWindow } from './lib/types';
+
+// ─── Module-scope constants ───────────────────────────────────────────────────
+
+export const INVALID_TOKEN_CODES = [
+  'messaging/invalid-registration-token',
+  'messaging/registration-token-not-registered',
+];
+
+/**
+ * Given a list of tokens and the per-message responses from sendEachForMulticast,
+ * returns only the tokens that should be pruned (i.e. those with a hard-invalid code).
+ * Transient errors (quota exceeded, internal, etc.) are logged but NOT pruned.
+ */
+export function filterInvalidFcmTokens(
+  tokens: string[],
+  responses: Array<{ success: boolean; error?: { code: string } }>
+): string[] {
+  const invalid: string[] = [];
+  for (const [i, result] of responses.entries()) {
+    if (!result.success) {
+      const code = result.error?.code ?? '';
+      if (INVALID_TOKEN_CODES.includes(code)) {
+        invalid.push(tokens[i]);
+      } else {
+        logger.warn(
+          `[onOverlapWrite] Transient FCM error for token[${i}], code=${code} — not pruning`
+        );
+      }
+    }
+  }
+  return invalid;
+}
 
 // ─── Testable business logic ──────────────────────────────────────────────────
 
@@ -89,11 +122,7 @@ export const onOverlapWrite = onDocumentWritten(
           notification: { title: notif.title, body: notif.body },
           data: notif.data,
         });
-        const invalid: string[] = [];
-        response.responses.forEach((r, idx) => {
-          if (!r.success) invalid.push(tokens[idx]);
-        });
-        return invalid;
+        return filterInvalidFcmTokens(tokens, response.responses);
       },
       updateFcmTokens: async (uid, validTokens) => {
         await db.collection('users').doc(uid).update({ fcmTokens: validTokens });
