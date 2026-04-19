@@ -676,6 +676,7 @@ class SettingsScreen extends ConsumerWidget {
       // Navigation will be handled by GoRouter redirect guard
       // User will be redirected to /auth automatically
     } catch (e) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to sign out: $e'),

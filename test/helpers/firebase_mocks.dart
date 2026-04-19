@@ -1,11 +1,11 @@
-/// Firebase mock setup for unit and widget tests.
-///
-/// Usage:
-///   import 'package:couple_sync/test/helpers/firebase_mocks.dart';
-///   setupFirebaseMocks(); // call in setUp() or setUpAll()
-///
-/// This file provides mock implementations for Firebase services
-/// so tests can run without a real Firebase connection.
+// Firebase mock setup for unit and widget tests.
+//
+// Usage:
+//   import 'package:couple_sync/test/helpers/firebase_mocks.dart';
+//   setupFirebaseMocks(); // call in setUp() or setUpAll()
+//
+// This file provides mock implementations for Firebase services
+// so tests can run without a real Firebase connection.
 
 // TODO: Add Firebase mock implementations as tests are written.
 // Common patterns:

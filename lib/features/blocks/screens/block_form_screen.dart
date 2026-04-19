@@ -315,7 +315,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
 
                     // Type dropdown
                     DropdownButtonFormField<TimeBlockType>(
-                      value: _type,
+                      initialValue: _type,
                       decoration: const InputDecoration(
                         labelText: 'Type',
                         border: OutlineInputBorder(),
@@ -336,7 +336,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
 
                     // Category dropdown
                     DropdownButtonFormField<TimeBlockCategory>(
-                      value: _category,
+                      initialValue: _category,
                       decoration: const InputDecoration(
                         labelText: 'Category',
                         border: OutlineInputBorder(),
@@ -357,7 +357,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
 
                     // Visibility dropdown
                     DropdownButtonFormField<TimeBlockVisibility>(
-                      value: _visibility,
+                      initialValue: _visibility,
                       decoration: const InputDecoration(
                         labelText: 'Visibility',
                         border: OutlineInputBorder(),
