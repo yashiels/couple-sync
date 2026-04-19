@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/models/couple_model.dart';
 import '../../../core/router/routes.dart';
 import '../../../services/calendar_service.dart';
 import '../../../services/providers/auth_state_provider.dart';
@@ -348,7 +349,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget _buildCoupleSection(
     BuildContext context,
     WidgetRef ref,
-    dynamic couple,
+    CoupleModel couple,
   ) {
     final partnerAsync = ref.watch(partnerProfileProvider);
 
@@ -577,7 +578,7 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
-  void _showUnpairDialog(BuildContext context, WidgetRef ref, dynamic couple) {
+  void _showUnpairDialog(BuildContext context, WidgetRef ref, CoupleModel couple) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -606,36 +607,53 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _handleUnpair(BuildContext context, WidgetRef ref, dynamic couple) async {
+  Future<void> _handleUnpair(BuildContext context, WidgetRef ref, CoupleModel couple) async {
     try {
       final authState = ref.read(authStateProvider);
       final userProfile = authState.profile;
+      final uid = authState.uid;
 
-      if (userProfile == null) return;
+      if (userProfile == null || uid == null) return;
 
-      // TODO: STORY-011 - Implement unpair functionality in FirestoreService
-      // This should:
-      // 1. Update couple status to 'inactive'
-      // 2. Add unpair history entry
-      // 3. Clear coupleId from both users
-      // 4. Optionally delete shared time blocks
+      final coupleId = userProfile.coupleId;
+      if (coupleId == null) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unpair functionality coming soon'),
-        ),
-      );
+      final partnerUid = couple.getPartnerUid(uid);
 
-      // For now, just show a message
-      // When implemented, navigate to pairing screen after unpair
-      // context.go(AppRoutes.pairing);
+      final db = FirebaseFirestore.instance;
+
+      // Use a transaction to atomically clear both users' coupleId so neither
+      // user is left in an orphaned/permanently-paired state.
+      await db.runTransaction((txn) async {
+        txn.update(
+          db.collection('users').doc(uid),
+          {'coupleId': FieldValue.delete()},
+        );
+
+        if (partnerUid != null) {
+          txn.update(
+            db.collection('users').doc(partnerUid),
+            {'coupleId': FieldValue.delete()},
+          );
+        }
+      });
+
+      // Refresh local profile so providers reflect the cleared coupleId.
+      await ref.read(authStateProvider.notifier).refreshProfile();
+
+      // Navigate to pairing screen so the user can pair again if desired.
+      if (context.mounted) {
+        context.go(AppRoutes.pairing);
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to unpair: $e'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to unpair: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
     }
   }
 
