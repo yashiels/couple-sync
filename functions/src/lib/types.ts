@@ -51,6 +51,8 @@ export interface InviteDoc {
   createdByUid: string;
   coupleId?: string;
   expiresAt: number; // UTC ms
-  status: 'pending' | 'accepted' | 'expired';
+  // 'accepted' is a legacy value — no longer written by current code (acceptInvite
+  // now only stamps coupleId). Kept here so existing Firestore docs deserialise correctly.
+  status: 'pending' | 'redeemed' | 'accepted' | 'expired';
   deepLinkUrl?: string;
 }
