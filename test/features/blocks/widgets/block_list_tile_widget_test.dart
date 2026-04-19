@@ -14,10 +14,10 @@ TimeBlock _makeBlock({
   TimeBlockVisibility visibility = TimeBlockVisibility.bothPartners,
   String? recurrenceRule,
 }) {
-  // 2024-06-15 09:00 UTC
-  final defaultStart = DateTime.utc(2024, 6, 15, 9, 0).millisecondsSinceEpoch;
-  // 2024-06-15 10:00 UTC
-  final defaultEnd = DateTime.utc(2024, 6, 15, 10, 0).millisecondsSinceEpoch;
+  // 2024-06-15 09:00 local (display tests use local time)
+  final defaultStart = DateTime(2024, 6, 15, 9, 0).millisecondsSinceEpoch;
+  // 2024-06-15 10:00 local
+  final defaultEnd = DateTime(2024, 6, 15, 10, 0).millisecondsSinceEpoch;
 
   return TimeBlock(
     userId: 'user-1',
@@ -123,9 +123,9 @@ void main() {
     });
 
     testWidgets('formats same-day time range correctly', (tester) async {
-      // 2024-06-15 09:00 - 10:30 UTC (same day)
-      final start = DateTime.utc(2024, 6, 15, 9, 0).millisecondsSinceEpoch;
-      final end = DateTime.utc(2024, 6, 15, 10, 30).millisecondsSinceEpoch;
+      // 2024-06-15 09:00 - 10:30 local (display tests use local time)
+      final start = DateTime(2024, 6, 15, 9, 0).millisecondsSinceEpoch;
+      final end = DateTime(2024, 6, 15, 10, 30).millisecondsSinceEpoch;
 
       await tester.pumpWidget(
         _buildSubject(
@@ -139,9 +139,9 @@ void main() {
     });
 
     testWidgets('formats cross-day time range correctly', (tester) async {
-      // 2024-06-15 23:00 - 2024-06-16 01:00 UTC (different days)
-      final start = DateTime.utc(2024, 6, 15, 23, 0).millisecondsSinceEpoch;
-      final end = DateTime.utc(2024, 6, 16, 1, 0).millisecondsSinceEpoch;
+      // 2024-06-15 23:00 - 2024-06-16 01:00 local (different days)
+      final start = DateTime(2024, 6, 15, 23, 0).millisecondsSinceEpoch;
+      final end = DateTime(2024, 6, 16, 1, 0).millisecondsSinceEpoch;
 
       await tester.pumpWidget(
         _buildSubject(

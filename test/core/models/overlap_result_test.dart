@@ -117,14 +117,16 @@ void main() {
     });
 
     group('computed properties', () {
-      test('startDateTime returns correct UTC DateTime', () {
+      test('startDateTime returns local DateTime for the correct instant', () {
         final window = createTestWindow();
-        expect(window.startDateTime, DateTime.utc(2026, 4, 8, 9, 0, 0));
+        expect(window.startDateTime.millisecondsSinceEpoch, windowStartUtc);
+        expect(window.startDateTime.isUtc, isFalse);
       });
 
-      test('endDateTime returns correct UTC DateTime', () {
+      test('endDateTime returns local DateTime for the correct instant', () {
         final window = createTestWindow();
-        expect(window.endDateTime, DateTime.utc(2026, 4, 8, 10, 0, 0));
+        expect(window.endDateTime.millisecondsSinceEpoch, windowEndUtc);
+        expect(window.endDateTime.isUtc, isFalse);
       });
 
       test('durationHours returns correct decimal hours', () {
