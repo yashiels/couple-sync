@@ -1,0 +1,104 @@
+name: Rebase PRs
+
+# Automatically rebases open PRs when main advances, and rebases a single PR
+# on demand when someone comments "/rebase" on it.
+#
+# Requires a PAT stored as secret GH_PAT (repo scope, owned by a user with
+# push access). GITHUB_TOKEN pushes are invisible to other workflows, so CI
+# would never re-trigger on the rebased branch without a PAT.
+
+on:
+  push:
+    branches: [main]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ── Triggered by push to main ─────────────────────────────────────────────
+  rebase-all:
+    name: Rebase out-of-date PRs
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "apex-skyner"
+          git config user.email "apex@skyner.co.za"
+
+      - name: Rebase each open PR that is behind main
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          git fetch --all --prune
+
+          gh pr list --base main --state open \
+            --json number,headRefName \
+            --jq '.[] | "\(.number) \(.headRefName)"' | \
+          while read -r pr_number branch; do
+            # Skip branches already up to date with main
+            if git merge-base --is-ancestor origin/main "origin/$branch" 2>/dev/null; then
+              echo "PR #$pr_number ($branch): already up to date — skipping"
+              continue
+            fi
+
+            echo "PR #$pr_number ($branch): rebasing..."
+            git checkout -B "$branch" "origin/$branch"
+
+            if git rebase origin/main; then
+              git push --force-with-lease origin "$branch"
+              echo "PR #$pr_number: rebased OK"
+            else
+              git rebase --abort
+              gh pr comment "$pr_number" \
+                --body "⚠️ Auto-rebase onto \`main\` failed due to merge conflicts. Please rebase manually."
+              echo "PR #$pr_number: conflict — commented on PR"
+            fi
+          done
+
+  # ── Triggered by /rebase comment on a PR ─────────────────────────────────
+  rebase-one:
+    name: Rebase on /rebase comment
+    if: |
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request != null &&
+      contains(github.event.comment.body, '/rebase')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "apex-skyner"
+          git config user.email "apex@skyner.co.za"
+
+      - name: Rebase this PR
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          git fetch --all --prune
+          branch=$(gh pr view "$PR_NUMBER" --json headRefName --jq '.headRefName')
+
+          git checkout -B "$branch" "origin/$branch"
+
+          if git rebase origin/main; then
+            git push --force-with-lease origin "$branch"
+            gh pr comment "$PR_NUMBER" \
+              --body "✅ Branch rebased onto \`main\` successfully."
+          else
+            git rebase --abort
+            gh pr comment "$PR_NUMBER" \
+              --body "⚠️ Auto-rebase onto \`main\` failed due to merge conflicts. Please rebase manually."
+          fi
