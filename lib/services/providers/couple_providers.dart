@@ -12,7 +12,7 @@ import 'firestore_provider.dart';
 final coupleProvider = FutureProvider<CoupleModel?>((ref) {
   final profile = ref.watch(currentUserProfileProvider);
   if (profile?.coupleId == null) return null;
-  return ref.read(firestoreServiceProvider).getCouple(profile!.coupleId!);
+  return ref.watch(firestoreServiceProvider).getCouple(profile!.coupleId!);
 });
 
 /// Fetches the partner's user profile.
@@ -23,7 +23,7 @@ final partnerProfileProvider = FutureProvider<UserModel?>((ref) {
   if (couple == null || myUid == null) return null;
   final partnerId =
       couple.userAUid == myUid ? couple.userBUid : couple.userAUid;
-  return ref.read(firestoreServiceProvider).getUser(partnerId);
+  return ref.watch(firestoreServiceProvider).getUser(partnerId);
 });
 
 /// Real-time stream of the current user's time blocks.
@@ -32,7 +32,7 @@ final userBlocksProvider = StreamProvider<List<TimeBlock>>((ref) {
   final profile = ref.watch(currentUserProfileProvider);
   final myUid = ref.watch(currentUserIdProvider);
   if (profile?.coupleId == null || myUid == null) return Stream.value([]);
-  return ref.read(firestoreServiceProvider).watchBlocks(
+  return ref.watch(firestoreServiceProvider).watchBlocks(
         profile!.coupleId!,
         userId: myUid,
       );
@@ -49,7 +49,7 @@ final partnerBlocksProvider = StreamProvider<List<TimeBlock>>((ref) {
   }
   final partnerId =
       couple.userAUid == myUid ? couple.userBUid : couple.userAUid;
-  return ref.read(firestoreServiceProvider).watchBlocks(
+  return ref.watch(firestoreServiceProvider).watchBlocks(
         profile!.coupleId!,
         userId: partnerId,
       );
@@ -60,5 +60,5 @@ final partnerBlocksProvider = StreamProvider<List<TimeBlock>>((ref) {
 final overlapWindowsProvider = StreamProvider<OverlapResult?>((ref) {
   final profile = ref.watch(currentUserProfileProvider);
   if (profile?.coupleId == null) return Stream.value(null);
-  return ref.read(firestoreServiceProvider).watchOverlap(profile!.coupleId!);
+  return ref.watch(firestoreServiceProvider).watchOverlap(profile!.coupleId!);
 });

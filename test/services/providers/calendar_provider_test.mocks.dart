@@ -7,7 +7,6 @@ import 'dart:async' as _i3;
 
 import 'package:couple_sync/core/models/time_block.dart' as _i5;
 import 'package:couple_sync/services/calendar_service.dart' as _i2;
-import 'package:googleapis/calendar/v3.dart' as _i4;
 import 'package:mockito/mockito.dart' as _i1;
 
 // ignore_for_file: type=lint
@@ -73,14 +72,6 @@ class MockCalendarService extends _i1.Mock implements _i2.CalendarService {
             returnValue: _i3.Future<String?>.value(),
           )
           as _i3.Future<String?>);
-
-  @override
-  _i3.Future<_i4.CalendarApi?> getCalendarApi() =>
-      (super.noSuchMethod(
-            Invocation.method(#getCalendarApi, []),
-            returnValue: _i3.Future<_i4.CalendarApi?>.value(),
-          )
-          as _i3.Future<_i4.CalendarApi?>);
 
   @override
   _i3.Future<List<({DateTime end, DateTime start})>> fetchFreebusy() =>

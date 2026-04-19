@@ -237,39 +237,30 @@ class CalendarService {
     }
   }
 
-  /// Gets the Google Calendar API client.
-  /// Returns null if not connected or token refresh failed.
-  Future<calendar.CalendarApi?> getCalendarApi() async {
-    final accessToken = await getAccessToken();
-    if (accessToken == null) {
-      return null;
-    }
-
-    // Create an authenticated HTTP client
-    final httpClient = _AuthenticatedClient(
-      http.Client(),
-      auth.AccessToken(
-        'Bearer',
-        accessToken,
-        DateTime.now().toUtc().add(const Duration(hours: 1)),
-      ),
-    );
-
-    return calendar.CalendarApi(httpClient);
-  }
-
   /// Fetches freebusy intervals from Google Calendar for the next 14 days.
   /// Returns a list of busy time intervals (start and end times in UTC).
   /// Privacy-first: NEVER fetches or stores event titles.
   Future<List<({DateTime start, DateTime end})>> fetchFreebusy() async {
+    final accessToken = await getAccessToken();
+    if (accessToken == null) {
+      throw const CalendarException(
+        code: 'not-connected',
+        message: 'Google Calendar is not connected. Please connect first.',
+      );
+    }
+
+    // Create a short-lived HTTP client owned by this call; closed in finally.
+    final rawClient = http.Client();
     try {
-      final calendarApi = await getCalendarApi();
-      if (calendarApi == null) {
-        throw const CalendarException(
-          code: 'not-connected',
-          message: 'Google Calendar is not connected. Please connect first.',
-        );
-      }
+      final httpClient = _AuthenticatedClient(
+        rawClient,
+        auth.AccessToken(
+          'Bearer',
+          accessToken,
+          DateTime.now().toUtc().add(const Duration(hours: 1)),
+        ),
+      );
+      final calendarApi = calendar.CalendarApi(httpClient);
 
       // Calculate time range: now to 14 days ahead
       final now = DateTime.now().toUtc();
@@ -320,6 +311,8 @@ class CalendarService {
         code: 'freebusy-failed',
         message: 'Failed to fetch calendar availability: ${_getUserFriendlyError(e)}',
       );
+    } finally {
+      rawClient.close();
     }
   }
 
