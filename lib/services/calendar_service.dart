@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
@@ -31,25 +33,47 @@ class CalendarService {
   static const String _refreshTokenKey = 'google_calendar_refresh_token';
   static const String _tokenExpiryKey = 'google_calendar_token_expiry';
   static const String _lastSyncKey = 'google_calendar_last_sync';
-  static const List<String> _calendarScopes = [
-    'https://www.googleapis.com/auth/calendar.readonly',
-  ];
 
   final GoogleSignIn _googleSignIn;
   final FlutterSecureStorage _secureStorage;
 
+  /// Broadcasts calendar connection-state changes to subscribers.
+  /// Closed in [dispose] to prevent timer leaks.
+  late final StreamController<bool> _connectionStateController =
+      StreamController<bool>.broadcast(
+    // Emit the current connection state whenever a new listener subscribes
+    // so that callers using `.first` always receive a value without needing
+    // a prior call to [notifyConnectionStateChanged].
+    onListen: () => notifyConnectionStateChanged(),
+  );
+
   CalendarService({
-    GoogleSignIn? googleSignIn,
+    required GoogleSignIn googleSignIn,
     FlutterSecureStorage? secureStorage,
-  })  : _googleSignIn = googleSignIn ?? GoogleSignIn(scopes: _calendarScopes),
+  })  : _googleSignIn = googleSignIn,
         _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
   /// Stream of calendar connection state changes.
-  Stream<bool> get connectionStateChanges async* {
-    yield await isConnected;
-    await for (final _ in Stream.periodic(const Duration(seconds: 1))) {
-      yield await isConnected;
+  ///
+  /// Every new subscriber immediately receives the current connection state
+  /// via the [onListen] hook.  Subsequent emissions are pushed explicitly via
+  /// [notifyConnectionStateChanged] (e.g. after [connect] or [disconnect]),
+  /// preventing the unbounded timer leak of the previous [Stream.periodic]
+  /// implementation.
+  Stream<bool> get connectionStateChanges => _connectionStateController.stream;
+
+  /// Push the current connection state to all active [connectionStateChanges]
+  /// subscribers.  Called after [connect] or [disconnect].
+  Future<void> notifyConnectionStateChanged() async {
+    if (!_connectionStateController.isClosed) {
+      _connectionStateController.add(await isConnected);
     }
+  }
+
+  /// Releases the [StreamController] used by [connectionStateChanges].
+  /// Called automatically by the Riverpod provider via [ref.onDispose].
+  void dispose() {
+    _connectionStateController.close();
   }
 
   /// Whether Google Calendar is currently connected.
@@ -108,6 +132,7 @@ class CalendarService {
       // For long-term access, we'll need to re-authenticate when token expires
       // This is a known limitation - production apps should use server-side OAuth
 
+      await notifyConnectionStateChanged();
       return true;
     } on CalendarException {
       rethrow;
@@ -132,6 +157,8 @@ class CalendarService {
 
       // Sign out from Google
       await _googleSignIn.signOut();
+
+      await notifyConnectionStateChanged();
     } catch (e) {
       throw CalendarException(
         code: 'disconnect-failed',
