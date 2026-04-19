@@ -200,13 +200,16 @@ class _ShareCodeTabState extends ConsumerState<ShareCodeTab> {
     });
   }
 
-  /// Shares the invite code using the system share sheet.
+  /// Shares the invite link using the system share sheet.
+  /// The HTTPS URL is an App Link (Android) / Universal Link (iOS) that
+  /// opens Couple Sync directly on devices where the app is installed.
   void _shareCode() {
     if (_inviteCode == null) return;
 
+    final deepLink = 'https://coupleschedule.app/invite/$_inviteCode';
     Share.share(
-      'Join me on Couple Sync! Use my invite code: $_inviteCode',
-      subject: 'Couple Sync Invite Code',
+      'Join me on Couple Sync!\n\nTap to open: $deepLink\n\nOr enter code manually: $_inviteCode',
+      subject: 'Couple Sync Invite',
     );
   }
 }

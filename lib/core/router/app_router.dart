@@ -16,20 +16,49 @@ import '../../features/settings/screens/settings_screen.dart';
 
 /// Pure redirect logic extracted for testability.
 ///
+/// [currentPath] is the matched route path (no query string).
+/// [queryParams] are the query parameters for the current navigation state.
+///
 /// Returns the path to redirect to, or null if no redirect is needed.
-String? computeRedirect(AuthState authState, String currentPath) {
+String? computeRedirect(
+  AuthState authState,
+  String currentPath, {
+  Map<String, String> queryParams = const {},
+}) {
   // While loading auth state, don't redirect
   if (authState.isLoading) {
     return null;
   }
 
   // Guard 1: Not authenticated → redirect to /auth
-  // Allow access to auth screen when not authenticated
+  // Allow access to auth screen when not authenticated.
+  // Also allow /invite/* to pass through so the route-level redirect can
+  // forward to /pairing; the auth guard there will fire on subsequent navigation.
   if (!authState.isAuthenticated) {
     if (currentPath == AppRoutes.auth) {
       return null; // Stay on auth screen
     }
+    if (currentPath.startsWith(AppRoutes.inviteBase)) {
+      return null; // Let the GoRoute redirect handle the invite path
+    }
+    // If the destination is /pairing with an invite code, preserve the code
+    // through auth so the user lands on a pre-filled EnterCodeTab after sign-in.
+    if (currentPath == AppRoutes.pairing) {
+      final code = queryParams['code'];
+      if (code != null && code.isNotEmpty) {
+        return '${AppRoutes.auth}?pendingInvite=${Uri.encodeComponent(code)}';
+      }
+    }
     return AppRoutes.auth;
+  }
+
+  // Guard 1b: Authenticated and on /auth with a pendingInvite → consume it
+  // This fires after sign-in when the router re-evaluates redirects.
+  if (currentPath == AppRoutes.auth) {
+    final code = queryParams['pendingInvite'];
+    if (code != null && code.isNotEmpty) {
+      return '${AppRoutes.pairing}?code=${Uri.encodeComponent(code)}';
+    }
   }
 
   // Guard 2: Authenticated but no timezone → redirect to /timezone-setup
@@ -84,7 +113,11 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       // Access the container's current auth state directly
       final authState = ref.read(authStateProvider);
-      return computeRedirect(authState, state.matchedLocation);
+      return computeRedirect(
+        authState,
+        state.matchedLocation,
+        queryParams: state.uri.queryParameters,
+      );
     },
 
     // Refresh router when auth state changes
@@ -107,7 +140,28 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.pairing,
         name: RouteNames.pairing,
-        builder: (context, state) => const PairingScreen(),
+        builder: (context, state) => PairingScreen(
+          // Pass invite code from query parameter so EnterCodeTab is pre-filled
+          // when the user arrives via a deep link (e.g. /invite/:code flow).
+          initialCode: state.uri.queryParameters['code'],
+        ),
+      ),
+
+      // Universal Link / App Link handler
+      // iOS: https://coupleschedule.app/invite/<code>  (Associated Domains)
+      // Android: https://coupleschedule.app/invite/<code>  (App Links / autoVerify)
+      // go_router matches this path when the OS hands the HTTPS URL to the app.
+      // Unauthenticated users are redirected to /auth by computeRedirect; the
+      // code is passed through so the pairing screen can pre-fill it.
+      GoRoute(
+        path: '${AppRoutes.inviteBase}/:code',
+        name: RouteNames.invite,
+        redirect: (context, state) {
+          final code = state.pathParameters['code'] ?? '';
+          // Hand off to /pairing with the invite code as a query parameter so
+          // EnterCodeTab can auto-populate the field.
+          return '${AppRoutes.pairing}?code=${Uri.encodeComponent(code)}';
+        },
       ),
 
       // Main App — wrapped in bottom navigation shell
