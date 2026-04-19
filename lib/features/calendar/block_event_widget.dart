@@ -27,7 +27,7 @@ class BlockEventWidget extends StatelessWidget {
     // Apply opacity/alpha for visual distinction between user and partner
     final displayColor = isCurrentUser 
         ? categoryColor
-        : categoryColor.withOpacity(0.6);
+        : categoryColor.withValues(alpha: 0.6);
     
     // Format time range
     final startTime = _formatTime(block.startDateTime);
@@ -44,7 +44,7 @@ class BlockEventWidget extends StatelessWidget {
           border: Border.all(
             color: isCurrentUser 
                 ? categoryColor
-                : categoryColor.withOpacity(0.8),
+                : categoryColor.withValues(alpha: 0.8),
             width: 1,
           ),
         ),
@@ -69,7 +69,7 @@ class BlockEventWidget extends StatelessWidget {
                   '$startTime - $endTime',
                   style: TextStyle(
                     fontSize: 9,
-                    color: _getTextColor(categoryColor).withOpacity(0.9),
+                    color: _getTextColor(categoryColor).withValues(alpha: 0.9),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
