@@ -11,10 +11,10 @@ TimeBlock _makeBlock({
   int? endUtc,
   TimeBlockSource source = TimeBlockSource.manual,
 }) {
-  // 2024-06-15 09:00 UTC
-  final defaultStart = DateTime.utc(2024, 6, 15, 9, 0).millisecondsSinceEpoch;
-  // 2024-06-15 10:00 UTC (60 min duration >= 30 so time range is shown)
-  final defaultEnd = DateTime.utc(2024, 6, 15, 10, 0).millisecondsSinceEpoch;
+  // 2024-06-15 09:00 local (display tests use local time)
+  final defaultStart = DateTime(2024, 6, 15, 9, 0).millisecondsSinceEpoch;
+  // 2024-06-15 10:00 local (60 min duration >= 30 so time range is shown)
+  final defaultEnd = DateTime(2024, 6, 15, 10, 0).millisecondsSinceEpoch;
 
   return TimeBlock(
     userId: 'user-1',
@@ -71,8 +71,8 @@ void main() {
 
     testWidgets('hides time range for blocks < 30 minutes', (tester) async {
       // 15 minute block
-      final start = DateTime.utc(2024, 6, 15, 9, 0).millisecondsSinceEpoch;
-      final end = DateTime.utc(2024, 6, 15, 9, 15).millisecondsSinceEpoch;
+      final start = DateTime(2024, 6, 15, 9, 0).millisecondsSinceEpoch;
+      final end = DateTime(2024, 6, 15, 9, 15).millisecondsSinceEpoch;
 
       await tester.pumpWidget(_buildSubject(
         block: _makeBlock(startUtc: start, endUtc: end),

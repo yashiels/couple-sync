@@ -135,10 +135,10 @@ class TimeBlock {
   int get durationMinutes => durationMs ~/ 60000;
 
   /// Get start time as DateTime
-  DateTime get startDateTime => DateTime.fromMillisecondsSinceEpoch(startUtc, isUtc: true);
+  DateTime get startDateTime => DateTime.fromMillisecondsSinceEpoch(startUtc);
 
   /// Get end time as DateTime
-  DateTime get endDateTime => DateTime.fromMillisecondsSinceEpoch(endUtc, isUtc: true);
+  DateTime get endDateTime => DateTime.fromMillisecondsSinceEpoch(endUtc);
 
   /// Check if this block is recurring
   bool get isRecurring => recurrenceRule != null && recurrenceRule!.isNotEmpty;
