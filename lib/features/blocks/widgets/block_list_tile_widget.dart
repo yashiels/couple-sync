@@ -177,8 +177,8 @@ class BlockListTileWidget extends StatelessWidget {
 
   /// Format time range as "HH:mm - HH:mm"
   String _formatTimeRange() {
-    final start = block.startDateTime;
-    final end = block.endDateTime;
+    final start = block.startDateTime.toLocal();
+    final end = block.endDateTime.toLocal();
     
     final startStr = '${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}';
     final endStr = '${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')}';

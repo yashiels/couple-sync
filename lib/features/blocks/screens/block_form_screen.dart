@@ -99,7 +99,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
           .get();
       
       if (doc.exists) {
-        final block = TimeBlock.fromJson(doc.data()!);
+        final block = TimeBlock.fromJson(doc.data()!, doc.id);
         setState(() {
           _existingBlock = block;
           _titleController.text = block.title;
@@ -137,7 +137,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
       _startTime.hour,
       _startTime.minute,
     );
-    return dateTime.millisecondsSinceEpoch;
+    return dateTime.toUtc().millisecondsSinceEpoch;
   }
 
   /// Get end time as UTC milliseconds
@@ -149,7 +149,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
       _endTime.hour,
       _endTime.minute,
     );
-    return dateTime.millisecondsSinceEpoch;
+    return dateTime.toUtc().millisecondsSinceEpoch;
   }
 
   /// Validate that end time is after start time
@@ -196,7 +196,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
         recurrenceRule: _recurrenceRule,
         source: TimeBlockSource.manual,
         visibility: _visibility,
-        createdAt: _existingBlock?.createdAt ?? DateTime.now(),
+        createdAt: _existingBlock?.createdAt ?? DateTime.now().toUtc(),
       );
       
       if (_existingBlock != null) {

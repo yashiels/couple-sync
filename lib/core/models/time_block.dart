@@ -24,6 +24,7 @@ enum TimeBlockVisibility { bothPartners, onlyMe }
 
 /// TimeBlock document model for timeblocks/{coupleId}/blocks/{blockId}
 class TimeBlock {
+  final String id;
   final String userId;
   final String title;
   final TimeBlockType type;
@@ -37,6 +38,7 @@ class TimeBlock {
   final DateTime createdAt;
 
   const TimeBlock({
+    this.id = '',
     required this.userId,
     required this.title,
     required this.type,
@@ -50,8 +52,9 @@ class TimeBlock {
     required this.createdAt,
   });
 
-  factory TimeBlock.fromJson(Map<String, dynamic> json) {
+  factory TimeBlock.fromJson(Map<String, dynamic> json, [String docId = '']) {
     return TimeBlock(
+      id: docId,
       userId: json['userId'] as String,
       title: json['title'] as String,
       type: TimeBlockType.values.firstWhere(
@@ -77,8 +80,11 @@ class TimeBlock {
       createdAt: json['createdAt'] is Timestamp
           ? (json['createdAt'] as Timestamp).toDate()
           : json['createdAt'] is int
-              ? DateTime.fromMillisecondsSinceEpoch(json['createdAt'] as int)
-              : DateTime.now(),
+              ? DateTime.fromMillisecondsSinceEpoch(
+                  json['createdAt'] as int,
+                  isUtc: true,
+                )
+              : DateTime.now().toUtc(),
     );
   }
 
@@ -99,6 +105,7 @@ class TimeBlock {
   }
 
   TimeBlock copyWith({
+    String? id,
     String? userId,
     String? title,
     TimeBlockType? type,
@@ -113,6 +120,7 @@ class TimeBlock {
     bool clearRecurrenceRule = false,
   }) {
     return TimeBlock(
+      id: id ?? this.id,
       userId: userId ?? this.userId,
       title: title ?? this.title,
       type: type ?? this.type,
@@ -134,11 +142,13 @@ class TimeBlock {
   /// Get the duration in minutes
   int get durationMinutes => durationMs ~/ 60000;
 
-  /// Get start time as DateTime
-  DateTime get startDateTime => DateTime.fromMillisecondsSinceEpoch(startUtc);
+  /// Get start time as DateTime (UTC)
+  DateTime get startDateTime =>
+      DateTime.fromMillisecondsSinceEpoch(startUtc, isUtc: true);
 
-  /// Get end time as DateTime
-  DateTime get endDateTime => DateTime.fromMillisecondsSinceEpoch(endUtc);
+  /// Get end time as DateTime (UTC)
+  DateTime get endDateTime =>
+      DateTime.fromMillisecondsSinceEpoch(endUtc, isUtc: true);
 
   /// Check if this block is recurring
   bool get isRecurring => recurrenceRule != null && recurrenceRule!.isNotEmpty;
@@ -148,6 +158,7 @@ class TimeBlock {
       identical(this, other) ||
       other is TimeBlock &&
           runtimeType == other.runtimeType &&
+          id == other.id &&
           userId == other.userId &&
           title == other.title &&
           type == other.type &&
@@ -162,6 +173,7 @@ class TimeBlock {
 
   @override
   int get hashCode => Object.hash(
+        id,
         userId,
         title,
         type,
