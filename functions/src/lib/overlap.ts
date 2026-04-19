@@ -132,6 +132,27 @@ export function clipToWakingHours(
   return intervals.flatMap(([s, e]) => clipIntervalToWakingHours(s, e, timezone));
 }
 
+// Splits multi-day intervals into per-day segments (00:00–24:00 local).
+// Used when showLateNightWindows=true so the calendar gets one window per day
+// instead of a single interval spanning the whole horizon.
+export function clipToDayBoundaries(
+  intervals: Array<[number, number]>,
+  timezone: string
+): Array<[number, number]> {
+  const result: Array<[number, number]> = [];
+  for (const [s, e] of intervals) {
+    let dayStart = DateTime.fromMillis(s, { zone: timezone }).startOf('day');
+    while (dayStart.toMillis() < e) {
+      const dayEnd = dayStart.plus({ days: 1 }).toMillis();
+      const clipStart = Math.max(s, dayStart.toMillis());
+      const clipEnd = Math.min(e, dayEnd);
+      if (clipStart < clipEnd) result.push([clipStart, clipEnd]);
+      dayStart = dayStart.plus({ days: 1 });
+    }
+  }
+  return result;
+}
+
 // ─── Scoring ──────────────────────────────────────────────────────────────────
 
 export function scoreWindow(
@@ -188,13 +209,18 @@ export function computeOverlap(
   const freeA = computeFreeIntervals(blocksA, now, windowEnd);
   const freeB = computeFreeIntervals(blocksB, now, windowEnd);
 
-  // Intersect, then clip to waking hours per partner (skip clip if they opted into late-night)
+  // Intersect, then clip per partner. Late-night mode uses day boundaries (00:00–24:00)
+  // instead of waking hours so intervals stay split per day for calendar rendering.
   let clipped = intersectIntervals(freeA, freeB);
   if (!prefsA.showLateNightWindows) {
     clipped = clipToWakingHours(clipped, timezoneA);
+  } else {
+    clipped = clipToDayBoundaries(clipped, timezoneA);
   }
   if (!prefsB.showLateNightWindows) {
     clipped = clipToWakingHours(clipped, timezoneB);
+  } else {
+    clipped = clipToDayBoundaries(clipped, timezoneB);
   }
 
   const reasonableBoth =
