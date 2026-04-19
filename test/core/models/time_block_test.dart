@@ -106,16 +106,16 @@ void main() {
         expect(block.durationMinutes, 60);
       });
 
-      test('startDateTime returns local DateTime for the correct instant', () {
+      test('startDateTime returns UTC DateTime for the correct instant', () {
         final block = createTestBlock();
         expect(block.startDateTime.millisecondsSinceEpoch, startUtc);
-        expect(block.startDateTime.isUtc, isFalse);
+        expect(block.startDateTime.isUtc, isTrue);
       });
 
-      test('endDateTime returns local DateTime for the correct instant', () {
+      test('endDateTime returns UTC DateTime for the correct instant', () {
         final block = createTestBlock();
         expect(block.endDateTime.millisecondsSinceEpoch, endUtc);
-        expect(block.endDateTime.isUtc, isFalse);
+        expect(block.endDateTime.isUtc, isTrue);
       });
 
       test('isRecurring false when null', () {

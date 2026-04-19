@@ -204,7 +204,7 @@ class FirestoreService {
           .get();
 
       return querySnapshot.docs
-          .map((doc) => TimeBlock.fromJson(doc.data()))
+          .map((doc) => TimeBlock.fromJson(doc.data(), doc.id))
           .toList();
     } on FirebaseException catch (e) {
       throw _mapFirebaseException(e, 'Failed to get blocks');
@@ -231,7 +231,7 @@ class FirestoreService {
 
       return query.snapshots().map((snapshot) {
         return snapshot.docs
-            .map((doc) => TimeBlock.fromJson(doc.data()))
+            .map((doc) => TimeBlock.fromJson(doc.data(), doc.id))
             .toList();
       }).handleError((error) {
         if (error is FirebaseException) {

@@ -52,11 +52,13 @@ class OverlapWindow {
     );
   }
 
-  /// Get start time as DateTime
-  DateTime get startDateTime => DateTime.fromMillisecondsSinceEpoch(startUtc);
+  /// Get start time as DateTime (UTC)
+  DateTime get startDateTime =>
+      DateTime.fromMillisecondsSinceEpoch(startUtc, isUtc: true);
 
-  /// Get end time as DateTime
-  DateTime get endDateTime => DateTime.fromMillisecondsSinceEpoch(endUtc);
+  /// Get end time as DateTime (UTC)
+  DateTime get endDateTime =>
+      DateTime.fromMillisecondsSinceEpoch(endUtc, isUtc: true);
 
   /// Get duration as hours (decimal)
   double get durationHours => durationMinutes / 60.0;
@@ -109,8 +111,11 @@ class OverlapResult {
       computedAt: json['computedAt'] is Timestamp
           ? (json['computedAt'] as Timestamp).toDate()
           : json['computedAt'] is int
-              ? DateTime.fromMillisecondsSinceEpoch(json['computedAt'] as int)
-              : DateTime.now(),
+              ? DateTime.fromMillisecondsSinceEpoch(
+                  json['computedAt'] as int,
+                  isUtc: true,
+                )
+              : DateTime.now().toUtc(),
       blockHashA: json['blockHashA'] as String,
       blockHashB: json['blockHashB'] as String,
     );
