@@ -13,6 +13,7 @@ import 'package:mockito/mockito.dart';
   QuerySnapshot,
   QueryDocumentSnapshot,
   Query,
+  WriteBatch,
 ], customMocks: [
   MockSpec<CollectionReference<Map<String, dynamic>>>(
     as: #MockCollectionReferenceMap,
@@ -926,6 +927,145 @@ void main() {
           'unknown',
         )),
       );
+    });
+  });
+
+  // ============================================================
+  // ATOMIC REPLACE GOOGLE-SOURCED BLOCKS
+  // ============================================================
+
+  group('atomicReplaceGoogleSourcedBlocks', () {
+    TimeBlock makeGoogleBlock() => TimeBlock(
+          userId: 'uid-a',
+          title: 'Busy',
+          type: TimeBlockType.busy,
+          category: TimeBlockCategory.work,
+          startUtc: 1704067200000,
+          endUtc: 1704096800000,
+          timezone: 'America/New_York',
+          source: TimeBlockSource.google,
+          visibility: TimeBlockVisibility.bothPartners,
+          createdAt: now,
+        );
+
+    /// Wires up the sub-collection query chain for the google-sourced fetch.
+    void stubFetch({
+      required MockCollectionReferenceMap subCollection,
+      required List<MockQueryDocumentSnapshotMap> existingDocs,
+    }) {
+      final userQuery = MockQueryMap();
+      final googleQuery = MockQueryMap();
+      final querySnapshot = MockQuerySnapshotMap();
+
+      when(mockDocRef.collection('blocks')).thenReturn(subCollection);
+      when(subCollection.where('userId', isEqualTo: 'uid-a'))
+          .thenReturn(userQuery);
+      when(userQuery.where('source', isEqualTo: 'google'))
+          .thenReturn(googleQuery);
+      when(googleQuery.get()).thenAnswer((_) async => querySnapshot);
+      when(querySnapshot.docs).thenReturn(existingDocs);
+    }
+
+    test('normal replace: deletes existing google blocks and creates new ones',
+        () async {
+      final mockSubCollection = MockCollectionReferenceMap();
+      final mockBatch = MockWriteBatch();
+      final existingDoc = MockQueryDocumentSnapshotMap();
+      final existingRef = MockDocumentReferenceMap();
+      final newDocRef = MockDocumentReferenceMap();
+
+      stubCollection('timeblocks');
+      stubDoc('couple-1');
+      stubFetch(
+        subCollection: mockSubCollection,
+        existingDocs: [existingDoc],
+      );
+      when(existingDoc.reference).thenReturn(existingRef);
+
+      when(mockFirestore.batch()).thenReturn(mockBatch);
+      when(mockBatch.delete(any)).thenReturn(null);
+      when(mockBatch.set(any, any)).thenReturn(null);
+      when(mockBatch.commit()).thenAnswer((_) async {});
+
+      // Stub collection.doc() used to allocate IDs for new blocks.
+      when(mockSubCollection.doc()).thenReturn(newDocRef);
+
+      final newBlock = makeGoogleBlock();
+      final result = await service.atomicReplaceGoogleSourcedBlocks(
+        'couple-1',
+        'uid-a',
+        [newBlock],
+      );
+
+      expect(result.deletedCount, 1);
+      expect(result.createdCount, 1);
+      verify(mockBatch.delete(existingRef)).called(1);
+      verify(mockBatch.set(newDocRef, any)).called(1);
+      verify(mockBatch.commit()).called(1);
+    });
+
+    test('first sync (zero existing blocks): creates new blocks without error',
+        () async {
+      final mockSubCollection = MockCollectionReferenceMap();
+      final mockBatch = MockWriteBatch();
+      final newDocRef = MockDocumentReferenceMap();
+
+      stubCollection('timeblocks');
+      stubDoc('couple-1');
+      stubFetch(
+        subCollection: mockSubCollection,
+        existingDocs: [], // no pre-existing google blocks
+      );
+
+      when(mockFirestore.batch()).thenReturn(mockBatch);
+      when(mockBatch.set(any, any)).thenReturn(null);
+      when(mockBatch.commit()).thenAnswer((_) async {});
+      when(mockSubCollection.doc()).thenReturn(newDocRef);
+
+      final newBlock = makeGoogleBlock();
+      final result = await service.atomicReplaceGoogleSourcedBlocks(
+        'couple-1',
+        'uid-a',
+        [newBlock],
+      );
+
+      expect(result.deletedCount, 0);
+      expect(result.createdCount, 1);
+      verifyNever(mockBatch.delete(any));
+      verify(mockBatch.set(newDocRef, any)).called(1);
+      verify(mockBatch.commit()).called(1);
+    });
+
+    test('empty new blocks: deletes existing blocks and creates nothing',
+        () async {
+      final mockSubCollection = MockCollectionReferenceMap();
+      final mockBatch = MockWriteBatch();
+      final existingDoc = MockQueryDocumentSnapshotMap();
+      final existingRef = MockDocumentReferenceMap();
+
+      stubCollection('timeblocks');
+      stubDoc('couple-1');
+      stubFetch(
+        subCollection: mockSubCollection,
+        existingDocs: [existingDoc],
+      );
+      when(existingDoc.reference).thenReturn(existingRef);
+
+      when(mockFirestore.batch()).thenReturn(mockBatch);
+      when(mockBatch.delete(any)).thenReturn(null);
+      when(mockBatch.commit()).thenAnswer((_) async {});
+
+      final result = await service.atomicReplaceGoogleSourcedBlocks(
+        'couple-1',
+        'uid-a',
+        [], // no new blocks — calendar cleared
+      );
+
+      expect(result.deletedCount, 1);
+      expect(result.createdCount, 0);
+      verify(mockBatch.delete(existingRef)).called(1);
+      verifyNever(mockBatch.set(any, any));
+      verify(mockBatch.commit()).called(1);
     });
   });
 
