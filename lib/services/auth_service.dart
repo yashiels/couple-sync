@@ -14,13 +14,10 @@ class AuthService {
   AuthService({
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
-    GoogleSignIn? googleSignIn,
+    required GoogleSignIn googleSignIn,
   })  : _auth = auth ?? FirebaseAuth.instance,
         _firestore = firestore ?? FirebaseFirestore.instance,
-        _googleSignIn = googleSignIn ??
-            GoogleSignIn(scopes: [
-              'https://www.googleapis.com/auth/calendar.readonly',
-            ]);
+        _googleSignIn = googleSignIn;
 
   /// Stream of authentication state changes from Firebase.
   Stream<User?> get authStateChanges => _auth.authStateChanges();
