@@ -70,21 +70,21 @@ String? computeRedirect(
   }
 
   // Guard 3: Has timezone but no coupleId → redirect to /pairing
+  // Note: the timezoneSetup carve-out was removed — if hasTimezone is true,
+  // Guard 2 never fires, so reaching here means timezone is done. Allowing
+  // the user to revisit /timezone-setup from this state was dead and misleading.
   if (!authState.hasCouple) {
     if (currentPath == AppRoutes.pairing) {
       return null; // Stay on pairing screen
     }
-    if (currentPath == AppRoutes.timezoneSetup) {
-      return null; // Allow going back to timezone setup
-    }
     return AppRoutes.pairing;
   }
 
-  // Guard 4: Has coupleId and navigating to /auth or /pairing → redirect to /home
-  if (authState.hasCouple) {
-    if (currentPath == AppRoutes.auth || currentPath == AppRoutes.pairing) {
-      return AppRoutes.home;
-    }
+  // Guard 4: Has coupleId → redirect away from /auth or /pairing to /home.
+  // The outer hasCouple check is omitted: reaching here proves hasCouple is
+  // true (Guard 3 above would have redirected otherwise).
+  if (currentPath == AppRoutes.auth || currentPath == AppRoutes.pairing) {
+    return AppRoutes.home;
   }
 
   // No redirect needed
@@ -96,6 +96,10 @@ String? computeRedirect(
 final routerProvider = Provider<GoRouter>((ref) {
   // Use a listenable that bridges Riverpod state changes to GoRouter refreshes.
   final refreshNotifier = RouterRefreshNotifier();
+
+  // Dispose the notifier when this provider is disposed (e.g. hot-restart) so
+  // listeners registered via ChangeNotifier are cleaned up and don't leak.
+  ref.onDispose(refreshNotifier.dispose);
 
   // Eagerly read to ensure the provider is initialized and the auth listener starts.
   ref.read(authStateProvider);
