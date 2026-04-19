@@ -2,7 +2,7 @@ appId: ${APP_ID}
 name: App Launches Without Crash
 ---
 - launchApp
-- waitForAnimationToEnd:
-    timeout: 10000
-- assertVisible:
-    text: "Couple Sync|Home|Calendar|Pair with Partner|Set Your Timezone"
+- extendedWaitUntil:
+    visible:
+      text: "Couple Sync|Home|Calendar|Pair with Partner|Set Your Timezone"
+    timeout: 40000

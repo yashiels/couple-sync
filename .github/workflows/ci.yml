@@ -19,7 +19,7 @@ env:
 jobs:
   analyze:
     name: Analyze
-    runs-on: [self-hosted, Linux, X64, astra]
+    runs-on: [self-hosted, Linux, X64, cosmos]
     steps:
       - uses: actions/checkout@v6
       - uses: subosito/flutter-action@v2
@@ -32,7 +32,7 @@ jobs:
 
   test:
     name: Test
-    runs-on: [self-hosted, Linux, X64, astra]
+    runs-on: [self-hosted, Linux, X64, cosmos]
     steps:
       - uses: actions/checkout@v6
       - uses: subosito/flutter-action@v2
@@ -45,7 +45,7 @@ jobs:
 
   functions-lint-test:
     name: Functions Lint & Test
-    runs-on: [self-hosted, Linux, X64, astra]
+    runs-on: [self-hosted, Linux, X64, cosmos]
     defaults:
       run:
         working-directory: functions
@@ -60,7 +60,7 @@ jobs:
 
   integration-test:
     name: Integration Test (E2E)
-    runs-on: [self-hosted, Linux, X64, astra]
+    runs-on: [self-hosted, Linux, X64, cosmos]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -90,7 +90,7 @@ jobs:
 
   build:
     name: Build
-    runs-on: [self-hosted, Linux, X64, astra, android]
+    runs-on: [self-hosted, Linux, X64, android]
     needs: [analyze, test, functions-lint-test]
     steps:
       - uses: actions/checkout@v6
@@ -110,7 +110,7 @@ jobs:
 
   ui-test-android:
     name: UI Test (Maestro - Android)
-    runs-on: [self-hosted, Linux, X64, astra, android]
+    runs-on: [self-hosted, Linux, X64, android]
     needs: [build]
     env:
       AVD_NAME: ci-avd

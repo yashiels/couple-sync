@@ -23,7 +23,7 @@ on:
 jobs:
   deploy-play-store:
     name: Deploy to Play Store
-    runs-on: [self-hosted, Linux, X64, astra]
+    runs-on: [self-hosted, Linux, X64, cosmos]
     steps:
       - uses: actions/checkout@v4
 
