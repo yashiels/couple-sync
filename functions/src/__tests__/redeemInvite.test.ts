@@ -85,6 +85,17 @@ describe('handleRedeemInvite', () => {
       .rejects.toThrow('FAILED_PRECONDITION');
   });
 
+  test('throws FAILED_PRECONDITION when invite status is redeemed', async () => {
+    const deps = makeDeps({
+      getInvite: jest.fn().mockResolvedValue(
+        makeValidInvite({ status: 'redeemed' })
+      ),
+    });
+
+    await expect(handleRedeemInvite('userB', 'ABC123', deps))
+      .rejects.toThrow('FAILED_PRECONDITION');
+  });
+
   test('throws DEADLINE_EXCEEDED when invite expiry timestamp is in the past', async () => {
     const deps = makeDeps({
       getInvite: jest.fn().mockResolvedValue(
