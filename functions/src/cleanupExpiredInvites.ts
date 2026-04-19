@@ -8,17 +8,17 @@ const BATCH_SIZE = 500;
 
 interface CleanupDeps {
   getExpiredInvites(cutoffMs: number): Promise<string[]>;
-  deleteInvite(id: string): Promise<void>;
+  /** Delete a batch of up to 500 invite IDs in a single atomic operation. */
+  deleteInviteBatch(ids: string[]): Promise<void>;
 }
 
 export async function handleCleanupExpiredInvites(deps: CleanupDeps): Promise<void> {
   const cutoff = Date.now() - SEVEN_DAYS_MS;
   const expiredIds = await deps.getExpiredInvites(cutoff);
 
-  // Process in batches to avoid overloading Firestore
+  // Commit one WriteBatch per 500-doc chunk (Firestore batch limit).
   for (let i = 0; i < expiredIds.length; i += BATCH_SIZE) {
-    const batch = expiredIds.slice(i, i + BATCH_SIZE);
-    await Promise.all(batch.map((id) => deps.deleteInvite(id)));
+    await deps.deleteInviteBatch(expiredIds.slice(i, i + BATCH_SIZE));
   }
 }
 
@@ -38,8 +38,10 @@ export const cleanupExpiredInvites = onSchedule(
           .get();
         return snap.docs.map((d) => d.id);
       },
-      deleteInvite: async (id) => {
-        await db.collection('invites').doc(id).delete();
+      deleteInviteBatch: async (ids) => {
+        const batch = db.batch();
+        ids.forEach((id) => batch.delete(db.collection('invites').doc(id)));
+        await batch.commit();
       },
     });
   }
