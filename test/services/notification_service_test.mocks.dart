@@ -778,6 +778,7 @@ class MockNotificationSettings extends _i1.Mock
 /// A class which mocks [CollectionReference].
 ///
 /// See the documentation for Mockito's code generation for more information.
+// ignore: must_be_immutable
 class MockCollectionReferenceMap extends _i1.Mock
     implements _i5.CollectionReference<Map<String, dynamic>> {
   MockCollectionReferenceMap() {
@@ -1204,6 +1205,7 @@ class MockCollectionReferenceMap extends _i1.Mock
 /// A class which mocks [DocumentReference].
 ///
 /// See the documentation for Mockito's code generation for more information.
+// ignore: must_be_immutable
 class MockDocumentReferenceMap extends _i1.Mock
     implements _i5.DocumentReference<Map<String, dynamic>> {
   MockDocumentReferenceMap() {

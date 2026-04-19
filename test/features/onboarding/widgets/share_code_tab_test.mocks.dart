@@ -1019,6 +1019,17 @@ class MockFirestoreService extends _i1.Mock implements _i10.FirestoreService {
           as _i7.Future<List<_i11.TimeBlock>>);
 
   @override
+  _i7.Stream<List<_i11.TimeBlock>> watchBlocks(
+    String? coupleId, {
+    String? userId,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#watchBlocks, [coupleId], {#userId: userId}),
+            returnValue: _i7.Stream<List<_i11.TimeBlock>>.empty(),
+          )
+          as _i7.Stream<List<_i11.TimeBlock>>);
+
+  @override
   _i7.Future<String> createBlock(String? coupleId, _i11.TimeBlock? block) =>
       (super.noSuchMethod(
             Invocation.method(#createBlock, [coupleId, block]),
@@ -1073,12 +1084,41 @@ class MockFirestoreService extends _i1.Mock implements _i10.FirestoreService {
           as _i7.Future<int>);
 
   @override
+  _i7.Future<({int createdCount, int deletedCount})>
+  atomicReplaceGoogleSourcedBlocks(
+    String? coupleId,
+    String? userId,
+    List<_i11.TimeBlock>? newBlocks,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#atomicReplaceGoogleSourcedBlocks, [
+              coupleId,
+              userId,
+              newBlocks,
+            ]),
+            returnValue:
+                _i7.Future<({int createdCount, int deletedCount})>.value((
+                  createdCount: 0,
+                  deletedCount: 0,
+                )),
+          )
+          as _i7.Future<({int createdCount, int deletedCount})>);
+
+  @override
   _i7.Future<_i11.OverlapResult?> getOverlap(String? coupleId) =>
       (super.noSuchMethod(
             Invocation.method(#getOverlap, [coupleId]),
             returnValue: _i7.Future<_i11.OverlapResult?>.value(),
           )
           as _i7.Future<_i11.OverlapResult?>);
+
+  @override
+  _i7.Stream<_i11.OverlapResult?> watchOverlap(String? coupleId) =>
+      (super.noSuchMethod(
+            Invocation.method(#watchOverlap, [coupleId]),
+            returnValue: _i7.Stream<_i11.OverlapResult?>.empty(),
+          )
+          as _i7.Stream<_i11.OverlapResult?>);
 }
 
 /// A class which mocks [AuthService].
@@ -1454,6 +1494,7 @@ class MockUser extends _i1.Mock implements _i4.User {
 /// A class which mocks [CollectionReference].
 ///
 /// See the documentation for Mockito's code generation for more information.
+// ignore: must_be_immutable
 class MockCollectionReferenceMap extends _i1.Mock
     implements _i6.CollectionReference<Map<String, dynamic>> {
   MockCollectionReferenceMap() {
@@ -1880,6 +1921,7 @@ class MockCollectionReferenceMap extends _i1.Mock
 /// A class which mocks [DocumentReference].
 ///
 /// See the documentation for Mockito's code generation for more information.
+// ignore: must_be_immutable
 class MockDocumentReferenceMap extends _i1.Mock
     implements _i6.DocumentReference<Map<String, dynamic>> {
   MockDocumentReferenceMap() {
