@@ -85,6 +85,69 @@ void main() {
     test('stays on /auth when already there', () {
       expect(computeRedirect(unauthState, AppRoutes.auth), isNull);
     });
+
+    test('preserves invite code — redirects /pairing?code=ABC123 to /auth?pendingInvite=ABC123', () {
+      final result = computeRedirect(
+        unauthState,
+        AppRoutes.pairing,
+        queryParams: const {'code': 'ABC123'},
+      );
+      expect(result, '/auth?pendingInvite=ABC123');
+    });
+
+    test('redirects /pairing without code to plain /auth', () {
+      expect(computeRedirect(unauthState, AppRoutes.pairing), AppRoutes.auth);
+    });
+
+    test('URI-encodes special characters in invite code', () {
+      final result = computeRedirect(
+        unauthState,
+        AppRoutes.pairing,
+        queryParams: const {'code': 'AB C12'},
+      );
+      expect(result, '/auth?pendingInvite=AB%20C12');
+    });
+  });
+
+  group('computeRedirect — authenticated, consuming pendingInvite', () {
+    late AuthState authNoTimezoneState;
+
+    setUp(() {
+      // Authenticated but timezone not yet set (first-time user after sign-in
+      // via deep link). Guard 1b fires before Guard 2 so the pending invite is
+      // consumed and the user is sent to /pairing with the code.
+      authNoTimezoneState = makeAuthState(
+        isAuthenticated: true,
+        hasTimezone: false,
+        hasCouple: false,
+      );
+    });
+
+    test('redirects /auth?pendingInvite=ABC123 to /pairing?code=ABC123', () {
+      final result = computeRedirect(
+        authNoTimezoneState,
+        AppRoutes.auth,
+        queryParams: const {'pendingInvite': 'ABC123'},
+      );
+      expect(result, '/pairing?code=ABC123');
+    });
+
+    test('does not redirect /auth without pendingInvite (goes to timezone-setup instead)', () {
+      // No pendingInvite — Guard 1b is skipped, Guard 2 fires
+      final result = computeRedirect(authNoTimezoneState, AppRoutes.auth);
+      expect(result, AppRoutes.timezoneSetup);
+    });
+
+    test('URI-encodes the code when building the redirect URL', () {
+      // GoRouter decodes query param values before handing them to redirects,
+      // so spaces arrive as spaces; we must re-encode when building the URL.
+      final result = computeRedirect(
+        authNoTimezoneState,
+        AppRoutes.auth,
+        queryParams: const {'pendingInvite': 'AB C12'},
+      );
+      expect(result, '/pairing?code=AB%20C12');
+    });
   });
 
   group('computeRedirect — authenticated but no timezone', () {
