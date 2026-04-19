@@ -212,14 +212,14 @@ void main() {
       );
     });
 
-    test('OverlapWindow startDateTime is UTC', () {
-      expect(window.startDateTime.isUtc, isTrue);
-      expect(window.startDateTime, DateTime.utc(2026, 4, 8, 9, 0, 0));
+    test('OverlapWindow startDateTime preserves epoch and is local', () {
+      expect(window.startDateTime.millisecondsSinceEpoch, windowStartUtcMs);
+      expect(window.startDateTime.isUtc, isFalse);
     });
 
-    test('OverlapWindow endDateTime is UTC', () {
-      expect(window.endDateTime.isUtc, isTrue);
-      expect(window.endDateTime, DateTime.utc(2026, 4, 8, 10, 0, 0));
+    test('OverlapWindow endDateTime preserves epoch and is local', () {
+      expect(window.endDateTime.millisecondsSinceEpoch, windowEndUtcMs);
+      expect(window.endDateTime.isUtc, isFalse);
     });
 
     test('partner A (Africa/Johannesburg, UTC+2) converts window correctly', () {
