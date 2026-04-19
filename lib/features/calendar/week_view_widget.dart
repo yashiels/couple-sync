@@ -328,9 +328,9 @@ class _WeekViewWidgetState extends State<WeekViewWidget> {
     final isDark = theme.brightness == Brightness.dark;
     
     // Use success color for overlap windows
-    final overlapColor = isDark 
-        ? AppColors.successDark.withOpacity(0.3)
-        : AppColors.successLight.withOpacity(0.3);
+    final overlapColor = isDark
+        ? AppColors.successDark.withValues(alpha: 0.3)
+        : AppColors.successLight.withValues(alpha: 0.3);
     final borderColor = isDark 
         ? AppColors.successDark
         : AppColors.successLight;

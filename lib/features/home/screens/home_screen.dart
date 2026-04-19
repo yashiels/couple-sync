@@ -337,7 +337,7 @@ class _UpcomingWindowCard extends StatelessWidget {
         leading: CircleAvatar(
           backgroundColor: theme.colorScheme.primaryContainer,
           child: Text(
-            '${window.score.toStringAsFixed(0)}',
+            window.score.toStringAsFixed(0),
             style: theme.textTheme.labelSmall?.copyWith(
               color: theme.colorScheme.onPrimaryContainer,
               fontWeight: FontWeight.bold,
