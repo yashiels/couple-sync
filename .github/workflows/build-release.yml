@@ -12,7 +12,7 @@ on:
 jobs:
   build-android:
     name: Build Android Release
-    runs-on: [self-hosted, Linux, X64, astra, android]
+    runs-on: [self-hosted, Linux, X64, android]
     steps:
       - uses: actions/checkout@v4
 
