@@ -9,8 +9,16 @@ import '../widgets/enter_code_tab.dart';
 /// Pairing screen with two tabs for sharing and entering invite codes.
 /// Listens for coupleId changes so the screen navigates away when
 /// the partner redeems the invite (even if this device shared the code).
+///
+/// Pass [initialCode] when navigating here from a deep-linked invite URL so
+/// the screen switches directly to the "Enter Code" tab and pre-fills the
+/// invite code field. The router reads the `code` query parameter and passes
+/// it via the GoRoute builder.
 class PairingScreen extends ConsumerStatefulWidget {
-  const PairingScreen({super.key});
+  /// Invite code to pre-fill in the Enter Code tab (may be null).
+  final String? initialCode;
+
+  const PairingScreen({super.key, this.initialCode});
 
   @override
   ConsumerState<PairingScreen> createState() => _PairingScreenState();
@@ -24,7 +32,9 @@ class _PairingScreenState extends ConsumerState<PairingScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    // Start on "Enter Code" tab (index 1) when arriving via a deep link.
+    final startIndex = (widget.initialCode?.isNotEmpty == true) ? 1 : 0;
+    _tabController = TabController(length: 2, vsync: this, initialIndex: startIndex);
     _listenForPairing();
   }
 
@@ -71,9 +81,9 @@ class _PairingScreenState extends ConsumerState<PairingScreen>
       ),
       body: TabBarView(
         controller: _tabController,
-        children: const [
-          ShareCodeTab(),
-          EnterCodeTab(),
+        children: [
+          const ShareCodeTab(),
+          EnterCodeTab(initialCode: widget.initialCode),
         ],
       ),
     );

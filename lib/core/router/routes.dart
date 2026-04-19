@@ -8,6 +8,11 @@ abstract class AppRoutes {
   static const timezoneSetup = '/timezone-setup';
   static const pairing = '/pairing';
 
+  // Universal Link / App Link deep-link entry point
+  // Matches https://coupleschedule.app/invite/:code
+  static const inviteBase = '/invite';
+  static String invite(String code) => '/invite/$code';
+
   // Main App
   static const home = '/home';
   static const calendar = '/calendar';
@@ -22,6 +27,7 @@ abstract class RouteNames {
   static const auth = 'auth';
   static const timezoneSetup = 'timezone-setup';
   static const pairing = 'pairing';
+  static const invite = 'invite';
   static const home = 'home';
   static const calendar = 'calendar';
   static const blocks = 'blocks';

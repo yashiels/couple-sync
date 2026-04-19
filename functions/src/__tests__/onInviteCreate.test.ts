@@ -7,7 +7,7 @@ describe('handleOnInviteCreate', () => {
 
     expect(updateDeepLink).toHaveBeenCalledWith(
       'ABC123',
-      'coupleschedule://invite/ABC123'
+      'https://coupleschedule.app/invite/ABC123'
     );
   });
 
@@ -21,12 +21,12 @@ describe('handleOnInviteCreate', () => {
     expect(savedUrl).toContain(code);
   });
 
-  test('uses coupleschedule:// scheme', async () => {
+  test('uses https://coupleschedule.app scheme (Universal Links / App Links)', async () => {
     const updateDeepLink = jest.fn().mockResolvedValue(undefined);
     await handleOnInviteCreate('TEST01', { updateDeepLink });
 
     const [, savedUrl] = updateDeepLink.mock.calls[0] as [string, string];
-    expect(savedUrl).toMatch(/^coupleschedule:\/\//);
+    expect(savedUrl).toMatch(/^https:\/\/coupleschedule\.app\/invite\//);
   });
 
   test('calls updateDeepLink exactly once per invite', async () => {
