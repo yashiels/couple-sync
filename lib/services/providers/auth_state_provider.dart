@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../../core/models/user_model.dart';
 import '../auth_service.dart';
 
@@ -62,10 +63,10 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
   AuthStateNotifier({
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
-    AuthService? authService,
+    required AuthService authService,
   })  : _auth = auth ?? FirebaseAuth.instance,
         _firestore = firestore ?? FirebaseFirestore.instance,
-        _authService = authService ?? AuthService(),
+        _authService = authService,
         super(const AuthState()) {
     _init();
   }
@@ -182,16 +183,26 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
   }
 }
 
+/// Single shared [GoogleSignIn] instance used by both [AuthService] and
+/// [CalendarService].  Sharing one instance prevents the platform-channel
+/// collision that occurs when one service calls [signOut] and inadvertently
+/// invalidates another service's session.
+final googleSignInProvider = Provider<GoogleSignIn>((ref) {
+  return GoogleSignIn(
+    scopes: ['https://www.googleapis.com/auth/calendar.readonly'],
+  );
+});
+
 /// Provider for the AuthService.
 /// Use this for direct access to auth operations.
 final authServiceProvider = Provider<AuthService>((ref) {
-  return AuthService();
+  return AuthService(googleSignIn: ref.watch(googleSignInProvider));
 });
 
 /// Provider for authentication state.
 /// Use this in guards and UI to check auth status, timezone, and couple pairing.
 final authStateProvider = StateNotifierProvider<AuthStateNotifier, AuthState>((ref) {
-  return AuthStateNotifier();
+  return AuthStateNotifier(authService: ref.watch(authServiceProvider));
 });
 
 /// Convenience provider to check if app is loading auth state.

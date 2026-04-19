@@ -5,8 +5,14 @@ import 'auth_state_provider.dart';
 import 'firestore_provider.dart';
 
 /// Provider for the CalendarService singleton.
+/// Injects the shared [GoogleSignIn] instance from [googleSignInProvider] so
+/// that only one platform-channel handle is ever created for the whole app.
 final calendarServiceProvider = Provider<CalendarService>((ref) {
-  return CalendarService();
+  final calendarService = CalendarService(
+    googleSignIn: ref.watch(googleSignInProvider),
+  );
+  ref.onDispose(calendarService.dispose);
+  return calendarService;
 });
 
 /// Provider for calendar connection state.
