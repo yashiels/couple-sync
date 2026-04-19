@@ -1,5 +1,10 @@
-import { handleOnOverlapWrite } from '../onOverlapWrite';
+import { handleOnOverlapWrite, filterInvalidFcmTokens } from '../onOverlapWrite';
 import { CoupleDoc, OverlapWindow } from '../lib/types';
+
+// Silence firebase-functions logger in unit tests
+jest.mock('firebase-functions', () => ({
+  logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() },
+}));
 
 const makeCouple = (): CoupleDoc => ({
   userAUid: 'userA',
@@ -94,5 +99,44 @@ describe('handleOnOverlapWrite', () => {
         body: expect.any(String),
       })
     );
+  });
+});
+
+describe('filterInvalidFcmTokens', () => {
+  test('does NOT include token with transient error code in invalid list', () => {
+    const tokens = ['token-transient', 'token-invalid'];
+    const responses = [
+      { success: false, error: { code: 'messaging/quota-exceeded' } },
+      { success: false, error: { code: 'messaging/registration-token-not-registered' } },
+    ];
+
+    const invalid = filterInvalidFcmTokens(tokens, responses);
+
+    expect(invalid).not.toContain('token-transient');
+  });
+
+  test('DOES include token with hard-invalid error code in invalid list', () => {
+    const tokens = ['token-transient', 'token-invalid'];
+    const responses = [
+      { success: false, error: { code: 'messaging/quota-exceeded' } },
+      { success: false, error: { code: 'messaging/registration-token-not-registered' } },
+    ];
+
+    const invalid = filterInvalidFcmTokens(tokens, responses);
+
+    expect(invalid).toContain('token-invalid');
+  });
+
+  test('returns only hard-invalid tokens from mixed FCM response', () => {
+    const tokens = ['token-ok', 'token-quota', 'token-unregistered'];
+    const responses = [
+      { success: true },
+      { success: false, error: { code: 'messaging/quota-exceeded' } },
+      { success: false, error: { code: 'messaging/registration-token-not-registered' } },
+    ];
+
+    const invalid = filterInvalidFcmTokens(tokens, responses);
+
+    expect(invalid).toEqual(['token-unregistered']);
   });
 });
