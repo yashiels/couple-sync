@@ -53,7 +53,7 @@ dependencies:
   intl: ^0.20.2
 
   # Google Calendar API
-  googleapis: ^14.0.0
+  googleapis: ^16.0.0
   googleapis_auth: ^2.0.0
 
   # Secure Storage
