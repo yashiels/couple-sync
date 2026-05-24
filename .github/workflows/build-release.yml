@@ -14,7 +14,7 @@ jobs:
     name: Build Android Release
     runs-on: [self-hosted, Linux, X64, android]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: subosito/flutter-action@v2
         with:
@@ -29,7 +29,7 @@ jobs:
         run: flutter build apk --release
 
       - name: Upload Android artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
@@ -38,7 +38,7 @@ jobs:
     name: Build iOS Release
     runs-on: [self-hosted, macOS, astra]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: subosito/flutter-action@v2
         with:
@@ -57,7 +57,7 @@ jobs:
         run: flutter build ios --release --no-codesign
 
       - name: Upload iOS artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-ios
           path: build/ios/iphoneos/Runner.app
