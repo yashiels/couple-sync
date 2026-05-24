@@ -18,6 +18,7 @@ env:
 
 jobs:
   analyze:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Analyze
     runs-on: [self-hosted, Linux, X64, cosmos]
     timeout-minutes: 20
@@ -32,6 +33,7 @@ jobs:
       - run: flutter analyze --no-fatal-infos
 
   test:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Test
     runs-on: [self-hosted, Linux, X64, cosmos]
     timeout-minutes: 20
@@ -46,6 +48,7 @@ jobs:
       - run: flutter test
 
   functions-lint-test:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Functions Lint & Test
     runs-on: [self-hosted, Linux, X64, cosmos]
     timeout-minutes: 20
@@ -62,6 +65,7 @@ jobs:
       - run: npm test
 
   integration-test:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Integration Test (E2E)
     runs-on: [self-hosted, Linux, X64, cosmos]
     timeout-minutes: 45
@@ -93,6 +97,7 @@ jobs:
         run: pkill -f "firebase" || true
 
   build:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Build
     runs-on: [self-hosted, Linux, X64, android]
     timeout-minutes: 30
@@ -114,6 +119,7 @@ jobs:
           retention-days: 7
 
   ui-test-android:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: UI Test (Maestro - Android)
     runs-on: [self-hosted, Linux, X64, android]
     timeout-minutes: 45
