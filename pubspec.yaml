@@ -42,7 +42,7 @@ dependencies:
 
   # Authentication
   google_sign_in: ^6.3.0
-  sign_in_with_apple: ^6.1.4
+  sign_in_with_apple: ^8.0.0
 
   # State Management & Routing
   flutter_riverpod: ^2.6.1
