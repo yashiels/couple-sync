@@ -391,6 +391,91 @@ class FirestoreService {
     }
   }
 
+  /// Replaces all google-sourced blocks for a user with [newBlocks].
+  ///
+  /// Deletes are staged before creates so the transition is as tight as
+  /// possible. Firestore batches are limited to 500 operations, so the total
+  /// work (deletes + creates) is chunked accordingly:
+  ///
+  /// - **Single batch (≤ 500 ops total):** the operation is fully atomic —
+  ///   both deletes and creates land in one commit or not at all.
+  /// - **Multiple batches (> 500 ops total):** batches are committed
+  ///   sequentially, which is NOT atomic across commits. A failure mid-way
+  ///   will leave the collection in a partial state.
+  ///
+  /// In practice, calendar sync intervals are well below 500 events, so the
+  /// single-batch (atomic) path is the common case.
+  ///
+  /// Returns a record of (deletedCount, createdCount).
+  Future<({int deletedCount, int createdCount})> atomicReplaceGoogleSourcedBlocks(
+    String coupleId,
+    String userId,
+    List<TimeBlock> newBlocks,
+  ) async {
+    try {
+      final collection = _firestore
+          .collection('timeblocks')
+          .doc(coupleId)
+          .collection('blocks');
+
+      // Fetch existing google-sourced block references.
+      final querySnapshot = await collection
+          .where('userId', isEqualTo: userId)
+          .where('source', isEqualTo: 'google')
+          .get();
+
+      final deleteRefs = querySnapshot.docs.map((d) => d.reference).toList();
+
+      // Build list of all operations: deletes first, then sets.
+      // Each entry is a function that stages an op onto a WriteBatch.
+      // Firestore batches support up to 500 operations.
+      const int batchLimit = 500;
+
+      // Collect all staged operations as closures over a WriteBatch.
+      final List<void Function(WriteBatch)> operations = [
+        for (final ref in deleteRefs) (WriteBatch b) => b.delete(ref),
+        for (final block in newBlocks)
+          (WriteBatch b) => b.set(
+                collection.doc(),
+                {
+                  ...block.toJson(),
+                  'createdAt': FieldValue.serverTimestamp(),
+                },
+              ),
+      ];
+
+      // Chunk into batches of batchLimit and commit sequentially.
+      for (int i = 0; i < operations.length; i += batchLimit) {
+        final chunk = operations.sublist(
+          i,
+          (i + batchLimit).clamp(0, operations.length),
+        );
+        final batch = _firestore.batch();
+        for (final op in chunk) {
+          op(batch);
+        }
+        await batch.commit();
+      }
+
+      return (
+        deletedCount: deleteRefs.length,
+        createdCount: newBlocks.length,
+      );
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(
+        e,
+        'Failed to atomically replace google-sourced blocks',
+      );
+    } catch (e) {
+      throw FirestoreException(
+        code: 'unknown',
+        message:
+            'An unexpected error occurred while replacing google-sourced blocks',
+        originalError: e,
+      );
+    }
+  }
+
   // ============================================================
   // OVERLAP
   // ============================================================
