@@ -209,7 +209,7 @@ class _WeekViewScreenState extends ConsumerState<WeekViewScreen> {
 
   /// Navigate to block form to add new block
   void _addNewBlock() {
-    context.go(AppRoutes.blockForm, extra: BlockFormArgs(
+    context.push(AppRoutes.blockForm, extra: BlockFormArgs(
       initialDate: DateTime.now(),
     ));
   }

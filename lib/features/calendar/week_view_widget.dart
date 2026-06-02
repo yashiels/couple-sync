@@ -309,12 +309,14 @@ class _WeekViewWidgetState extends State<WeekViewWidget> {
   Widget _buildBlockWidget(TimeBlock block, DateTime dayStart, bool isCurrentUser) {
     final blockStart = block.startDateTime;
     final blockEnd = block.endDateTime;
-    
+
     // Calculate position and height
     final startMinutes = blockStart.hour * 60 + blockStart.minute;
     final endMinutes = blockEnd.hour * 60 + blockEnd.minute;
-    final duration = endMinutes - startMinutes;
-    
+    // Clip cross-midnight blocks to end of day to avoid negative height
+    final effectiveEnd = endMinutes < startMinutes ? 24 * 60 : endMinutes;
+    final duration = effectiveEnd - startMinutes;
+
     final top = (startMinutes / 60) * 60; // 60 pixels per hour
     final height = (duration / 60) * 60;
     

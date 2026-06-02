@@ -248,5 +248,77 @@ void main() {
 
       expect(find.text('Old Block'), findsNothing);
     });
+
+    testWidgets(
+        'cross-midnight block renders without throwing and has positive height',
+        (tester) async {
+      // Block starts 23:00 UTC Monday and ends 01:00 UTC Tuesday.
+      // startUtc → 23:00, endUtc → 01:00 next day.
+      // In the widget: startMinutes=1380, endMinutes=60.
+      // Since endMinutes < startMinutes, effectiveEnd clips to 1440,
+      // giving duration=60 min → height=60px (clamped to ≥20px).
+      final startUtc =
+          DateTime.utc(2024, 6, 10, 23, 0).millisecondsSinceEpoch;
+      final endUtc =
+          DateTime.utc(2024, 6, 11, 1, 0).millisecondsSinceEpoch;
+
+      await tester.pumpWidget(_buildSubject(
+        initialWeek: _testMonday,
+        userBlocks: [
+          _makeBlock(
+            title: 'Late Night',
+            startUtc: startUtc,
+            endUtc: endUtc,
+          ),
+        ],
+      ));
+
+      // Widget must render without any exception
+      expect(find.byType(WeekViewWidget), findsOneWidget);
+
+      // Cross-midnight block appears in both the start day and end day columns
+      expect(find.byType(BlockEventWidget), findsAtLeastNWidgets(1));
+
+      // Measure the rendered height of the first block widget and verify it is positive
+      final renderBox = tester.renderObject<RenderBox>(
+        find.byType(BlockEventWidget).first,
+      );
+      expect(renderBox.size.height, greaterThan(0.0));
+    });
+
+    testWidgets(
+        'cross-midnight overlap window renders without throwing and has positive height',
+        (tester) async {
+      // Overlap starts 23:00 UTC Monday and ends 01:00 UTC Tuesday.
+      final startUtc =
+          DateTime.utc(2024, 6, 10, 23, 0).millisecondsSinceEpoch;
+      final endUtc =
+          DateTime.utc(2024, 6, 11, 1, 0).millisecondsSinceEpoch;
+
+      await tester.pumpWidget(_buildSubject(
+        initialWeek: _testMonday,
+        overlapWindows: [
+          _makeOverlap(
+            startUtc: startUtc,
+            endUtc: endUtc,
+            durationMinutes: 120,
+          ),
+        ],
+      ));
+
+      // Widget must render without any exception
+      expect(find.byType(WeekViewWidget), findsOneWidget);
+
+      // Cross-midnight overlap appears in both the start day and end day columns
+      expect(find.byIcon(Icons.favorite), findsAtLeastNWidgets(1));
+
+      // Verify the overlap container has positive height
+      final overlapFinder = find.ancestor(
+        of: find.byIcon(Icons.favorite),
+        matching: find.byType(Container),
+      );
+      final renderBox = tester.renderObject<RenderBox>(overlapFinder.first);
+      expect(renderBox.size.height, greaterThan(0.0));
+    });
   });
 }

@@ -1499,6 +1499,49 @@ class MockQuery<T extends Object?> extends _i1.Mock implements _i4.Query<T> {
           as _i4.AggregateQuery);
 }
 
+/// A class which mocks [WriteBatch].
+///
+/// See the documentation for Mockito's code generation for more information.
+class MockWriteBatch extends _i1.Mock implements _i4.WriteBatch {
+  MockWriteBatch() {
+    _i1.throwOnMissingStub(this);
+  }
+
+  @override
+  _i5.Future<void> commit() =>
+      (super.noSuchMethod(
+            Invocation.method(#commit, []),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  void delete(_i4.DocumentReference<Object?>? document) => super.noSuchMethod(
+    Invocation.method(#delete, [document]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void set<T>(
+    _i4.DocumentReference<T>? document,
+    T? data, [
+    _i3.SetOptions? options,
+  ]) => super.noSuchMethod(
+    Invocation.method(#set, [document, data, options]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void update(
+    _i4.DocumentReference<Object?>? document,
+    Map<String, dynamic>? data,
+  ) => super.noSuchMethod(
+    Invocation.method(#update, [document, data]),
+    returnValueForMissingStub: null,
+  );
+}
+
 /// A class which mocks [CollectionReference].
 ///
 /// See the documentation for Mockito's code generation for more information.

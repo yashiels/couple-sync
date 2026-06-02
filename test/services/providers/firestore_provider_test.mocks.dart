@@ -117,6 +117,17 @@ class MockFirestoreService extends _i1.Mock implements _i2.FirestoreService {
           as _i3.Future<List<_i4.TimeBlock>>);
 
   @override
+  _i3.Stream<List<_i4.TimeBlock>> watchBlocks(
+    String? coupleId, {
+    String? userId,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#watchBlocks, [coupleId], {#userId: userId}),
+            returnValue: _i3.Stream<List<_i4.TimeBlock>>.empty(),
+          )
+          as _i3.Stream<List<_i4.TimeBlock>>);
+
+  @override
   _i3.Future<String> createBlock(String? coupleId, _i4.TimeBlock? block) =>
       (super.noSuchMethod(
             Invocation.method(#createBlock, [coupleId, block]),
@@ -171,10 +182,39 @@ class MockFirestoreService extends _i1.Mock implements _i2.FirestoreService {
           as _i3.Future<int>);
 
   @override
+  _i3.Future<({int createdCount, int deletedCount})>
+  atomicReplaceGoogleSourcedBlocks(
+    String? coupleId,
+    String? userId,
+    List<_i4.TimeBlock>? newBlocks,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#atomicReplaceGoogleSourcedBlocks, [
+              coupleId,
+              userId,
+              newBlocks,
+            ]),
+            returnValue:
+                _i3.Future<({int createdCount, int deletedCount})>.value((
+                  createdCount: 0,
+                  deletedCount: 0,
+                )),
+          )
+          as _i3.Future<({int createdCount, int deletedCount})>);
+
+  @override
   _i3.Future<_i4.OverlapResult?> getOverlap(String? coupleId) =>
       (super.noSuchMethod(
             Invocation.method(#getOverlap, [coupleId]),
             returnValue: _i3.Future<_i4.OverlapResult?>.value(),
           )
           as _i3.Future<_i4.OverlapResult?>);
+
+  @override
+  _i3.Stream<_i4.OverlapResult?> watchOverlap(String? coupleId) =>
+      (super.noSuchMethod(
+            Invocation.method(#watchOverlap, [coupleId]),
+            returnValue: _i3.Stream<_i4.OverlapResult?>.empty(),
+          )
+          as _i3.Stream<_i4.OverlapResult?>);
 }

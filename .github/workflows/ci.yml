@@ -10,7 +10,7 @@ on:
 # Cancel older in-progress runs of the same ref when a new one starts.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   # Future-proof: force JS actions to Node 24 (Node 20 forced switch on 2026-06-02)
@@ -59,7 +59,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '22'
       - run: npm ci
       - run: npm run lint
       - run: npm test
@@ -73,7 +73,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '22'
       - uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
