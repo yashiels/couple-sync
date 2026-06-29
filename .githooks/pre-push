@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# pre-push: enforce branch naming convention + run tests.
+# Bypass entire hook with: git push --no-verify
+# Bypass naming for: main|develop|master|release/*|hotfix/*
+# Test gating runs for ALL branches that reach it.
+
+set -euo pipefail
+
+BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
+[ -z "$BRANCH" ] && exit 0
+
+# ── Branch naming validation ─────────────────────────────────────────────────
+NAMING_OK=0
+case "$BRANCH" in
+    main|develop|master|release/*|hotfix/*) NAMING_OK=1 ;;
+esac
+
+PATTERN='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)/[A-Z]+-[0-9]+(-[a-z0-9]+(-[a-z0-9]+)*)?$'
+if [[ "$BRANCH" =~ $PATTERN ]]; then
+    NAMING_OK=1
+fi
+
+if [ "$NAMING_OK" -eq 0 ]; then
+    cat <<EOF >&2
+
+❌ Branch name does not follow convention.
+
+   Got:    $BRANCH
+
+   Expected: <type>/<LINEAR-ID>-<kebab-description>
+   Examples:
+     chore/DEV-123-update-changelog
+     feat/DEV-456-add-week-view
+     fix/DEV-95-null-timezone
+
+   Allowed types: feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert
+   Bypass branches: main, develop, master, release/*, hotfix/*
+
+   To rename:  git branch -m <new-name>
+
+EOF
+    exit 1
+fi
+
+# ── Test gating ──────────────────────────────────────────────────────────────
+# Only run tests if Dart/Flutter files changed
+if git diff --name-only HEAD~1...HEAD | grep -qE '\.(dart)$'; then
+    echo "→ Running flutter test..."
+    if ! flutter test 2>&1; then
+        cat <<EOF >&2
+
+❌ Tests failed. Push aborted.
+   Bypass once (CI will still run): git push --no-verify
+
+EOF
+        exit 1
+    fi
+fi
+
+# If functions/ changed, run backend tests too
+if git diff --name-only HEAD~1...HEAD | grep -qE '^functions/'; then
+    echo "→ Running functions tests..."
+    cd functions
+    if ! npm test 2>&1; then
+        cat <<EOF >&2
+
+❌ Functions tests failed. Push aborted.
+   Bypass once: git push --no-verify
+
+EOF
+        exit 1
+    fi
+    cd ..
+fi
