@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Pre-commit hook: lint and format changed files.
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+echo "Running flutter analyze..."
+if ! flutter analyze 2>&1; then
+    echo ""
+    echo "❌ flutter analyze failed. Fix errors before committing."
+    exit 1
+fi
+
+echo "Running dart format check..."
+if ! dart format --set-exit-if-changed . 2>&1; then
+    echo ""
+    echo "❌ dart format check failed. Run 'dart format .' to fix."
+    exit 1
+fi
+
+# ── Secret scan ────────────────────────────────────────────────────────────
+if command -v gitleaks &>/dev/null; then
+    if ! gitleaks git --staged --redact --no-banner; then
+        cat <<EOM >&2
+
+❌ gitleaks detected potential secrets in staged changes.
+   Review findings above. If false positive: add to .gitleaks.toml allowlist.
+   Bypass once (NOT for real secrets): git commit --no-verify
+
+EOM
+        exit 1
+    fi
+else
+    echo "⚠️  gitleaks not installed — skipping secret scan. Install: brew install gitleaks"
+fi
+
+echo "✅ Pre-commit checks passed."
