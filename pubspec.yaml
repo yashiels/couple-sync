@@ -1,6 +1,6 @@
 name: couple_sync
 description: "Mobile app for long-distance couples to find mutual free time. Google Calendar sync, manual blocks, server-side overlap computation with push notifications."
-repository: https://github.com/skyner-group/couple-sync
+repository: https://github.com/yashiels/couple-sync
 homepage: https://skyner.co.za
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
