@@ -32,4 +32,4 @@ Couples connect via a pairing code, sync their Google Calendars (freebusy only �
 
 ## Repository
 
-`github.com/skynergroup/couple-sync` — single Flutter project with `functions/` subdirectory for backend. See `AGENTS.md` for conventions and `CLAUDE.md` for build commands.
+`github.com/yashiels/couple-sync` — single Flutter project with `functions/` subdirectory for backend. See `AGENTS.md` for conventions and `CLAUDE.md` for build commands.
