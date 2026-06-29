@@ -1,4 +1,132 @@
-# AGENTS.md
+# Agent Guide
+
+This document is for AI agents (and developers) working in this repository. Read it before making changes.
+
+---
+
+## Before making changes
+
+- For product requirements and feature specs, see [PRD.md](./PRD.md) — use that vocabulary in code, comments, and PRs. For system structure see [ARCHITECTURE.md](./ARCHITECTURE.md).
+- Read existing code before modifying it. Do not assume structure — verify it.
+- Check existing providers under `lib/services/` before adding a new service. The pattern you need may already exist there.
+- The Cloud Functions backend lives in `functions/`. It is deployed to Firebase project `nexion-ai-prod`.
+
+---
+
+## Finding things
+
+| What you are looking for      | Where to look                       |
+| ----------------------------- | ----------------------------------- |
+| Flutter app screens / routes  | `lib/features/`                     |
+| Reusable UI components        | `lib/core/theme/`, `lib/features/*/widgets/` |
+| State management (Riverpod)   | `lib/services/` (providers)         |
+| Data models                   | `lib/core/models/`                  |
+| Router / navigation guards    | `lib/core/router/`                  |
+| Cloud Functions               | `functions/src/`                    |
+| Firestore security rules      | `firestore.rules`                   |
+| Firestore indexes             | `firestore.indexes.json`            |
+| GitHub Actions workflows      | `.github/workflows/`                |
+
+---
+
+## Running things
+
+Install Flutter dependencies:
+
+```bash
+flutter pub get
+```
+
+Common targets:
+
+```bash
+# Run the app
+flutter run
+
+# Run tests
+flutter test
+
+# Static analysis
+flutter analyze
+
+# Format check
+dart format --set-exit-if-changed .
+
+# Build iOS (no signing)
+flutter build ios --no-codesign
+
+# Build Android APK
+flutter build apk --debug
+
+# Cloud Functions (in functions/)
+cd functions && npm install && npm run build
+```
+
+---
+
+## Important context
+
+- **Firestore is live.** The app reads/writes to Firestore in project `nexion-ai-prod`. Do not add mock data — use the real backend.
+- **Overlap computation is server-side.** When a time block is written, Cloud Functions compute the overlap window and write to `overlaps/{coupleId}/windows/latest`. The Flutter app reads this, never computes overlaps client-side.
+- **Security rules enforce couple membership.** Every read/write to couple-scoped data requires the user to be a member of that couple. Rules use `get()` on the parent couple doc (costs 1 read per check).
+- **No min instances for Functions.** Cold starts are accepted to stay within free tier.
+- **Previous implementation was reset.** v1 is a rebuild with simplified architecture. See "Discovered Patterns" below for what to avoid.
+
+---
+
+## Do not
+
+- Add multiple calendar providers — Google Calendar only in v1
+- Store or display event titles from Google Calendar — freebusy only
+- Compute overlaps client-side — always use the server-side function result
+- Commit `.env` files or any file containing credentials or secrets
+- Assume the backend service is running — verify it first
+- Use Firestore Timestamps — store UTC milliseconds as int
+- Add complex auth state management — keep it simple with Riverpod StateNotifier
+
+---
+
+## Verification before claiming done
+
+Before marking a task complete, verify the affected code passes all of the following:
+
+```bash
+# Static analysis passes
+flutter analyze
+
+# Tests pass
+flutter test
+
+# Format is clean
+dart format --set-exit-if-changed .
+```
+
+If Cloud Functions were changed, also verify:
+
+```bash
+cd functions
+npm run build
+npm test
+```
+
+---
+
+## Branch Convention
+
+Branch names follow `<type>/<issue-number>-<kebab-description>`:
+
+```
+feat/DEV-96-add-week-view
+fix/DEV-104-null-timezone
+chore/DEV-111-update-gitignore
+```
+
+- **GitHub issue number is required** in the branch name — create or identify an issue before branching
+- `type` follows Conventional Commits: `feat`, `fix`, `chore`, `refactor`, `docs`, `ci`, etc.
+- Description is kebab-case and optional but recommended
+- Bypass branches (no issue required): `main`, `develop`, `master`, `release/*`, `hotfix/*`
+
+---
 
 ## Tech Stack
 

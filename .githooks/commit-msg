@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# commit-msg hook: enforce conventional commits format.
+# Format: <type>(<scope>): <subject>
+#   - type: feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert
+#   - scope: optional, lowercase, allows letters/digits/hyphens/dots/slashes
+#   - subject: required, starts lowercase, no trailing period
+# Examples:
+#   chore(docs): update changelog
+#   feat(calendar): add week view
+#   fix: handle null timezone in block
+#
+# Bypass: merge commits, revert auto-messages, fixup/squash commits.
+
+set -euo pipefail
+
+MSG_FILE="$1"
+FIRST_LINE="$(head -n1 "$MSG_FILE")"
+
+# Bypass auto-generated messages
+case "$FIRST_LINE" in
+    "Merge "*|"Revert "*|"fixup! "*|"squash! "*|"amend! ") exit 0 ;;
+esac
+
+# Conventional commits regex
+PATTERN='^(\[DEV-[0-9]+\] )?(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9][a-z0-9._/-]*\))?!?: [a-z0-9].{0,99}[^.]$'
+
+if [[ "$FIRST_LINE" =~ $PATTERN ]]; then
+    exit 0
+fi
+
+cat <<EOF >&2
+
+❌ Commit message does not follow conventional format.
+
+   Got:    $FIRST_LINE
+
+   Expected: <type>(<scope>): <subject>
+   Examples:
+     chore(docs): update changelog
+     feat(calendar): add week view
+     fix: handle null timezone in block
+
+   Rules:
+     - type: feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert
+     - scope: optional, lowercase
+     - subject: starts lowercase, no trailing period, max 100 chars
+
+EOF
+exit 1
