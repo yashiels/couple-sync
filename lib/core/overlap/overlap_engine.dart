@@ -2,6 +2,7 @@ import 'dart:collection';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:rrule/rrule.dart';
+import 'package:timezone/timezone.dart';
 import 'package:couple_sync/core/models/time_block.dart';
 
 /// A time interval as `[startMs, endMs]` (UTC milliseconds since epoch).
@@ -91,4 +92,100 @@ List<Interval> expandBlock(TimeBlock block, int windowStart, int windowEnd) {
         ];
       })
       .toList();
+}
+
+/// Build the free intervals (the complement of busy+tentative) within
+/// [windowStart, windowEnd].
+List<Interval> computeFreeIntervals(
+    List<TimeBlock> blocks, int windowStart, int windowEnd) {
+  final busy = mergeIntervals(
+    blocks
+        .where((b) =>
+            b.type == TimeBlockType.busy ||
+            b.type == TimeBlockType.tentative)
+        .expand((b) => expandBlock(b, windowStart, windowEnd))
+        .toList(),
+  );
+  final free = <Interval>[];
+  int cursor = windowStart;
+  for (final iv in busy) {
+    if (cursor < iv[0]) free.add([cursor, iv[0]]);
+    cursor = cursor > iv[1] ? cursor : iv[1];
+  }
+  if (cursor < windowEnd) free.add([cursor, windowEnd]);
+  return free;
+}
+
+/// Floor `ms` to the start of its local calendar day in [timezone].
+/// Uses TZDateTime so DST transitions do not shift the wall-clock boundary.
+TZDateTime _localStartOfDay(int ms, String timezone) {
+  final loc = getLocation(timezone);
+  final t = TZDateTime.fromMillisecondsSinceEpoch(loc, ms);
+  return TZDateTime(loc, t.year, t.month, t.day);
+}
+
+/// Clip [start, end] to waking hours (wakeHour..sleepHour) in the given
+/// timezone, advancing by *local calendar days* (TZDateTime, DST-correct).
+List<Interval> clipIntervalToWakingHours(
+  int start,
+  int end,
+  String timezone, {
+  int wakeHour = kWakeHour,
+  int sleepHour = kSleepHour,
+}) {
+  final result = <Interval>[];
+  final loc = getLocation(timezone);
+  var dayStart = _localStartOfDay(start, timezone);
+  while (dayStart.millisecondsSinceEpoch < end) {
+    final wakeMs = TZDateTime(
+      loc,
+      dayStart.year,
+      dayStart.month,
+      dayStart.day,
+      wakeHour,
+    ).millisecondsSinceEpoch;
+    final sleepMs = TZDateTime(
+      loc,
+      dayStart.year,
+      dayStart.month,
+      dayStart.day,
+      sleepHour,
+    ).millisecondsSinceEpoch;
+    final clipStart = start > wakeMs ? start : wakeMs;
+    final clipEnd = end < sleepMs ? end : sleepMs;
+    if (clipStart < clipEnd) result.add([clipStart, clipEnd]);
+    dayStart = TZDateTime(loc, dayStart.year, dayStart.month, dayStart.day + 1);
+  }
+  return result;
+}
+
+List<Interval> clipToWakingHours(List<Interval> intervals, String timezone) {
+  return intervals
+      .expand((iv) => clipIntervalToWakingHours(iv[0], iv[1], timezone))
+      .toList();
+}
+
+/// Split multi-day intervals into per-day (00:00-24:00 local) segments.
+/// Used when showLateNightWindows=true so the calendar gets one window/day.
+List<Interval> clipToDayBoundaries(List<Interval> intervals, String timezone) {
+  final result = <Interval>[];
+  final loc = getLocation(timezone);
+  for (final iv in intervals) {
+    var dayStart = _localStartOfDay(iv[0], timezone);
+    while (dayStart.millisecondsSinceEpoch < iv[1]) {
+      final dayEnd = TZDateTime(
+        loc,
+        dayStart.year,
+        dayStart.month,
+        dayStart.day + 1,
+      ).millisecondsSinceEpoch;
+      final clipStart = iv[0] > dayStart.millisecondsSinceEpoch
+          ? iv[0]
+          : dayStart.millisecondsSinceEpoch;
+      final clipEnd = iv[1] < dayEnd ? iv[1] : dayEnd;
+      if (clipStart < clipEnd) result.add([clipStart, clipEnd]);
+      dayStart = TZDateTime(loc, dayStart.year, dayStart.month, dayStart.day + 1);
+    }
+  }
+  return result;
 }

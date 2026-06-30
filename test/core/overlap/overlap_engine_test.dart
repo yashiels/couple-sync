@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:timezone/timezone.dart';
 import 'package:couple_sync/core/models/time_block.dart';
 import 'package:couple_sync/core/overlap/overlap_engine.dart';
 
@@ -29,6 +31,11 @@ const int _h = 3600000;
 const int _d = 24 * _h;
 
 void main() {
+  setUpAll(() {
+    // Ensure tz database is loaded for DST-correct clips.
+    tz_data.initializeTimeZones();
+  });
+
   group('mergeIntervals', () {
     test('empty returns empty', () {
       expect(mergeIntervals([]), isEmpty);
@@ -203,6 +210,98 @@ void main() {
       final out = expandBlock(b, _t0, _t0 + _d);
       expect(out.length, 1);
       expect(out[0], [_t0, _t0 + _h]);
+    });
+  });
+
+  group('computeFreeIntervals', () {
+    test('busy splits the free window', () {
+      // window 0..100, busy 20..40 -> free [[0,20],[40,100]]
+      final blocks = [
+        _block(startUtc: 20, endUtc: 40),
+      ];
+      expect(computeFreeIntervals(blocks, 0, 100), [
+        [0, 20],
+        [40, 100],
+      ]);
+    });
+    test('free type ignored; tentative treated as busy', () {
+      final blocks = [
+        _block(startUtc: 20, endUtc: 40, type: TimeBlockType.free),
+        _block(startUtc: 50, endUtc: 60, type: TimeBlockType.tentative),
+      ];
+      // free does not split; tentative IS busy (matches TS) -> split around 50-60
+      expect(computeFreeIntervals(blocks, 0, 100), [
+        [0, 50],
+        [60, 100],
+      ]);
+    });
+  });
+
+  group('clipToWakingHours (DST)', () {
+    test('clips to 07:00-23:00 local on a normal day in America/New_York', () {
+      final ny = 'America/New_York';
+      final loc = getLocation(ny);
+      // Construct local midnight 2024-02-15 (non-DST day) via TZDateTime so the
+      // boundary is wall-clock, not offset-shifted.
+      final localMidnight = TZDateTime(loc, 2024, 2, 15);
+      final start = localMidnight.millisecondsSinceEpoch;
+      final end = start + 24 * _h;
+      final out = clipIntervalToWakingHours(start, end, ny);
+      expect(out.length, greaterThanOrEqualTo(1));
+      for (final iv in out) {
+        expect(iv[1] - iv[0], lessThanOrEqualTo(16 * _h));
+      }
+      // First clip starts at 07:00 local and ends at 23:00 local (16h).
+      expect(out[0][1] - out[0][0], 16 * _h);
+      expect(
+        TZDateTime.fromMillisecondsSinceEpoch(loc, out[0][0]).hour,
+        7,
+      );
+      expect(
+        TZDateTime.fromMillisecondsSinceEpoch(loc, out[0][1]).hour,
+        23,
+      );
+    });
+
+    test('spring-forward 2024-03-10 boundary does not shift by an hour', () {
+      final ny = 'America/New_York';
+      final loc = getLocation(ny);
+      // 2024-03-10 is the DST spring-forward day in America/New_York (23h day).
+      // Use a TZDateTime-constructed local midnight so the test is anchored to
+      // the local calendar day, not a UTC instant that may land on the wrong date.
+      final localMidnight = TZDateTime(loc, 2024, 3, 10);
+      final start = localMidnight.millisecondsSinceEpoch;
+      final end = start + 24 * _h;
+      final out = clipIntervalToWakingHours(start, end, ny);
+      expect(out, isNotEmpty);
+      // Contract: each clip is <= waking window (16 wall-clock hours).
+      for (final iv in out) {
+        expect(iv[1] - iv[0], lessThanOrEqualTo(16 * _h));
+      }
+      // The first clip's wake boundary must be at wall-clock 07:00 on 2024-03-10,
+      // not shifted by the 02:00->03:00 transition. 07:00 is post-transition (EDT).
+      final wakeLocal = TZDateTime.fromMillisecondsSinceEpoch(loc, out[0][0]);
+      expect(wakeLocal.year, 2024);
+      expect(wakeLocal.month, 3);
+      expect(wakeLocal.day, 10);
+      expect(wakeLocal.hour, 7);
+    });
+
+    test('fall-back 2024-11-03 clipToDayBoundaries yields 25h segment', () {
+      final ny = 'America/New_York';
+      final loc = getLocation(ny);
+      // 2024-11-03 is the DST fall-back day in America/New_York (25h day).
+      final localMidnight = TZDateTime(loc, 2024, 11, 3);
+      final start = localMidnight.millisecondsSinceEpoch;
+      // Late-night interval spanning past the end of the 25h day.
+      final end = start + 26 * _h;
+      final out = clipToDayBoundaries([
+        [start, end]
+      ], ny);
+      expect(out, isNotEmpty);
+      // First segment is the full fall-back day: 25h = 1500 minutes.
+      expect(out[0][1] - out[0][0], 25 * _h);
+      expect((out[0][1] - out[0][0]) ~/ 60000, 1500);
     });
   });
 }
