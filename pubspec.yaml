@@ -62,6 +62,10 @@ dependencies:
   # HTTP Client
   http: ^1.2.0
 
+  # Utilities
+  crypto: ^3.0.6   # pub.dev latest 3.0.7
+  rrule: ^0.2.0    # pub.dev latest 0.2.18
+
   # UI
   cupertino_icons: ^1.0.8
   share_plus: ^10.1.4
