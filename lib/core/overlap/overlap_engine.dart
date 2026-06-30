@@ -1,9 +1,11 @@
-import 'dart:collection';
+import 'dart:math' as math;
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:rrule/rrule.dart';
 import 'package:timezone/timezone.dart';
 import 'package:couple_sync/core/models/time_block.dart';
+import 'package:couple_sync/core/models/overlap_result.dart';
+export 'package:couple_sync/core/models/overlap_result.dart' show OverlapWindow;
 
 /// A time interval as `[startMs, endMs]` (UTC milliseconds since epoch).
 typedef Interval = List<int>;
@@ -188,4 +190,86 @@ List<Interval> clipToDayBoundaries(List<Interval> intervals, String timezone) {
     }
   }
   return result;
+}
+
+/// Per-partner preferences that affect how overlap windows are clipped and
+/// scored. Mirrors the TS `PartnerPrefs` interface.
+class PartnerPrefs {
+  final bool showLateNightWindows;
+  const PartnerPrefs({this.showLateNightWindows = false});
+}
+
+/// Score a candidate overlap window. Longer windows score higher; evenings
+/// (18:00-21:00 local) and weekends (Sat/Sun) get a +5 bonus each; windows
+/// further in the future decay by 0.5/day from a base of 10.
+///
+/// Drops the dead `_timezoneB` param from the TS signature (it was ignored).
+double scoreWindow(int startUtc, int endUtc, String timezoneA, int now) {
+  final durationHours = (endUtc - startUtc) / (60 * 60 * 1000);
+  final base = (math.log(durationHours + 1) / math.ln2) * 10;
+  final loc = getLocation(timezoneA);
+  final localA = TZDateTime.fromMillisecondsSinceEpoch(loc, startUtc);
+  final eveningBonus = (localA.hour >= 18 && localA.hour < 21) ? 5.0 : 0.0;
+  final weekendBonus = (localA.weekday >= 6) ? 5.0 : 0.0; // 6=Sat,7=Sun
+  final daysFromNow = (startUtc - now) / (24 * 60 * 60 * 1000);
+  final timeDecay = (10 - daysFromNow * 0.5).clamp(0.0, double.infinity);
+  return base + eveningBonus + weekendBonus + timeDecay;
+}
+
+/// Stable hash of a block list, independent of input order. Used to short-circuit
+/// recomputation when neither partner's blocks have changed.
+String computeBlockHash(List<TimeBlock> blocks) {
+  final sorted = [...blocks]..sort((a, b) => a.startUtc.compareTo(b.startUtc));
+  final str = sorted
+      .map((b) => '${b.startUtc}:${b.endUtc}:${b.recurrenceRule ?? ''}:${b.type.name}')
+      .join('|');
+  return sha256.convert(utf8.encode(str)).toString().substring(0, 16);
+}
+
+/// Compute mutual free-time windows for two partners over the next
+/// [kHorizonDays] days. Busy+tentative blocks are subtracted, the result is
+/// intersected and clipped per partner (waking-hours vs day-boundaries based
+/// on `showLateNightWindows`), filtered to >= [kMinWindowMinutes], sorted by
+/// score descending, and capped at [kMaxWindows].
+List<OverlapWindow> computeOverlap(
+  List<TimeBlock> blocksA,
+  List<TimeBlock> blocksB,
+  String timezoneA,
+  String timezoneB,
+  int now,
+  PartnerPrefs prefsA,
+  PartnerPrefs prefsB,
+) {
+  final windowEnd = now + kHorizonDays * 24 * 60 * 60 * 1000;
+  final freeA = computeFreeIntervals(blocksA, now, windowEnd);
+  final freeB = computeFreeIntervals(blocksB, now, windowEnd);
+
+  var clipped = intersectIntervals(freeA, freeB);
+  if (!prefsA.showLateNightWindows) {
+    clipped = clipToWakingHours(clipped, timezoneA);
+  } else {
+    clipped = clipToDayBoundaries(clipped, timezoneA);
+  }
+  if (!prefsB.showLateNightWindows) {
+    clipped = clipToWakingHours(clipped, timezoneB);
+  } else {
+    clipped = clipToDayBoundaries(clipped, timezoneB);
+  }
+
+  final reasonableBoth =
+      !prefsA.showLateNightWindows && !prefsB.showLateNightWindows;
+
+  final windows = clipped
+      .map((iv) => OverlapWindow(
+            startUtc: iv[0],
+            endUtc: iv[1],
+            durationMinutes: ((iv[1] - iv[0]) / 60000).round(),
+            score: scoreWindow(iv[0], iv[1], timezoneA, now),
+            reasonableBoth: reasonableBoth,
+          ))
+      .where((w) => w.durationMinutes >= kMinWindowMinutes)
+      .toList();
+
+  windows.sort((a, b) => b.score.compareTo(a.score));
+  return windows.length > kMaxWindows ? windows.sublist(0, kMaxWindows) : windows;
 }

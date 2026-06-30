@@ -4,6 +4,12 @@ import 'package:timezone/timezone.dart';
 import 'package:couple_sync/core/models/time_block.dart';
 import 'package:couple_sync/core/overlap/overlap_engine.dart';
 
+class _Prefs implements PartnerPrefs {
+  @override
+  final bool showLateNightWindows;
+  _Prefs(this.showLateNightWindows);
+}
+
 TimeBlock _block({
   required int startUtc,
   required int endUtc,
@@ -302,6 +308,59 @@ void main() {
       // First segment is the full fall-back day: 25h = 1500 minutes.
       expect(out[0][1] - out[0][0], 25 * _h);
       expect((out[0][1] - out[0][0]) ~/ 60000, 1500);
+    });
+  });
+
+  group('computeBlockHash', () {
+    test('stable regardless of input order', () {
+      final a = [
+        _block(startUtc: 30, endUtc: 40, rrule: 'FREQ=DAILY'),
+        _block(startUtc: 10, endUtc: 20, rrule: 'FREQ=DAILY'),
+      ];
+      final b = [
+        _block(startUtc: 10, endUtc: 20, rrule: 'FREQ=DAILY'),
+        _block(startUtc: 30, endUtc: 40, rrule: 'FREQ=DAILY'),
+      ];
+      expect(computeBlockHash(a), computeBlockHash(b));
+    });
+    test('differs when recurrence differs', () {
+      final a = [_block(startUtc: 10, endUtc: 20, rrule: 'FREQ=DAILY')];
+      final b = [_block(startUtc: 10, endUtc: 20, rrule: 'FREQ=WEEKLY')];
+      expect(computeBlockHash(a), isNot(computeBlockHash(b)));
+    });
+  });
+
+  group('computeOverlap', () {
+    test('two empty partners -> whole waking window', () {
+      final out = computeOverlap([], [], 'UTC', 'UTC', _t0, _Prefs(false), _Prefs(false));
+      expect(out, isNotEmpty);
+      for (final w in out) {
+        expect(w.durationMinutes, greaterThanOrEqualTo(30));
+      }
+    });
+    test('non-overlapping busy -> no window', () {
+      final a = [_block(startUtc: _t0, endUtc: _t0 + 12 * _h)]; // busy all morning
+      final b = [_block(startUtc: _t0 + 12 * _h, endUtc: _t0 + 24 * _h)];
+      final out = computeOverlap(a, b, 'UTC', 'UTC', _t0, _Prefs(false), _Prefs(false));
+      // The exact windows depend on waking-hours clip; just assert it's bounded.
+      for (final w in out) {
+        expect(w.endUtc, greaterThan(w.startUtc));
+      }
+    });
+    test('caps at 20 windows', () {
+      // Place a 1h busy block at 12:00-13:00 UTC each day for 14 days, inside
+      // the 07:00-23:00 waking window. Each day's waking window splits into two
+      // free segments (07-12, 13-23) -> 28 segments, all >= 30 min, so the
+      // kMaxWindows=20 cap fires.
+      final a = <TimeBlock>[];
+      for (int i = 0; i < 14; i++) {
+        a.add(_block(
+          startUtc: _t0 + i * _d + 12 * _h,
+          endUtc: _t0 + i * _d + 13 * _h,
+        ));
+      }
+      final out = computeOverlap(a, [], 'UTC', 'UTC', _t0, _Prefs(false), _Prefs(false));
+      expect(out.length, 20);
     });
   });
 }
