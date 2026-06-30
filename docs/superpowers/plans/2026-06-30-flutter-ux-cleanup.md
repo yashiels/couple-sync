@@ -53,7 +53,9 @@ String formatDurationMinutes(int minutes) {
 }
 
 String formatDateYMd(DateTime dt) => DateFormat.yMd().format(dt);
-String formatTimeHm(DateTime dt) => DateFormat.Hm().format(dt);
+/// Locale-aware clock time — `jm()` gives 12h with am/pm where the locale
+/// expects it (never the 24h-only `Hm` skeleton).
+String formatTimeHm(DateTime dt) => DateFormat.jm().format(dt);
 String formatMonth(DateTime dt) => DateFormat.MMM().format(dt);
 String formatWeekdayShort(DateTime dt) => DateFormat.E().format(dt);
 ```
@@ -61,7 +63,7 @@ String formatWeekdayShort(DateTime dt) => DateFormat.E().format(dt);
 - [ ] **Step 3: Create `block_labels.dart` (enum extensions)**
 
 ```dart
-import '../core/models/time_block.dart';
+import 'package:couple_sync/core/models/time_block.dart';
 
 extension TimeBlockTypeLabel on TimeBlockType {
   String get label => switch (this) {
@@ -184,7 +186,7 @@ Replace the block height/offset calculation (around `week_view_widget.dart:320`,
 
 - [ ] **Step 6: Respect locale for hour labels**
 
-In the hour-label column (line 457-459), replace forced 24h `00:00` with `DateFormat.Hm().format(...)` so 12h-locale users see am/pm.
+In the hour-label column (line 457-459), replace forced 24h `00:00` with `formatTimeHm(...)` (which uses `DateFormat.jm()` — locale-aware am/pm) so 12h-locale users see am/pm.
 
 - [ ] **Step 7: Remove the dead outer `Stack` (line 100/123) wrapping a single `Column`.**
 

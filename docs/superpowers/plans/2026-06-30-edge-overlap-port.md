@@ -58,8 +58,8 @@
 In `pubspec.yaml` under `dependencies:`, add (alphabetical):
 
 ```yaml
-  crypto: ^4.0.0
-  rrule: ^0.12.0
+  crypto: ^3.0.6   # pub.dev latest 3.0.7
+  rrule: ^0.2.0    # pub.dev latest 0.2.18
 ```
 
 (`timezone` and `intl` are already present.)
@@ -274,7 +274,7 @@ git commit -m "feat(overlap): port mergeIntervals+intersectIntervals to dart"
 - Consumes: `TimeBlock` from `lib/core/models/time_block.dart`.
 - Produces: `List<Interval> expandBlock(TimeBlock block, int windowStart, int windowEnd)`.
 
-**Note on the `rrule` package API:** the TS uses `RRule.parseString(ruleStr)` + `rule.between(windowStart - duration, windowEnd, true)`. The Dart `rrule` package exposes `RecurrenceRule.fromString('RRULE:...')` and instance generation. Confirm the exact param names (`before`/`after` vs `getInstances(start:, before:, after:)`) against the installed `rrule` package docs at implementation time; the test contract below is what must hold regardless of API naming.
+**Note on the `rrule` package API:** the TS uses `RRule.parseString(ruleStr)` + `rule.between(windowStart - duration, windowEnd, true)`. The Dart `rrule` package (0.2.x) exposes `RecurrenceRule.fromString('RRULE:...')` and `getInstances(start:)` returning an `Iterable<DateTime>` from the rule's dtstart onward — it does **not** take `before`/`after` params. To bound iteration, walk the iterable and `break` once occurrences pass `windowEnd` (occurrences are ascending). The test contract below is authoritative regardless of API naming.
 
 - [ ] **Step 1: Write failing tests (golden — mirror TS behavior)**
 
@@ -430,27 +430,30 @@ List<Interval> expandBlock(TimeBlock block, int windowStart, int windowEnd) {
       : block.recurrenceRule!;
   final rule = RecurrenceRule.fromString('RRULE:$ruleStr');
 
-  // Look back by one duration so occurrences starting just before the window
-  // that extend into it are included (matches TS between(start-duration, end, true)).
-  final after = DateTime.fromMillisecondsSinceEpoch(windowStart - duration, isUtc: true);
-  final before = DateTime.fromMillisecondsSinceEpoch(windowEnd, isUtc: true);
-
-  // ponytail: rrule package API — use getInstances with before/after if available;
-  // the contract test above is authoritative. If the installed version names these
-  // differently, adapt here only; tests will catch divergence from TS.
-  final occurrences = rule.getInstances(
-    start: DateTime.fromMillisecondsSinceEpoch(block.startUtc, isUtc: true),
-    before: before,
-    after: after,
-  );
+  // pub.dev rrule 0.2.x: getInstances(start:) returns an Iterable<DateTime> from
+  // the rule's dtstart onward (ascending). Walk it and stop once occurrences pass
+  // the window end. Keeping occurrences whose [occ, occ+duration] overlaps the
+  // window reproduces the TS `between(windowStart - duration, windowEnd, true)`
+  // inclusive lookback: an occurrence starting just before the window that extends
+  // into it is kept because its end > windowStart.
+  final dtStart = DateTime.fromMillisecondsSinceEpoch(block.startUtc, isUtc: true);
+  final occurrences = <DateTime>[];
+  for (final occ in rule.getInstances(start: dtStart)) {
+    final s = occ.millisecondsSinceEpoch;
+    if (s >= windowEnd) break; // ascending; stop
+    final e = s + duration;
+    if (e > windowStart) occurrences.add(occ);
+  }
 
   return occurrences
-      .map((occ) => [occ.millisecondsSinceEpoch, occ.millisecondsSinceEpoch + duration])
-      .where((iv) => iv[1] > windowStart && iv[0] < windowEnd)
-      .map((iv) => [
-            iv[0] > windowStart ? iv[0] : windowStart,
-            iv[1] < windowEnd ? iv[1] : windowEnd,
-          ])
+      .map((occ) {
+        final s = occ.millisecondsSinceEpoch;
+        final e = s + duration;
+        return [
+          s > windowStart ? s : windowStart,
+          e < windowEnd ? e : windowEnd,
+        ];
+      })
       .toList();
 }
 ```
@@ -506,13 +509,16 @@ group('computeFreeIntervals', () {
       [40, 100],
     ]);
   });
-  test('free/tentative excluded from busy', () {
+  test('free type ignored; tentative treated as busy', () {
     final blocks = [
       _block(startUtc: 20, endUtc: 40, type: TimeBlockType.free),
       _block(startUtc: 50, endUtc: 60, type: TimeBlockType.tentative),
     ];
-    // only busy counted -> none here -> whole window free
-    expect(computeFreeIntervals(blocks, 0, 100), [[0, 100]]);
+    // free does not split; tentative IS busy (matches TS) -> split around 50-60
+    expect(computeFreeIntervals(blocks, 0, 100), [
+      [0, 50],
+      [60, 100],
+    ]);
   });
 });
 
@@ -985,7 +991,9 @@ Create `lib/core/overlap/overlap_controller.dart`:
 
 ```dart
 import 'dart:async';
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:couple_sync/core/overlap/overlap_engine.dart';
 import 'package:couple_sync/core/models/overlap_result.dart';
@@ -1000,6 +1008,7 @@ class PartnerInput {
 }
 
 /// Computes inputHash over all overlap inputs (blocks + tz + prefs + algo + nowBucket).
+/// Copies the block lists before sorting so callers' lists are not mutated.
 String computeOverlapInputHash({
   required List<TimeBlock> blocksA,
   required List<TimeBlock> blocksB,
@@ -1009,11 +1018,14 @@ String computeOverlapInputHash({
   required PartnerPrefs prefsB,
   required int nowBucket,
 }) {
-  final blockStrA = blocksA
-    ..sort((a, b) => a.startUtc.compareTo(b.startUtc));
-  final blockStrB = [...blocksB]..sort((a, b) => a.startUtc.compareTo(b.startUtc));
-  final a = blockStrA.map((b) => '${b.startUtc}:${b.endUtc}:${b.recurrenceRule ?? ''}:${b.type.name}').join('|');
-  final b = blockStrB.map((b) => '${b.startUtc}:${b.endUtc}:${b.recurrenceRule ?? ''}:${b.type.name}').join('|');
+  final sortedA = [...blocksA]..sort((a, b) => a.startUtc.compareTo(b.startUtc));
+  final sortedB = [...blocksB]..sort((a, b) => a.startUtc.compareTo(b.startUtc));
+  final a = sortedA
+      .map((b) => '${b.startUtc}:${b.endUtc}:${b.recurrenceRule ?? ''}:${b.type.name}')
+      .join('|');
+  final b = sortedB
+      .map((b) => '${b.startUtc}:${b.endUtc}:${b.recurrenceRule ?? ''}:${b.type.name}')
+      .join('|');
   final str = '$a#$b#$tzA#$tzB#${prefsA.showLateNightWindows}#${prefsB.showLateNightWindows}#$kAlgoVersion#$nowBucket';
   return sha256.convert(utf8.encode(str)).toString().substring(0, 16);
 }
@@ -1178,14 +1190,21 @@ beforeAll(async () => {
 });
 afterAll(async () => { await env.cleanup(); });
 
-function couple(coupleId: string, a: string, b: string) {
-  return env.authedContext({ uid: a }).firestore().doc(`couples/${coupleId}`)
-    .set({ userAUid: a, userBUid: b });
+// couples/{coupleId} has NO client-write rule (functions-only via admin SDK),
+// so seed it with security rules disabled. isCoupleMember() then reads it.
+async function seedCouple(coupleId: string, a: string, b: string) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(`couples/${coupleId}`).set({ userAUid: a, userBUid: b });
+  });
+  // The membership check also reads users/{uid}.coupleId, so stamp that too.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(`users/${a}`).set({ coupleId });
+  });
 }
 
 test('member can write latest with computedBy=self', async () => {
   const cid = 'c1', a = 'uA', b = 'uB';
-  await couple(cid, a, b);
+  await seedCouple(cid, a, b);
   await env.authedContext({ uid: a }).firestore().doc(`users/${a}`)
     .set({ coupleId: cid });
   const db = env.authedContext({ uid: a }).firestore();
@@ -1196,7 +1215,7 @@ test('member can write latest with computedBy=self', async () => {
 
 test('non-member cannot write latest', async () => {
   const cid = 'c2', a = 'uA', b = 'uB';
-  await couple(cid, a, b);
+  await seedCouple(cid, a, b);
   const db = env.authedContext({ uid: 'stranger' }).firestore();
   await assertFails(db.doc(`overlaps/${cid}/windows/latest`).set({
     windows: [], computedAt: 1, inputHash: 'h', computedBy: 'stranger',
@@ -1205,7 +1224,7 @@ test('non-member cannot write latest', async () => {
 
 test('computedBy must equal auth.uid', async () => {
   const cid = 'c3', a = 'uA', b = 'uB';
-  await couple(cid, a, b);
+  await seedCouple(cid, a, b);
   await env.authedContext({ uid: a }).firestore().doc(`users/${a}`).set({ coupleId: cid });
   const db = env.authedContext({ uid: a }).firestore();
   await assertFails(db.doc(`overlaps/${cid}/windows/latest`).set({
@@ -1215,7 +1234,7 @@ test('computedBy must equal auth.uid', async () => {
 
 test('windows.size() > 20 rejected', async () => {
   const cid = 'c4', a = 'uA', b = 'uB';
-  await couple(cid, a, b);
+  await seedCouple(cid, a, b);
   await env.authedContext({ uid: a }).firestore().doc(`users/${a}`).set({ coupleId: cid });
   const db = env.authedContext({ uid: a }).firestore();
   const windows = Array.from({ length: 21 }, () => ({ startUtc: 0, endUtc: 1, durationMinutes: 1, score: 0, reasonableBoth: false }));
@@ -1226,7 +1245,7 @@ test('windows.size() > 20 rejected', async () => {
 
 test('write to a non-latest windowId rejected', async () => {
   const cid = 'c5', a = 'uA', b = 'uB';
-  await couple(cid, a, b);
+  await seedCouple(cid, a, b);
   await env.authedContext({ uid: a }).firestore().doc(`users/${a}`).set({ coupleId: cid });
   const db = env.authedContext({ uid: a }).firestore();
   await assertFails(db.doc(`overlaps/${cid}/windows/other`).set({
@@ -1313,8 +1332,10 @@ In `functions/src/onOverlapWrite.ts`, add the validator and thread `computedBy` 
 export function validateWindows(input: unknown[]): OverlapWindow[] {
   const out: OverlapWindow[] = [];
   for (const w of input as any[]) {
-    if (typeof w.startUtc !== 'number' || typeof w.endUtc !== 'number' ||
-        typeof w.durationMinutes !== 'number' || typeof w.score !== 'number' ||
+    if (typeof w.startUtc !== 'number' || !Number.isInteger(w.startUtc) ||
+        typeof w.endUtc !== 'number' || !Number.isInteger(w.endUtc) ||
+        typeof w.durationMinutes !== 'number' || !Number.isInteger(w.durationMinutes) ||
+        typeof w.score !== 'number' || !Number.isFinite(w.score) ||
         typeof w.reasonableBoth !== 'boolean') {
       throw new Error('invalid window shape');
     }
