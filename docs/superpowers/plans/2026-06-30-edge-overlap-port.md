@@ -6,7 +6,7 @@
 
 **Architecture:** A pure Dart `overlap_engine.dart` ports `overlap.ts` verbatim (TZDateTime for DST-correct waking-hours clipping; `rrule` package for recurrence). A Riverpod `AsyncNotifier` watches blocks + both user docs, debounces, computes with a hour-bucketed `now`, and writes the result through a Firestore transaction with an `inputHash` skip. Firestore rules allow couple members to write only `overlaps/{coupleId}/windows/latest` with a top-level shape gate; `onOverlapWrite` deep-validates `windows[]` before sending FCM and skips the writer's uid.
 
-**Tech Stack:** Flutter, Riverpod 2.x, cloud_firestore 5.x, `timezone` 0.10.x, `crypto` 4.x, `rrule` 0.12.x (pub.dev/packages/rrule). Cloud Functions v2 (nodejs22). Jest + @firebase/rules-unit-testing.
+**Tech Stack:** Flutter, Riverpod 2.x, cloud_firestore 5.x, `timezone` 0.10.x, `crypto` 3.x, `rrule` 0.2.x (pub.dev/packages/rrule). Cloud Functions v2 (nodejs22). Jest + @firebase/rules-unit-testing.
 
 ## Global Constraints
 
