@@ -1,9 +1,11 @@
 import 'package:couple_sync/core/models/time_block.dart';
 import 'package:couple_sync/core/models/overlap_result.dart';
+import 'package:couple_sync/core/utils/format_utils.dart';
 import 'package:couple_sync/features/calendar/week_view_widget.dart';
 import 'package:couple_sync/features/calendar/block_event_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:timezone/data/latest.dart' as tz_data;
 
 /// Fixed Monday for deterministic tests: 2024-06-10 (a Monday).
 final _testMonday = DateTime(2024, 6, 10);
@@ -74,6 +76,8 @@ Widget _buildSubject({
 }
 
 void main() {
+  setUpAll(tz_data.initializeTimeZones);
+
   group('WeekViewWidget', () {
     testWidgets('renders without errors with no data', (tester) async {
       await tester.pumpWidget(_buildSubject(initialWeek: _testMonday));
@@ -223,11 +227,16 @@ void main() {
       expect(find.text('You'), findsOneWidget);
     });
 
-    testWidgets('time labels show 24h format', (tester) async {
+    testWidgets('time labels are locale-aware', (tester) async {
       await tester.pumpWidget(_buildSubject(initialWeek: _testMonday));
 
-      expect(find.text('00:00'), findsOneWidget);
-      expect(find.text('12:00'), findsOneWidget);
+      // Locale-aware (DateFormat.jm) — 12h with am/pm in en_US.
+      // Compare against the same helper the widget uses, so the test
+      // is robust to intl's choice of separator (NNBSP, not ASCII space).
+      final midnight = formatTimeHm(DateTime(2024, 1, 1, 0));
+      final noon = formatTimeHm(DateTime(2024, 1, 1, 12));
+      expect(find.text(midnight), findsOneWidget);
+      expect(find.text(noon), findsOneWidget);
     });
 
     testWidgets('does not render blocks outside of visible week',

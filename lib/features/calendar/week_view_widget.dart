@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../../core/models/time_block.dart';
 import '../../core/models/overlap_result.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/block_positioning.dart';
+import '../../core/utils/format_utils.dart';
 import 'block_event_widget.dart';
 
 /// Week view widget displaying 7 days with time blocks and overlap windows.
@@ -97,28 +99,24 @@ class _WeekViewWidgetState extends State<WeekViewWidget> {
   
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    return Column(
       children: [
-        Column(
-          children: [
-            // Week header with navigation
-            _buildWeekHeader(),
-            
-            // Day headers (Mon-Sun)
-            _buildDayHeaders(),
-            
-            // Page view with week content
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                onPageChanged: _onPageChanged,
-                itemBuilder: (context, index) {
-                  final weekStart = _getWeekStartFromPageIndex(index);
-                  return _buildWeekContent(weekStart, index);
-                },
-              ),
-            ),
-          ],
+        // Week header with navigation
+        _buildWeekHeader(),
+
+        // Day headers (Mon-Sun)
+        _buildDayHeaders(),
+
+        // Page view with week content
+        Expanded(
+          child: PageView.builder(
+            controller: _pageController,
+            onPageChanged: _onPageChanged,
+            itemBuilder: (context, index) {
+              final weekStart = _getWeekStartFromPageIndex(index);
+              return _buildWeekContent(weekStart, index);
+            },
+          ),
         ),
       ],
     );
@@ -155,28 +153,27 @@ class _WeekViewWidgetState extends State<WeekViewWidget> {
   
   /// Build day name headers (Mon, Tue, Wed, etc.)
   Widget _buildDayHeaders() {
-    final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     final today = DateTime.now();
     final todayDateOnly = DateTime(today.year, today.month, today.day);
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
         children: List.generate(7, (index) {
           final dayDate = _currentWeekStart.add(Duration(days: index));
           final isToday = dayDate == todayDateOnly;
-          
+
           return Expanded(
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Column(
                 children: [
                   Text(
-                    days[index],
+                    formatWeekdayShort(dayDate),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
-                      color: isToday 
+                      color: isToday
                         ? Theme.of(context).colorScheme.primary
                         : Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -187,7 +184,7 @@ class _WeekViewWidgetState extends State<WeekViewWidget> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                      color: isToday 
+                      color: isToday
                         ? Theme.of(context).colorScheme.primary
                         : Theme.of(context).colorScheme.onSurface,
                     ),
@@ -307,19 +304,18 @@ class _WeekViewWidgetState extends State<WeekViewWidget> {
   
   /// Build a block widget positioned in the day column
   Widget _buildBlockWidget(TimeBlock block, DateTime dayStart, bool isCurrentUser) {
-    final blockStart = block.startDateTime;
-    final blockEnd = block.endDateTime;
+    // Position and height via tz-aware helpers so cross-midnight /
+    // cross-timezone blocks render against the correct local day.
+    final startMinutes = localDayOffsetMinutes(block.startUtc, block.timezone);
+    final duration = dayClampedDurationMinutes(
+      block.startUtc,
+      block.endUtc,
+      block.timezone,
+    );
 
-    // Calculate position and height
-    final startMinutes = blockStart.hour * 60 + blockStart.minute;
-    final endMinutes = blockEnd.hour * 60 + blockEnd.minute;
-    // Clip cross-midnight blocks to end of day to avoid negative height
-    final effectiveEnd = endMinutes < startMinutes ? 24 * 60 : endMinutes;
-    final duration = effectiveEnd - startMinutes;
+    final top = (startMinutes / 60) * _pixelsPerHour;
+    final height = (duration / 60) * _pixelsPerHour;
 
-    final top = (startMinutes / 60) * 60; // 60 pixels per hour
-    final height = (duration / 60) * 60;
-    
     return Positioned(
       top: top,
       left: 2,
@@ -453,9 +449,10 @@ class _WeekViewWidgetState extends State<WeekViewWidget> {
     );
   }
   
-  /// Format hour to 24h format
+  /// Locale-aware hour label (am/pm where the locale expects it).
   String _formatHour(int hour) {
-    return '${hour.toString().padLeft(2, '0')}:00';
+    final dt = DateTime(2024, 1, 1, hour);
+    return formatTimeHm(dt);
   }
 }
 
@@ -569,9 +566,7 @@ class _OverlapDetailDialog extends StatelessWidget {
   }
 
   String _formatDate(DateTime dateTime) {
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return '${dateTime.day} ${months[dateTime.month - 1]} ${dateTime.year}';
+    return '${dateTime.day} ${formatMonth(dateTime)} ${dateTime.year}';
   }
 
   String _formatDuration(int minutes) {
