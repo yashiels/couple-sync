@@ -64,8 +64,18 @@ service cloud.firestore {
     // - Read: Only couple members
     // - Write: Cloud Functions only (admin SDK bypasses rules)
     match /overlaps/{coupleId}/windows/{windowId} {
-      allow read: if request.auth != null && isCoupleMember(coupleId);
-      // No allow write - Cloud Functions use admin SDK which bypasses rules
+      allow read: if isCoupleMember(coupleId);
+
+      // v2: couple members may write "latest" (device-computed overlap),
+      // gated to the single doc + top-level shape. Deep element validation
+      // happens in onOverlapWrite before FCM.
+      allow write: if isCoupleMember(coupleId)
+        && windowId == 'latest'
+        && request.resource.data.computedBy == request.auth.uid
+        && request.resource.data.inputHash is string
+        && request.resource.data.computedAt is int
+        && request.resource.data.windows is list
+        && request.resource.data.windows.size() <= 20;
     }
   }
 }
