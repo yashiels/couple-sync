@@ -1,9 +1,12 @@
+import 'dart:ui';
+
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'core/utils/timezone_helper.dart';
@@ -22,6 +25,10 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   // Ensure Flutter bindings are initialized before any Firebase operations
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Set the default locale for intl formatters (DateFormat, NumberFormat, etc.)
+  // so locale-aware skeletons like jm() respect the device locale.
+  Intl.defaultLocale = PlatformDispatcher.instance.locale.toString();
 
   // Initialize Firebase with error handling
   try {
