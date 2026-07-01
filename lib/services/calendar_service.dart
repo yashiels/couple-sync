@@ -30,7 +30,6 @@ class CalendarSyncResult {
 
 class CalendarService {
   static const String _accessTokenKey = 'google_calendar_access_token';
-  static const String _refreshTokenKey = 'google_calendar_refresh_token';
   static const String _tokenExpiryKey = 'google_calendar_token_expiry';
   static const String _lastSyncKey = 'google_calendar_last_sync';
 
@@ -89,10 +88,11 @@ class CalendarService {
   /// Throws [CalendarException] with a user-friendly message on failure.
   Future<bool> connect() async {
     try {
-      // Sign out first to force fresh OAuth consent with calendar scope
-      await _googleSignIn.signOut();
-
-      // Trigger the Google Sign-In flow with calendar scope
+      // Trigger the Google Sign-In flow with calendar scope.
+      // NOTE: we intentionally do NOT sign out first — signing out before
+      // every connect forced a fresh OAuth consent sheet on each reconnect
+      // and broke silent refresh. If the user is already signed in, Google
+      // returns the existing account without prompting.
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
       if (googleUser == null) {
@@ -152,7 +152,6 @@ class CalendarService {
     try {
       // Clear stored tokens
       await _secureStorage.delete(key: _accessTokenKey);
-      await _secureStorage.delete(key: _refreshTokenKey);
       await _secureStorage.delete(key: _tokenExpiryKey);
 
       // Sign out from Google
@@ -206,8 +205,12 @@ class CalendarService {
           await _googleSignIn.signInSilently();
 
       if (googleUser == null) {
-        // Silent sign-in failed, need user interaction
-        await disconnect();
+        // Silent sign-in failed — the user needs to re-authenticate
+        // interactively. Do NOT call disconnect() here: that would wipe
+        // the cached access token and (via the sync layer) the user's
+        // Google-sourced blocks. Returning false lets getAccessToken()
+        // surface null so the UI can prompt a soft "reconnect to refresh
+        // calendar" state while preserving existing blocks.
         return false;
       }
 
@@ -234,6 +237,34 @@ class CalendarService {
       return true;
     } catch (e) {
       return false;
+    }
+  }
+
+  /// Resolves the set of calendar IDs to include in a freebusy query.
+  ///
+  /// Calls the Calendar List API to pick up the user's primary and secondary
+  /// calendars. Any failure (network, permission, API unavailable) is
+  /// swallowed and falls back to `['primary']` so a degraded list call can
+  /// never block the core freebusy sync.
+  Future<List<String>> _resolveCalendarIds(
+      calendar.CalendarApi calendarApi) async {
+    try {
+      final listResponse = await calendarApi.calendarList.list();
+      final items = listResponse.items;
+      if (items == null || items.isEmpty) {
+        return const ['primary'];
+      }
+      final ids = <String>[];
+      for (final entry in items) {
+        final id = entry.id;
+        if (id != null && id.isNotEmpty) {
+          ids.add(id);
+        }
+      }
+      return ids.isEmpty ? const ['primary'] : ids;
+    } catch (_) {
+      // List call is best-effort: fall back to primary calendar only.
+      return const ['primary'];
     }
   }
 
@@ -266,39 +297,41 @@ class CalendarService {
       final now = DateTime.now().toUtc();
       final timeMax = now.add(const Duration(days: 14));
 
+      // Build the list of calendar IDs to query. Prefer the user's full
+      // calendar list (so secondary calendars are included); fall back to
+      // ['primary'] if the list call is unavailable or returns nothing.
+      final List<String> calendarIds = await _resolveCalendarIds(calendarApi);
+
       // Build freebusy request
       final request = calendar.FreeBusyRequest(
         timeMin: now,
         timeMax: timeMax,
-        items: [
-          calendar.FreeBusyRequestItem(
-            id: 'primary', // Use primary calendar
-          ),
-        ],
+        items: calendarIds
+            .map((id) => calendar.FreeBusyRequestItem(id: id))
+            .toList(growable: false),
       );
 
       // Execute freebusy query with exponential backoff on 429/503.
       final response =
           await withBackoff(() => calendarApi.freebusy.query(request));
 
-      // Extract busy intervals from response
+      // Extract busy intervals from response across ALL queried calendars
+      // (not just 'primary'), so secondary calendars contribute too.
       final busyIntervals = <({DateTime start, DateTime end})>[];
 
       final calendars = response.calendars;
       if (calendars != null) {
-        final primaryCalendar = calendars['primary'];
-        if (primaryCalendar != null) {
-          final busy = primaryCalendar.busy;
-          if (busy != null) {
-            for (final period in busy) {
-              final start = period.start;
-              final end = period.end;
-              if (start != null && end != null) {
-                busyIntervals.add((
-                  start: start,
-                  end: end,
-                ));
-              }
+        for (final entry in calendars.entries) {
+          final busy = entry.value.busy;
+          if (busy == null) continue;
+          for (final period in busy) {
+            final start = period.start;
+            final end = period.end;
+            if (start != null && end != null) {
+              busyIntervals.add((
+                start: start,
+                end: end,
+              ));
             }
           }
         }
