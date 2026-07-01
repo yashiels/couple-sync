@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../../../core/models/overlap_result.dart';
+import '../../../core/overlap/overlap_controller.dart';
 import '../../../services/providers/couple_providers.dart';
 import '../../../services/providers/auth_state_provider.dart';
 import '../widgets/window_card_widget.dart';
@@ -62,7 +63,13 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
 
     final userProfile = ref.watch(currentUserProfileProvider);
     final partnerAsync = ref.watch(partnerProfileProvider);
-    final overlapAsync = ref.watch(overlapWindowsProvider);
+    // Read overlap windows from the device-side controller (async —
+    // AsyncNotifierProvider<OverlapResult>). When there is no couple yet,
+    // emit a null result so the existing empty-state UI is preserved.
+    final coupleId = userProfile?.coupleId;
+    final overlapAsync = coupleId == null
+        ? const AsyncValue<OverlapResult?>.data(null)
+        : ref.watch(overlapControllerProvider(coupleId));
 
     // If the user has no couple yet, show a friendly message
     if (userProfile?.coupleId == null) {
@@ -150,7 +157,14 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
                 ),
                 const SizedBox(height: 24),
                 FilledButton.icon(
-                  onPressed: () => ref.invalidate(overlapWindowsProvider),
+                  onPressed: () {
+                    final id = ref
+                        .read(currentUserProfileProvider)
+                        ?.coupleId;
+                    if (id != null) {
+                      ref.invalidate(overlapControllerProvider(id));
+                    }
+                  },
                   icon: const Icon(Icons.refresh),
                   label: const Text('Retry'),
                 ),
