@@ -8,6 +8,7 @@ import '../../../core/router/routes.dart';
 import '../../../services/providers/auth_state_provider.dart';
 import '../../../services/providers/calendar_provider.dart';
 import '../../../services/providers/couple_providers.dart';
+import '../../overlap/widgets/window_detail_dialog.dart';
 import '../partner_clock_widget.dart';
 import '../next_window_card_widget.dart';
 
@@ -216,6 +217,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           (window) => _UpcomingWindowCard(
                             window: window,
                             userTimezone: userTimezone,
+                            partnerTimezone: partnerTimezone,
                           ),
                         ),
                     ],
@@ -327,10 +329,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 class _UpcomingWindowCard extends StatelessWidget {
   final OverlapWindow window;
   final String userTimezone;
+  final String partnerTimezone;
 
   const _UpcomingWindowCard({
     required this.window,
     required this.userTimezone,
+    required this.partnerTimezone,
   });
 
   @override
@@ -344,35 +348,50 @@ class _UpcomingWindowCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: theme.colorScheme.primaryContainer,
-          child: Text(
-            window.score.toStringAsFixed(0),
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onPrimaryContainer,
-              fontWeight: FontWeight.bold,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _showDetails(context),
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: theme.colorScheme.primaryContainer,
+            child: Text(
+              window.score.toStringAsFixed(0),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onPrimaryContainer,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          title: Text(
+            dateFormat.format(start),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          subtitle: Text(
+            '${timeFormat.format(start)} - ${timeFormat.format(end)}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          trailing: Text(
+            _formatDuration(window.durationMinutes),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ),
-        title: Text(
-          dateFormat.format(start),
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        subtitle: Text(
-          '${timeFormat.format(start)} - ${timeFormat.format(end)}',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        trailing: Text(
-          _formatDuration(window.durationMinutes),
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
+      ),
+    );
+  }
+
+  void _showDetails(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => WindowDetailDialog(
+        window: window,
+        userTimezone: userTimezone,
+        partnerTimezone: partnerTimezone,
       ),
     );
   }

@@ -25,6 +25,11 @@ class _WeekViewScreenState extends ConsumerState<WeekViewScreen> {
   // Current week being displayed
   late DateTime _currentWeekStart;
 
+  /// Drives the embedded WeekViewWidget's PageController from the parent
+  /// (used by the Today button).
+  final GlobalKey<WeekViewWidgetState> _weekViewKey =
+      GlobalKey<WeekViewWidgetState>();
+
   @override
   void initState() {
     super.initState();
@@ -154,6 +159,7 @@ class _WeekViewScreenState extends ConsumerState<WeekViewScreen> {
     }
 
     return WeekViewWidget(
+      key: _weekViewKey,
       initialWeek: _currentWeekStart,
       userBlocks: userBlocks,
       partnerBlocks: partnerBlocks,
@@ -195,6 +201,7 @@ class _WeekViewScreenState extends ConsumerState<WeekViewScreen> {
 
   /// Navigate to today's week
   void _goToToday() {
+    _weekViewKey.currentState?.jumpToToday();
     setState(() {
       _currentWeekStart = _getWeekStart(DateTime.now());
     });

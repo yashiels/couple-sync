@@ -7,6 +7,7 @@ import '../../core/models/overlap_result.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/block_positioning.dart';
 import '../../core/utils/format_utils.dart';
+import '../../core/utils/week_pagination.dart';
 import 'block_event_widget.dart';
 
 /// Week view widget displaying 7 days with time blocks and overlap windows.
@@ -45,16 +46,20 @@ class WeekViewWidget extends StatefulWidget {
   });
 
   @override
-  State<WeekViewWidget> createState() => _WeekViewWidgetState();
+  State<WeekViewWidget> createState() => WeekViewWidgetState();
 }
 
-class _WeekViewWidgetState extends State<WeekViewWidget> {
+/// Public state so the parent screen can drive pagination via a
+/// `GlobalKey<WeekViewWidgetState>` (e.g. the Today button).
+class WeekViewWidgetState extends State<WeekViewWidget> {
   late PageController _pageController;
   late DateTime _currentWeekStart;
   final Map<int, ScrollController> _scrollControllers = {};
 
-  static const int _initialPage = 5200;
   static const double _pixelsPerHour = 60.0;
+
+  final WeekPager _pager = WeekPager(weekStartMonday: true);
+  late final int _initialPage;
 
   double get _initialScrollOffset {
     final now = DateTime.now();
@@ -72,7 +77,8 @@ class _WeekViewWidgetState extends State<WeekViewWidget> {
   @override
   void initState() {
     super.initState();
-    _currentWeekStart = _getWeekStart(widget.initialWeek ?? DateTime.now());
+    _initialPage = _pager.pageIndexForDate(widget.initialWeek ?? DateTime.now());
+    _currentWeekStart = _pager.weekStartForPage(_initialPage);
     _pageController = PageController(initialPage: _initialPage);
   }
 
@@ -84,17 +90,15 @@ class _WeekViewWidgetState extends State<WeekViewWidget> {
     }
     super.dispose();
   }
-  
-  /// Get the start of the week (Monday) for a given date
-  DateTime _getWeekStart(DateTime date) {
-    final weekday = date.weekday;
-    return DateTime(date.year, date.month, date.day).subtract(Duration(days: weekday - 1));
+
+  /// Jump the page view to the week containing today.
+  void jumpToToday() {
+    _pageController.jumpToPage(_pager.pageIndexForDate(DateTime.now()));
   }
-  
-  /// Get week start for a given page index
+
+  /// Get week start for a given page index (fixed-epoch, stable across swipes).
   DateTime _getWeekStartFromPageIndex(int index) {
-    final weeksOffset = index - _initialPage;
-    return _currentWeekStart.add(Duration(days: weeksOffset * 7));
+    return _pager.weekStartForPage(index);
   }
   
   @override
