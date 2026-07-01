@@ -131,10 +131,15 @@ function firebaseDeps(
 
 // ─── Cloud Function export ───────────────────────────────────────────────────
 
-export const unpairCouple = onCall({ region: 'us-central1', timeoutSeconds: 120 }, async (request) => {
-  if (!request.auth) {
-    throw new HttpsError('unauthenticated', 'Must be signed in to unpair');
-  }
+export const unpairCouple = onCall(
+  { region: 'us-central1', timeoutSeconds: 120, enforceAppCheck: true },
+  async (request) => {
+    if (!request.app) {
+      throw new HttpsError('failed-precondition', 'App Check token missing');
+    }
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be signed in to unpair');
+    }
 
   const callerUid = request.auth.uid;
   const db = admin.firestore();
@@ -169,4 +174,5 @@ export const unpairCouple = onCall({ region: 'us-central1', timeoutSeconds: 120 
   }
 
   return result;
-});
+  }
+);

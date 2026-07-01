@@ -2,9 +2,11 @@ import 'dart:ui';
 
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -43,6 +45,23 @@ void main() async {
   } catch (e) {
     _handleInitializationError('Unexpected error during initialization: $e');
     return;
+  }
+
+  // Activate Firebase App Check. Debug providers are used in debug builds
+  // (incl. emulator sessions) so local dev stays frictionless; release builds
+  // use the platform-native attestation providers (DeviceCheck on iOS, Play
+  // Integrity on Android). Enforcement on Firestore writes + callables is
+  // configured in the Firebase Console (see docs/MANUAL_STEPS.md).
+  if (kDebugMode) {
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: AndroidProvider.debug,
+      appleProvider: AppleProvider.debug,
+    );
+  } else {
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: AndroidProvider.playIntegrity,
+      appleProvider: AppleProvider.deviceCheck,
+    );
   }
 
   // ponytail: point Firebase clients at the local emulators when the

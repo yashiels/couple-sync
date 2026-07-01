@@ -126,10 +126,15 @@ function firebaseDeps(
 
 // ─── Cloud Function export ────────────────────────────────────────────────────
 
-export const redeemInvite = onCall({ region: 'us-central1', timeoutSeconds: 120 }, async (request) => {
-  if (!request.auth) {
-    throw new HttpsError('unauthenticated', 'Must be signed in to redeem an invite');
-  }
+export const redeemInvite = onCall(
+  { region: 'us-central1', timeoutSeconds: 120, enforceAppCheck: true },
+  async (request) => {
+    if (!request.app) {
+      throw new HttpsError('failed-precondition', 'App Check token missing');
+    }
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be signed in to redeem an invite');
+    }
 
   const { code } = request.data as { code: string };
   if (!code || typeof code !== 'string') {
@@ -205,4 +210,5 @@ export const redeemInvite = onCall({ region: 'us-central1', timeoutSeconds: 120 
 
     return result;
   });
-});
+  }
+);

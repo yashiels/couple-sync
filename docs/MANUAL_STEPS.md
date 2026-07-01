@@ -88,3 +88,9 @@ cd /Volumes/pulsar/apex-local/Developer/github/skyner-group/couple-sync
 1. GCP Console → APIs & Services → enable **Google Calendar API** for the Firebase project.
 2. The OAuth consent screen must include the `https://www.googleapis.com/auth/calendar.readonly` scope.
 3. freebusy costs 1 quota unit/call; the default per-user quota is 1M/day — far above our ≤1/hour throttle.
+
+## App Check (one-time console setup)
+1. Firebase Console → App Check → register iOS (DeviceCheck) and Android (Play Integrity).
+2. Enforce App Check on **Cloud Firestore** (writes) and **Cloud Functions** (callables).
+3. Copy the debug secret; add to `firebase.json` `appCheck` debug token for local dev, or set via the debug provider in `lib/main.dart`.
+
