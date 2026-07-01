@@ -542,4 +542,59 @@ void main() {
       });
     });
   });
+
+  // Test the retry policy via a fake callback that fails N times then succeeds.
+  // `withBackoff` is a top-level generic helper extracted from `CalendarService`
+  // so the retry policy is unit-testable without a live Google Calendar API.
+  group('withBackoff', () {
+    test('retries on 429 then succeeds', () async {
+      int calls = 0;
+      Future<String> query() async {
+        calls++;
+        if (calls < 3) throw Exception('429 rate limit');
+        return 'ok';
+      }
+
+      final result = await withBackoff(query);
+
+      expect(result, 'ok');
+      expect(calls, 3);
+    });
+
+    test('retries on 503 then succeeds', () async {
+      int calls = 0;
+      Future<String> query() async {
+        calls++;
+        if (calls < 2) throw Exception('503 service unavailable');
+        return 'ok';
+      }
+
+      final result = await withBackoff(query);
+
+      expect(result, 'ok');
+      expect(calls, 2);
+    });
+
+    test('does NOT retry non-retriable errors (404)', () async {
+      int calls = 0;
+      Future<String> query() async {
+        calls++;
+        throw Exception('not found 404');
+      }
+
+      await expectLater(withBackoff(query), throwsException);
+      expect(calls, 1);
+    });
+
+    test('gives up after maxAttempts (4) on persistent 429', () async {
+      int calls = 0;
+      Future<String> query() async {
+        calls++;
+        throw Exception('429 rate limit');
+      }
+
+      await expectLater(withBackoff(query), throwsException);
+      expect(calls, 4); // 1 initial + 3 retries
+    });
+  });
 }

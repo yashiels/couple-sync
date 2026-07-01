@@ -82,3 +82,9 @@ cd /Volumes/pulsar/apex-local/Developer/github/skyner-group/couple-sync
 - **Android**: Requires Android SDK (included with Flutter)
 - **Apple Sign-In**: Only works on physical iOS devices, not simulators
 - **Google Sign-In**: Requires OAuth 2.0 client ID configuration in Google Cloud Console
+
+## Google Calendar API
+
+1. GCP Console → APIs & Services → enable **Google Calendar API** for the Firebase project.
+2. The OAuth consent screen must include the `https://www.googleapis.com/auth/calendar.readonly` scope.
+3. freebusy costs 1 quota unit/call; the default per-user quota is 1M/day — far above our ≤1/hour throttle.
