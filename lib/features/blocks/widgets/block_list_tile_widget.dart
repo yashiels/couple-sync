@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/time_block.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/format_utils.dart';
 
 /// Widget to display a single time block in the block management list.
 /// Shows title, time range, category color, and source badge.
@@ -179,13 +180,13 @@ class BlockListTileWidget extends StatelessWidget {
   String _formatTimeRange() {
     final start = block.startDateTime.toLocal();
     final end = block.endDateTime.toLocal();
-    
-    final startStr = '${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}';
-    final endStr = '${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')}';
-    
+
+    final startStr = formatTimeHm(start);
+    final endStr = formatTimeHm(end);
+
     // Check if same day
-    if (start.year == end.year && 
-        start.month == end.month && 
+    if (start.year == end.year &&
+        start.month == end.month &&
         start.day == end.day) {
       return '${_formatDate(start)} • $startStr - $endStr';
     } else {
@@ -193,10 +194,7 @@ class BlockListTileWidget extends StatelessWidget {
     }
   }
 
-  /// Format date as "d MMM"
-  String _formatDate(DateTime dateTime) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return '${dateTime.day} ${months[dateTime.month - 1]}';
-  }
+  /// Locale-aware short date — `d MMM` via [formatMonth].
+  String _formatDate(DateTime dateTime) =>
+      '${dateTime.day} ${formatMonth(dateTime)}';
 }

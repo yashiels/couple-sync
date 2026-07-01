@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/models/couple_model.dart';
 import '../../../core/router/routes.dart';
+import '../../../core/utils/format_utils.dart';
 import '../../../services/calendar_service.dart';
 import '../../../services/providers/auth_state_provider.dart';
 import '../../../services/providers/calendar_provider.dart';
@@ -294,7 +295,7 @@ class SettingsScreen extends ConsumerWidget {
     if (diff.inMinutes < 1) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${lastSyncTime.day}/${lastSyncTime.month}/${lastSyncTime.year}';
+    return formatDateYMd(lastSyncTime);
   }
 
   /// Build the Couple section using coupleProvider and partnerProfileProvider.

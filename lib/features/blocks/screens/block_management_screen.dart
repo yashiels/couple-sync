@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/models/time_block.dart';
 import '../../../core/router/routes.dart';
+import '../../../core/utils/format_utils.dart';
 import '../../../services/providers/auth_state_provider.dart';
 import '../../../services/providers/couple_providers.dart';
 import '../widgets/block_list_tile_widget.dart';
@@ -125,8 +126,8 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
     final start = block.startDateTime.toLocal();
     final end = block.endDateTime.toLocal();
 
-    final startStr = '${_formatDate(start)} ${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}';
-    final endStr = '${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')}';
+    final startStr = '${_formatDate(start)} ${formatTimeHm(start)}';
+    final endStr = formatTimeHm(end);
 
     if (start.year == end.year && start.month == end.month && start.day == end.day) {
       return '$startStr - $endStr';
@@ -135,11 +136,9 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
     }
   }
 
-  String _formatDate(DateTime dateTime) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return '${dateTime.day} ${months[dateTime.month - 1]} ${dateTime.year}';
-  }
+  /// Locale-aware short date — `d MMM yyyy` via [formatMonth].
+  String _formatDate(DateTime dateTime) =>
+      '${dateTime.day} ${formatMonth(dateTime)} ${dateTime.year}';
 
   String _getCategoryLabel(TimeBlockCategory category) {
     switch (category) {

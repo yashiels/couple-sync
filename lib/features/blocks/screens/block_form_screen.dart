@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:timezone/timezone.dart';
 import '../../../core/models/time_block.dart';
 import '../../../core/router/routes.dart';
+import '../../../core/utils/format_utils.dart';
 import '../../../services/providers/auth_state_provider.dart';
 import '../../../services/providers/firestore_provider.dart';
 import '../widgets/recurrence_picker_widget.dart';
@@ -388,7 +390,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                           child: OutlinedButton.icon(
                             icon: const Icon(Icons.calendar_today),
                             label: Text(
-                              '${_startDate.day}/${_startDate.month}/${_startDate.year}',
+                              formatDateYMd(_startDate),
                             ),
                             onPressed: () async {
                               final date = await showDatePicker(
@@ -441,7 +443,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                           child: OutlinedButton.icon(
                             icon: const Icon(Icons.calendar_today),
                             label: Text(
-                              '${_endDate.day}/${_endDate.month}/${_endDate.year}',
+                              formatDateYMd(_endDate),
                             ),
                             onPressed: () async {
                               final date = await showDatePicker(
@@ -496,9 +498,26 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                     const SizedBox(height: 24),
 
                     // Timezone display
-                    Text(
-                      'Timezone: $_timezone',
-                      style: Theme.of(context).textTheme.bodySmall,
+                    Card(
+                      margin: EdgeInsets.zero,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.schedule, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _tzLabel(_timezone),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 24),
 
@@ -589,5 +608,16 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
       case TimeBlockVisibility.onlyMe:
         return 'Only Me';
     }
+  }
+
+  /// Build a readable timezone label: IANA id + UTC offset + current local time.
+  String _tzLabel(String tzId) {
+    final loc = getLocation(tzId);
+    final now = TZDateTime.now(loc);
+    final offset = now.timeZoneOffset;
+    final sign = offset.isNegative ? '-' : '+';
+    final hh = offset.inHours.abs().toString().padLeft(2, '0');
+    final mm = (offset.inMinutes.abs() % 60).toString().padLeft(2, '0');
+    return '$tzId (UTC$sign$hh:$mm) · now ${formatTimeHm(now)}';
   }
 }
