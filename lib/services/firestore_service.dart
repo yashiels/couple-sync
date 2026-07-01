@@ -85,6 +85,14 @@ class FirestoreService {
     }
   }
 
+  /// Watches a user document in real time. Returns snapshots of the raw doc
+  /// so callers can decide how to react (the typed [UserModel] is parsed by
+  /// the caller). Used by the overlap controller to recompute when either
+  /// partner's timezone or showLateNightWindows pref changes.
+  Stream<DocumentSnapshot<Map<String, dynamic>>> getUserStream(String uid) {
+    return _firestore.collection('users').doc(uid).snapshots();
+  }
+
   // ============================================================
   // COUPLES
   // ============================================================
@@ -107,6 +115,14 @@ class FirestoreService {
         originalError: e,
       );
     }
+  }
+
+  /// Watches a couple document in real time. Returns raw snapshots so callers
+  /// can re-resolve `userAUid`/`userBUid` when pairing changes. Used by the
+  /// overlap controller.
+  Stream<DocumentSnapshot<Map<String, dynamic>>> getCoupleStream(
+      String coupleId) {
+    return _firestore.collection('couples').doc(coupleId).snapshots();
   }
 
   /// Create a new couple document.
@@ -502,6 +518,40 @@ class FirestoreService {
         message: 'An unexpected error occurred while fetching overlap',
         originalError: e,
       );
+    }
+  }
+
+  /// Writes `overlaps/{coupleId}/windows/latest` only if the stored `inputHash`
+  /// differs from `result.inputHash`. Returns true if the write happened.
+  ///
+  /// The Firestore transaction re-reads the doc's `inputHash` and skips the
+  /// write if it matches — this is what makes the two-writer race benign
+  /// (both devices computing the same inputs in the same hour produce the
+  /// same hash, so the second write is a no-op).
+  Future<bool> writeOverlapTransaction(
+    String coupleId,
+    OverlapResult result,
+    String uid,
+  ) async {
+    final docRef = _firestore
+        .collection('overlaps')
+        .doc(coupleId)
+        .collection('windows')
+        .doc('latest');
+    try {
+      return await _firestore.runTransaction<bool>((tx) async {
+        final snap = await tx.get(docRef);
+        final current =
+            snap.exists ? (snap.data()!['inputHash'] as String?) : null;
+        if (current == result.inputHash) return false;
+        tx.set(docRef, {
+          ...result.toJson(),
+          'computedBy': uid,
+        });
+        return true;
+      });
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, 'Failed to write overlap');
     }
   }
 
