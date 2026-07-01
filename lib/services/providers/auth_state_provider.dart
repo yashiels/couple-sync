@@ -167,6 +167,19 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  /// Sign in (or create) a user with email + password. Dev-only path.
+  /// Returns true on success, false on failure. Check [lastError].
+  Future<bool> signInWithEmail(String email, String password) async {
+    try {
+      _lastError = null;
+      await _authService.signInWithEmail(email, password);
+      return true;
+    } on AuthException catch (e) {
+      _lastError = e.message;
+      return false;
+    }
+  }
+
   /// Sign out the current user.
   Future<void> signOut() async {
     try {

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -595,7 +596,7 @@ class SettingsScreen extends ConsumerWidget {
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
-              await _handleUnpair(context, ref, couple);
+              await _handleUnpair(context, ref);
             },
             style: TextButton.styleFrom(
               foregroundColor: Theme.of(context).colorScheme.error,
@@ -607,36 +608,19 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _handleUnpair(BuildContext context, WidgetRef ref, CoupleModel couple) async {
+  Future<void> _handleUnpair(BuildContext context, WidgetRef ref) async {
     try {
       final authState = ref.read(authStateProvider);
-      final userProfile = authState.profile;
       final uid = authState.uid;
+      if (uid == null) return;
 
-      if (userProfile == null || uid == null) return;
-
-      final coupleId = userProfile.coupleId;
-      if (coupleId == null) return;
-
-      final partnerUid = couple.getPartnerUid(uid);
-
-      final db = FirebaseFirestore.instance;
-
-      // Use a transaction to atomically clear both users' coupleId so neither
-      // user is left in an orphaned/permanently-paired state.
-      await db.runTransaction((txn) async {
-        txn.update(
-          db.collection('users').doc(uid),
-          {'coupleId': FieldValue.delete()},
-        );
-
-        if (partnerUid != null) {
-          txn.update(
-            db.collection('users').doc(partnerUid),
-            {'coupleId': FieldValue.delete()},
-          );
-        }
-      });
+      // Delegate to the unpairCouple Cloud Function. It atomically marks the
+      // couple inactive (appending unpairHistory), clears coupleId on BOTH
+      // users, and deletes shared timeblocks/overlaps. Client-side writes to
+      // the partner's user doc and the couples doc are blocked by Firestore
+      // security rules, so unpair MUST go through this callable.
+      final callable = FirebaseFunctions.instance.httpsCallable('unpairCouple');
+      await callable();
 
       // Refresh local profile so providers reflect the cleared coupleId.
       await ref.read(authStateProvider.notifier).refreshProfile();
@@ -644,6 +628,15 @@ class SettingsScreen extends ConsumerWidget {
       // Navigate to pairing screen so the user can pair again if desired.
       if (context.mounted) {
         context.go(AppRoutes.pairing);
+      }
+    } on FirebaseFunctionsException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to unpair: ${e.message ?? e.code}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
       }
     } catch (e) {
       if (context.mounted) {

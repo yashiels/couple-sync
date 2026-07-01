@@ -14,7 +14,17 @@ class AuthScreen extends ConsumerStatefulWidget {
 class _AuthScreenState extends ConsumerState<AuthScreen> {
   bool _isGoogleLoading = false;
   bool _isAppleLoading = false;
+  bool _isEmailLoading = false;
   String? _errorMessage;
+
+  // ponytail: dev-only email controllers; only allocated when running against
+  // the Firebase emulators (USE_FIREBASE_EMULATOR dart-define).
+  static const _useEmulator =
+      bool.fromEnvironment('USE_FIREBASE_EMULATOR', defaultValue: false);
+  final TextEditingController _emailController =
+      TextEditingController(text: 'partnerA@example.com');
+  final TextEditingController _passwordController =
+      TextEditingController(text: 'password123');
 
   @override
   void initState() {
@@ -23,6 +33,35 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(authStateProvider.notifier).clearError();
     });
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleEmailSignIn() async {
+    if (_isEmailLoading) return;
+    setState(() {
+      _isEmailLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final success = await ref
+          .read(authStateProvider.notifier)
+          .signInWithEmail(_emailController.text, _passwordController.text);
+      if (!success) {
+        _errorMessage = ref.read(authStateProvider.notifier).lastError;
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isEmailLoading = false;
+        });
+      }
+    }
   }
 
   Future<void> _handleGoogleSignIn() async {
@@ -195,6 +234,50 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
+
+                // ponytail: dev-only email sign-in. Renders only against the
+                // Firebase emulators so prod auth stays Google/Apple-only.
+                if (_useEmulator) ...[
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'DEV — Emulator mode',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: colorScheme.error,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Password',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: _isEmailLoading ? null : _handleEmailSignIn,
+                    child: _isEmailLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Continue with Email (dev)'),
+                  ),
+                  const SizedBox(height: 32),
+                ],
 
                 // Terms and privacy
                 Text(

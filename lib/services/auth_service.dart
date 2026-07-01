@@ -176,6 +176,61 @@ class AuthService {
     }
   }
 
+  /// Signs in (or creates) a user with email + password.
+  ///
+  // ponytail: dev-only convenience for driving the app on the iOS simulator
+  // against the local Firebase emulators, where Google/Apple Sign-In can't run
+  // (Apple needs a paid dev account; Google on iOS sim is flaky). In prod the
+  // Email/Password auth provider is disabled in the Firebase console, so this
+  // path is inert there even if invoked. The UI button only renders under the
+  // USE_FIREBASE_EMULATOR dart-define.
+  Future<User> signInWithEmail(String email, String password) async {
+    try {
+      UserCredential cred;
+      try {
+        cred = await _auth.signInWithEmailAndPassword(
+          email: email.trim(),
+          password: password,
+        );
+      } on FirebaseAuthException catch (e) {
+        // Sign-up-or-in: if the account doesn't exist yet, create it. Lets a
+        // fresh tester type any email/pass and land in the app.
+        if (e.code == 'user-not-found' ||
+            e.code == 'invalid-credential' ||
+            e.code == 'invalid-email') {
+          cred = await _auth.createUserWithEmailAndPassword(
+            email: email.trim(),
+            password: password,
+          );
+        } else {
+          rethrow;
+        }
+      }
+
+      final user = cred.user;
+      if (user == null) {
+        throw AuthException(
+          code: 'sign-in-failed',
+          message: 'Failed to sign in with email. Please try again.',
+        );
+      }
+      await _createOrUpdateUserDocument(user);
+      return user;
+    } on AuthException {
+      rethrow;
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(
+        code: e.code,
+        message: _getFirebaseAuthErrorMessage(e),
+      );
+    } catch (e) {
+      throw AuthException(
+        code: 'unknown-error',
+        message: 'An unexpected error occurred. Please try again.',
+      );
+    }
+  }
+
   /// Signs out the current user from Firebase and all auth providers.
   ///
   /// Throws [AuthException] with a user-friendly message on failure.

@@ -1,3 +1,6 @@
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -33,6 +36,18 @@ void main() async {
   } catch (e) {
     _handleInitializationError('Unexpected error during initialization: $e');
     return;
+  }
+
+  // ponytail: point Firebase clients at the local emulators when the
+  // USE_FIREBASE_EMULATOR dart-define is set. Opt-in via --dart-define so
+  // prod/release builds are untouched. iOS sim uses 'localhost' (Android
+  // would need 10.0.2.2, but we're targeting iOS sim for the demo).
+  const useEmulator =
+      bool.fromEnvironment('USE_FIREBASE_EMULATOR', defaultValue: false);
+  if (useEmulator) {
+    await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
+    FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
+    FirebaseFunctions.instance.useFunctionsEmulator('localhost', 5001);
   }
 
   // Initialize timezone database before any TZDateTime operations
