@@ -277,8 +277,9 @@ class CalendarService {
         ],
       );
 
-      // Execute freebusy query
-      final response = await calendarApi.freebusy.query(request);
+      // Execute freebusy query with exponential backoff on 429/503.
+      final response =
+          await withBackoff(() => calendarApi.freebusy.query(request));
 
       // Extract busy intervals from response
       final busyIntervals = <({DateTime start, DateTime end})>[];
@@ -424,4 +425,32 @@ class CalendarException implements Exception {
 
   @override
   String toString() => 'CalendarException($code): $message';
+}
+
+/// Runs [operation] with exponential backoff, retrying on transient
+/// Google Calendar quota/availability errors (429 / 503 / rate / unavailable).
+///
+/// Delays: 1s, 2s, 4s (`500 * (1 << attempt)` ms for attempts 1..3).
+/// Up to [maxAttempts] total calls (4 by default) — i.e. 1 initial call
+/// plus 3 retries. Extracted as a top-level generic so the retry policy is
+/// unit-testable without a live Calendar API.
+Future<T> withBackoff<T>(
+  Future<T> Function() operation, {
+  int maxAttempts = 4,
+}) async {
+  int attempt = 0;
+  while (true) {
+    try {
+      return await operation();
+    } catch (e) {
+      final s = e.toString().toLowerCase();
+      final retriable = s.contains('429') ||
+          s.contains('503') ||
+          s.contains('rate') ||
+          s.contains('unavailable');
+      attempt++;
+      if (!retriable || attempt >= maxAttempts) rethrow;
+      await Future.delayed(Duration(milliseconds: 500 * (1 << attempt)));
+    }
+  }
 }
