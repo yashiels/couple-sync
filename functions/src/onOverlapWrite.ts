@@ -57,42 +57,68 @@ function formatOverlapBody(window: OverlapWindow): string {
   return `${hours}h free together on ${dt.toFormat('EEE, MMM d')}`;
 }
 
+export function validateWindows(input: unknown[]): OverlapWindow[] {
+  const out: OverlapWindow[] = [];
+  for (const w of input as any[]) {
+    if (typeof w.startUtc !== 'number' || !Number.isInteger(w.startUtc) ||
+        typeof w.endUtc !== 'number' || !Number.isInteger(w.endUtc) ||
+        typeof w.durationMinutes !== 'number' || !Number.isInteger(w.durationMinutes) ||
+        typeof w.score !== 'number' || !Number.isFinite(w.score) ||
+        typeof w.reasonableBoth !== 'boolean') {
+      throw new Error('invalid window shape');
+    }
+    if (!(w.durationMinutes > 0 && w.durationMinutes <= 1560)) {
+      throw new Error('durationMinutes out of bounds');
+    }
+    if (!(w.startUtc < w.endUtc)) {
+      throw new Error('startUtc must be < endUtc');
+    }
+    if (Math.abs((w.endUtc - w.startUtc) - w.durationMinutes * 60_000) > 1000) {
+      throw new Error('durationMinutes does not match start/end');
+    }
+    out.push(w);
+  }
+  return out;
+}
+
 export async function handleOnOverlapWrite(
   coupleId: string,
   windows: OverlapWindow[],
-  deps: OverlapWriteDeps
+  deps: OverlapWriteDeps,
+  computedBy?: string,
 ): Promise<void> {
-  if (windows.length === 0) return;
+  let valid: OverlapWindow[];
+  try {
+    valid = validateWindows(windows);
+  } catch (e) {
+    logger.warn(`[onOverlapWrite] rejected malformed windows: ${(e as Error).message}`);
+    return;
+  }
+  if (valid.length === 0) return;
 
   const couple = await deps.getCouple(coupleId);
   if (!couple) return;
 
-  const [tokensA, tokensB] = await Promise.all([
-    deps.getFcmTokens(couple.userAUid),
-    deps.getFcmTokens(couple.userBUid),
-  ]);
+  const targets = [couple.userAUid, couple.userBUid].filter((uid) => uid !== computedBy);
+  const tokensPerUid = await Promise.all(
+    targets.map(async (uid) => [uid, await deps.getFcmTokens(uid)] as const),
+  );
 
-  // Pick next upcoming window for the notification body
-  const nextWindow = windows.reduce((best, w) => (w.startUtc < best.startUtc ? w : best));
+  const nextWindow = valid.reduce((best, w) => (w.startUtc < best.startUtc ? w : best));
   const notification: Notification = {
-    title: "You have free time together!",
+    title: 'You have free time together!',
     body: formatOverlapBody(nextWindow),
     data: { coupleId },
   };
 
-  const sendIfTokens = async (uid: string, tokens: string[]) => {
-    if (tokens.length === 0) return;
+  for (const [uid, tokens] of tokensPerUid) {
+    if (tokens.length === 0) continue;
     const invalidTokens = await deps.sendNotification(tokens, notification);
     if (invalidTokens.length > 0) {
-      const valid = tokens.filter((t) => !invalidTokens.includes(t));
-      await deps.updateFcmTokens(uid, valid);
+      const validTokens = tokens.filter((t) => !invalidTokens.includes(t));
+      await deps.updateFcmTokens(uid, validTokens);
     }
-  };
-
-  await Promise.all([
-    sendIfTokens(couple.userAUid, tokensA),
-    sendIfTokens(couple.userBUid, tokensB),
-  ]);
+  }
 }
 
 // ─── Cloud Function export ────────────────────────────────────────────────────
@@ -104,8 +130,9 @@ export const onOverlapWrite = onDocumentWritten(
     const messaging = admin.messaging();
     const { coupleId } = event.params;
     const after = event.data?.after;
-    const overlapResult: OverlapResult | undefined = after?.data() as OverlapResult | undefined;
+    const overlapResult = after?.data() as (OverlapResult & { computedBy?: string }) | undefined;
     const windows = overlapResult?.windows ?? [];
+    const computedBy = overlapResult?.computedBy;
 
     await handleOnOverlapWrite(coupleId, windows, {
       getCouple: async (id) => {
@@ -127,6 +154,6 @@ export const onOverlapWrite = onDocumentWritten(
       updateFcmTokens: async (uid, validTokens) => {
         await db.collection('users').doc(uid).update({ fcmTokens: validTokens });
       },
-    });
+    }, computedBy);
   }
 );

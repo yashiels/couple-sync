@@ -1,4 +1,4 @@
-import { handleOnOverlapWrite, filterInvalidFcmTokens } from '../onOverlapWrite';
+import { handleOnOverlapWrite, filterInvalidFcmTokens, validateWindows } from '../onOverlapWrite';
 import { CoupleDoc, OverlapWindow } from '../lib/types';
 
 // Silence firebase-functions logger in unit tests
@@ -138,5 +138,43 @@ describe('filterInvalidFcmTokens', () => {
     const invalid = filterInvalidFcmTokens(tokens, responses);
 
     expect(invalid).toEqual(['token-unregistered']);
+  });
+});
+
+describe('validateWindows', () => {
+  const ok = (over: Partial<any> = {}) => ({
+    startUtc: 1000, endUtc: 1000 + 60 * 60 * 1000, durationMinutes: 60, score: 5, reasonableBoth: true, ...over,
+  });
+
+  test('accepts well-formed windows', () => {
+    expect(validateWindows([ok()])).toHaveLength(1);
+  });
+  test('rejects durationMinutes > 1560 (DST fall-back guard)', () => {
+    expect(() => validateWindows([ok({ durationMinutes: 1561, endUtc: 1000 + 1561 * 60 * 1000 })])).toThrow();
+  });
+  test('rejects startUtc >= endUtc', () => {
+    expect(() => validateWindows([ok({ startUtc: 2000, endUtc: 2000 })])).toThrow();
+  });
+  test('rejects end-start != durationMinutes*60000', () => {
+    expect(() => validateWindows([ok({ durationMinutes: 30 })])).toThrow();
+  });
+  test('rejects non-bool reasonableBoth', () => {
+    expect(() => validateWindows([ok({ reasonableBoth: 'yes' })])).toThrow();
+  });
+});
+
+describe('handleOnOverlapWrite skips writer', () => {
+  test('does not send to computedBy uid', async () => {
+    const sent: string[] = [];
+    await handleOnOverlapWrite('c1', [{
+      startUtc: 1000, endUtc: 1000 + 60 * 60 * 1000, durationMinutes: 60, score: 5, reasonableBoth: true,
+    }], {
+      getCouple: async () => ({ userAUid: 'uA', userBUid: 'uB', status: 'active', pairedAt: 0, createdAt: 0 }),
+      getFcmTokens: async (uid: string) => uid === 'uA' ? ['tA'] : ['tB'],
+      sendNotification: async (tokens: string[]) => { sent.push(...tokens); return []; },
+      updateFcmTokens: async () => {},
+      // computedBy carried on the doc; the handler reads it.
+    } as any, 'uA');
+    expect(sent).toEqual(['tB']); // uA (writer) skipped
   });
 });
