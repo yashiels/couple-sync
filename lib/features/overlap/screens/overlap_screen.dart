@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../../../core/models/overlap_result.dart';
 import '../../../core/overlap/overlap_controller.dart';
+import '../../../core/router/routes.dart';
 import '../../../services/providers/couple_providers.dart';
 import '../../../services/providers/auth_state_provider.dart';
 import '../widgets/window_card_widget.dart';
@@ -101,6 +103,12 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
                   ),
                   textAlign: TextAlign.center,
                 ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: () => context.go(AppRoutes.pairing),
+                  icon: const Icon(Icons.link),
+                  label: const Text('Pair with partner'),
+                ),
               ],
             ),
           ),
@@ -197,6 +205,10 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
                         // Filter summary bar
                         _buildFilterSummary(theme),
 
+                        // Hint when the 10-window cap is active
+                        if (windows.length == 10)
+                          _buildCapHint(theme),
+
                         // Windows list
                         Expanded(
                           child: ListView.builder(
@@ -220,6 +232,33 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
                     ),
         );
       },
+    );
+  }
+
+  /// Hint shown when the visible list is capped at 10 windows.
+  Widget _buildCapHint(ThemeData theme) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline,
+            size: 18,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Showing top 10 — refine filters for more',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

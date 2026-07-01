@@ -21,7 +21,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  bool _isRefreshing = false;
   bool _autoSyncTriggered = false;
 
   @override
@@ -37,8 +36,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _handleRefresh() async {
-    setState(() => _isRefreshing = true);
-
     // Invalidate providers to trigger re-fetch
     ref.invalidate(partnerProfileProvider);
     final coupleId = ref.read(currentUserProfileProvider)?.coupleId;
@@ -46,10 +43,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ref.invalidate(overlapControllerProvider(coupleId));
     }
 
-    // Allow time for providers to refresh
-    await Future.delayed(const Duration(seconds: 1));
-
-    setState(() => _isRefreshing = false);
+    // Await the actual provider futures so RefreshIndicator dismisses
+    // once the data is ready (no fixed delay).
+    await ref.read(partnerProfileProvider.future);
+    if (coupleId != null) {
+      await ref.read(overlapControllerProvider(coupleId).future);
+    }
   }
 
   void _handleFabAction(String action) {
@@ -122,6 +121,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   textAlign: TextAlign.center,
                 ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: () => context.go(AppRoutes.pairing),
+                  icon: const Icon(Icons.link),
+                  label: const Text('Pair with partner'),
+                ),
               ],
             ),
           ),
@@ -143,86 +148,83 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _handleRefresh,
-        child: _isRefreshing
-            ? const Center(child: CircularProgressIndicator())
-            : partnerAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, stack) => _buildErrorState(
-                  theme,
-                  'Failed to load partner data',
-                  () => ref.invalidate(partnerProfileProvider),
-                ),
-                data: (partner) {
-                  final partnerTimezone = partner?.timezone ?? 'UTC';
-                  final partnerName = partner?.displayName ?? 'Partner';
+        child: partnerAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stack) => _buildErrorState(
+            theme,
+            'Failed to load partner data',
+            () => ref.invalidate(partnerProfileProvider),
+          ),
+          data: (partner) {
+            final partnerTimezone = partner?.timezone ?? 'UTC';
+            final partnerName = partner?.displayName ?? 'Partner';
 
-                  return overlapAsync.when(
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
-                    error: (error, stack) => _buildErrorState(
-                      theme,
-                      'Failed to load overlap data',
-                      () => ref.invalidate(overlapWindowsProvider),
-                    ),
-                    data: (overlapResult) {
-                      final nextWindow = overlapResult?.nextWindow;
-                      final upcomingWindows = overlapResult?.windowsByTime
-                              .where((w) => w != nextWindow)
-                              .take(5)
-                              .toList() ??
-                          [];
-
-                      return SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Partner clocks
-                            PartnerClockWidget(
-                              userTimezone: userTimezone,
-                              partnerTimezone: partnerTimezone,
-                              partnerName: partnerName,
-                            ),
-
-                            const SizedBox(height: 24),
-
-                            // Next window card
-                            NextWindowCard(
-                              window: nextWindow,
-                              userTimezone: userTimezone,
-                              partnerTimezone: partnerTimezone,
-                            ),
-
-                            const SizedBox(height: 24),
-
-                            // Upcoming windows header
-                            Text(
-                              'Upcoming Windows',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-
-                            const SizedBox(height: 12),
-
-                            // Upcoming windows list
-                            if (upcomingWindows.isEmpty)
-                              _buildEmptyUpcoming(theme)
-                            else
-                              ...upcomingWindows.map(
-                                (window) => _UpcomingWindowCard(
-                                  window: window,
-                                  userTimezone: userTimezone,
-                                ),
-                              ),
-                          ],
-                        ),
-                      );
-                    },
-                  );
-                },
+            return overlapAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, stack) => _buildErrorState(
+                theme,
+                'Failed to load overlap data',
+                () => ref.invalidate(overlapControllerProvider(coupleId!)),
               ),
+              data: (overlapResult) {
+                final nextWindow = overlapResult?.nextWindow;
+                final upcomingWindows = overlapResult?.windowsByTime
+                        .where((w) => w != nextWindow)
+                        .take(5)
+                        .toList() ??
+                    [];
+
+                return SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Partner clocks
+                      PartnerClockWidget(
+                        userTimezone: userTimezone,
+                        partnerTimezone: partnerTimezone,
+                        partnerName: partnerName,
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // Next window card
+                      NextWindowCard(
+                        window: nextWindow,
+                        userTimezone: userTimezone,
+                        partnerTimezone: partnerTimezone,
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // Upcoming windows header
+                      Text(
+                        'Upcoming Windows',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Upcoming windows list
+                      if (upcomingWindows.isEmpty)
+                        _buildEmptyUpcoming(theme)
+                      else
+                        ...upcomingWindows.map(
+                          (window) => _UpcomingWindowCard(
+                            window: window,
+                            userTimezone: userTimezone,
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showQuickActions(context),
