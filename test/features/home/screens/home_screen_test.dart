@@ -33,8 +33,7 @@ OverlapResult _generateMockOverlapResult() {
   return OverlapResult(
     windows: windows,
     computedAt: now,
-    blockHashA: 'mock_hash_a',
-    blockHashB: 'mock_hash_b',
+    inputHash: 'mock_hash',
   );
 }
 

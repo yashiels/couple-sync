@@ -28,14 +28,14 @@ void main() {
 
   OverlapResult createTestResult({
     List<OverlapWindow>? windows,
-    String blockHashA = 'hash-a-111',
-    String blockHashB = 'hash-b-222',
+    String inputHash = 'hash-a-111',
+    String? computedBy,
   }) {
     return OverlapResult(
       windows: windows ?? [createTestWindow()],
       computedAt: computedAt,
-      blockHashA: blockHashA,
-      blockHashB: blockHashB,
+      inputHash: inputHash,
+      computedBy: computedBy,
     );
   }
 
@@ -151,8 +151,8 @@ void main() {
         expect(restored.windows.length, 1);
         expect(restored.windows.first, result.windows.first);
         expect(restored.computedAt.toUtc(), result.computedAt.toUtc());
-        expect(restored.blockHashA, result.blockHashA);
-        expect(restored.blockHashB, result.blockHashB);
+        expect(restored.inputHash, result.inputHash);
+        expect(restored.computedBy, result.computedBy);
       });
 
       test('handles empty windows list', () {
@@ -189,11 +189,11 @@ void main() {
     });
 
     group('copyWith', () {
-      test('copies with new blockHashA', () {
+      test('copies with new inputHash', () {
         final result = createTestResult();
-        final copy = result.copyWith(blockHashA: 'new-hash-a');
-        expect(copy.blockHashA, 'new-hash-a');
-        expect(copy.blockHashB, result.blockHashB);
+        final copy = result.copyWith(inputHash: 'new-hash-a');
+        expect(copy.inputHash, 'new-hash-a');
+        expect(copy.computedBy, result.computedBy);
       });
 
       test('copies with new windows list', () {
@@ -207,7 +207,7 @@ void main() {
       test('preserves windows when not updating', () {
         final result =
             createTestResult(windows: [createTestWindow(), createTestWindow()]);
-        final copy = result.copyWith(blockHashA: 'updated');
+        final copy = result.copyWith(inputHash: 'updated');
         expect(copy.windows.length, 2);
       });
     });
@@ -220,9 +220,9 @@ void main() {
         expect(a.hashCode, equals(b.hashCode));
       });
 
-      test('different blockHashA is not equal', () {
-        final a = createTestResult(blockHashA: 'hash-a');
-        final b = createTestResult(blockHashA: 'hash-b');
+      test('different inputHash is not equal', () {
+        final a = createTestResult(inputHash: 'hash-a');
+        final b = createTestResult(inputHash: 'hash-b');
         expect(a, isNot(equals(b)));
       });
 

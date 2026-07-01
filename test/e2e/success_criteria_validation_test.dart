@@ -155,8 +155,7 @@ void main() {
       final result = OverlapResult(
         windows: [],
         computedAt: computedAt,
-        blockHashA: 'hash-a',
-        blockHashB: 'hash-b',
+        inputHash: 'hash-a',
       );
 
       expect(result.computedAt, equals(computedAt));
@@ -179,8 +178,7 @@ void main() {
       final result = OverlapResult(
         windows: [],
         computedAt: DateTime.utc(2026, 4, 8, 12, 0, 0),
-        blockHashA: 'hash-a',
-        blockHashB: 'hash-b',
+        inputHash: 'hash-a',
       );
 
       expect(result.windows, isEmpty);

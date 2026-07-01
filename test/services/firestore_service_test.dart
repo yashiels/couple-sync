@@ -109,8 +109,7 @@ void main() {
           },
         ],
         'computedAt': timestamp,
-        'blockHashA': 'hash-a',
-        'blockHashB': 'hash-b',
+        'inputHash': 'hash-a',
       };
 
   void stubCollection(String name) {
@@ -1091,8 +1090,7 @@ void main() {
 
       expect(result, isNotNull);
       expect(result!.windows, hasLength(1));
-      expect(result.blockHashA, 'hash-a');
-      expect(result.blockHashB, 'hash-b');
+      expect(result.inputHash, 'hash-a');
     });
 
     test('returns null when document does not exist', () async {

@@ -69,8 +69,7 @@ Widget _buildSubject({
       OverlapResult(
         windows: _generateMockWindows(),
         computedAt: DateTime.now(),
-        blockHashA: 'hash_a',
-        blockHashB: 'hash_b',
+        inputHash: 'hash',
       );
 
   return ProviderScope(
@@ -169,8 +168,7 @@ void main() {
         overlapResult: OverlapResult(
           windows: const [],
           computedAt: DateTime.now(),
-          blockHashA: 'a',
-          blockHashB: 'b',
+          inputHash: 'a',
         ),
       ));
       await tester.pumpAndSettle();

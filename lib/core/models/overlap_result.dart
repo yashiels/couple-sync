@@ -92,14 +92,14 @@ class OverlapWindow {
 class OverlapResult {
   final List<OverlapWindow> windows;
   final DateTime computedAt;
-  final String blockHashA;
-  final String blockHashB;
+  final String inputHash;
+  final String? computedBy;
 
   const OverlapResult({
     required this.windows,
     required this.computedAt,
-    required this.blockHashA,
-    required this.blockHashB,
+    required this.inputHash,
+    this.computedBy,
   });
 
   factory OverlapResult.fromJson(Map<String, dynamic> json) {
@@ -116,31 +116,31 @@ class OverlapResult {
                   isUtc: true,
                 )
               : DateTime.now().toUtc(),
-      blockHashA: json['blockHashA'] as String,
-      blockHashB: json['blockHashB'] as String,
+      inputHash: json['inputHash'] as String? ?? '',
+      computedBy: json['computedBy'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'windows': windows.map((e) => e.toJson()).toList(),
-      'computedAt': Timestamp.fromDate(computedAt),
-      'blockHashA': blockHashA,
-      'blockHashB': blockHashB,
+      'computedAt': computedAt.millisecondsSinceEpoch, // int, not Timestamp
+      'inputHash': inputHash,
+      'computedBy': computedBy,
     };
   }
 
   OverlapResult copyWith({
     List<OverlapWindow>? windows,
     DateTime? computedAt,
-    String? blockHashA,
-    String? blockHashB,
+    String? inputHash,
+    String? computedBy,
   }) {
     return OverlapResult(
       windows: windows ?? List.from(this.windows),
       computedAt: computedAt ?? this.computedAt,
-      blockHashA: blockHashA ?? this.blockHashA,
-      blockHashB: blockHashB ?? this.blockHashB,
+      inputHash: inputHash ?? this.inputHash,
+      computedBy: computedBy ?? this.computedBy,
     );
   }
 
@@ -169,15 +169,15 @@ class OverlapResult {
           runtimeType == other.runtimeType &&
           _listEquals(windows, other.windows) &&
           computedAt == other.computedAt &&
-          blockHashA == other.blockHashA &&
-          blockHashB == other.blockHashB;
+          inputHash == other.inputHash &&
+          computedBy == other.computedBy;
 
   @override
   int get hashCode => Object.hash(
         Object.hashAll(windows),
         computedAt,
-        blockHashA,
-        blockHashB,
+        inputHash,
+        computedBy,
       );
 
   @override
