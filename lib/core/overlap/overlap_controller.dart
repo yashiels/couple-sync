@@ -67,7 +67,8 @@ int floorToHour(int ms) => (ms ~/ (60 * 60 * 1000)) * (60 * 60 * 1000);
 /// The pure helpers ([computeOverlapInputHash], [floorToHour]) are unit-tested
 /// in `test/core/overlap/overlap_controller_test.dart`. The stream wiring here
 /// is integration code covered end-to-end by the A11 smoke test.
-class OverlapController extends FamilyAsyncNotifier<OverlapResult, String> {
+class OverlapController
+    extends AutoDisposeFamilyAsyncNotifier<OverlapResult, String> {
   Timer? _debounce;
   StreamSubscription<List<TimeBlock>>? _blocksSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _userASub;
@@ -241,8 +242,14 @@ class OverlapController extends FamilyAsyncNotifier<OverlapResult, String> {
 }
 
 /// Family provider: `ref.watch(overlapControllerProvider(coupleId))` returns
-/// `AsyncValue<OverlapResult>` for the given couple.
+/// `AsyncValue<OverlapResult>` for the given couple. Auto-disposed so the
+/// stream subscriptions are cancelled when no screen is watching.
+///
+/// Note: the callable family class is `AutoDisposeAsyncNotifierProviderFamily`
+/// (the `AutoDisposeFamilyAsyncNotifierProvider` typedef resolves to the
+/// per-arg provider, which is not directly callable with an argument).
 final overlapControllerProvider =
-    AsyncNotifierProviderFamily<OverlapController, OverlapResult, String>(
+    AutoDisposeAsyncNotifierProviderFamily<OverlapController, OverlapResult,
+        String>(
   OverlapController.new,
 );

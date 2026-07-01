@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/models/overlap_result.dart';
+import '../../../core/overlap/overlap_controller.dart';
 import '../../../core/router/routes.dart';
 import '../../../services/providers/auth_state_provider.dart';
 import '../../../services/providers/calendar_provider.dart';
@@ -40,7 +41,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     // Invalidate providers to trigger re-fetch
     ref.invalidate(partnerProfileProvider);
-    ref.invalidate(overlapWindowsProvider);
+    final coupleId = ref.read(currentUserProfileProvider)?.coupleId;
+    if (coupleId != null) {
+      ref.invalidate(overlapControllerProvider(coupleId));
+    }
 
     // Allow time for providers to refresh
     await Future.delayed(const Duration(seconds: 1));
@@ -70,8 +74,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final userProfile = ref.watch(currentUserProfileProvider);
     // Read partner profile (async — FutureProvider<UserModel?>)
     final partnerAsync = ref.watch(partnerProfileProvider);
-    // Read overlap windows (async — StreamProvider<OverlapResult?>)
-    final overlapAsync = ref.watch(overlapWindowsProvider);
+    // Read overlap windows from the device-side controller (async —
+    // AsyncNotifierProvider<OverlapResult>). When there is no couple yet,
+    // emit a null result so the existing empty-state UI is preserved.
+    final coupleId = userProfile?.coupleId;
+    final overlapAsync = coupleId == null
+        ? const AsyncValue<OverlapResult?>.data(null)
+        : ref.watch(overlapControllerProvider(coupleId));
 
     // Determine user timezone (fallback to UTC if profile not loaded)
     final userTimezone = userProfile?.timezone ?? 'UTC';
