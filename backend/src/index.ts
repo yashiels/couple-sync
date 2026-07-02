@@ -17,7 +17,7 @@ const log = pino({ name: 'api' });
 
 async function bootstrap() {
   const config = getConfig();
-  log.info({ domain: config.domain, port: config.port }, 'Starting Couple Sync backend');
+  log.info({ port: config.port }, 'Starting Couple Sync backend');
 
   // Init Postgres pool (lazy — connection happens on first query).
   const pool = getPool();

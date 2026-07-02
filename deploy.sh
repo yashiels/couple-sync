@@ -1,64 +1,34 @@
 #!/usr/bin/env bash
 #
-# deploy.sh — Couple Sync VPS deploy (spec §10).
+# deploy.sh — deploy Couple Sync to a managed Docker platform (Coolify).
 #
-# Idempotent + safe to re-run. Pulls latest from the current branch on the VPS,
-# rebuilds the api + postgres + caddy stack, and applies DB migrations.
+# On Coolify, deployment is triggered by a git push: Coolify watches the branch,
+# builds the Docker image from backend/Dockerfile + docker-compose.yml, and
+# rolls the container. The container runs migrations on start (see Dockerfile
+# CMD), so no separate migrate step is needed.
 #
-# Usage:
-#   VPS_HOST=user@your-vps-host ./deploy.sh
-#   VPS_HOST=user@1.2.3.4 ./deploy.sh
+# Usage (push the current branch to trigger a Coolify build):
+#   ./deploy.sh
+#   ./deploy.sh main
 #
-# Env:
-#   VPS_HOST       (required) — ssh destination for the VPS.
-#   VPS_PATH       (optional) — repo path on the VPS (default /opt/couple-sync).
-#   SSH_OPTS       (optional) — extra args passed to ssh.
-#
-# Exit codes:
-#   0  success
-#   1  generic failure (ssh unreachable, git pull failed, build failed)
-#   2  missing VPS_HOST
+# Self-managed VPS (no Coolify)? See backend/README.md → "Self-managed deploy"
+# for the raw `docker compose up -d --build` flow (env-driven, no Caddy).
 #
 set -euo pipefail
 
-VPS_HOST="${VPS_HOST:-}"
-VPS_PATH="${VPS_PATH:-/opt/couple-sync}"
-SSH_OPTS="${SSH_OPTS:-}"
+BRANCH="${1:-$(git rev-parse --abbrev-ref HEAD)}"
 
-if [[ -z "$VPS_HOST" ]]; then
-  echo "ERROR: VPS_HOST is not set. Usage: VPS_HOST=user@host ./deploy.sh" >&2
-  exit 2
-fi
+echo "→ Pushing $BRANCH to origin (Coolify will build + deploy on push)"
+git push origin "$BRANCH"
 
-# shellcheck disable=SC2086
-SSH=(ssh $SSH_OPTS "$VPS_HOST")
+cat <<EOF
+✓ Pushed $BRANCH.
 
-echo "→ Deploying to $VPS_HOST:$VPS_PATH"
+Next (in Coolify):
+  - The application watching this branch will build automatically.
+  - Confirm the build + container start in the Coolify deploy log.
+  - Health check: curl https://<your-api-domain>/health
 
-# 1. Ensure the repo dir exists on the VPS (first-time bootstrap).
-if ! "${SSH[@]}" "test -d $VPS_PATH/.git"; then
-  echo "ERROR: $VPS_PATH is not a git checkout on the VPS." >&2
-  echo "       Bootstrap once: ssh $VPS_HOST 'sudo mkdir -p $VPS_PATH && sudo chown -R \$USER \$VPS_PATH && git clone <repo-url> $VPS_PATH'" >&2
-  exit 1
-fi
-
-# 2. Pull latest. We do NOT force — a dirty tree on the VPS is a human error
-#    that should be resolved manually, not clobbered by the deploy script.
-echo "→ git pull"
-"${SSH[@]}" "cd $VPS_PATH && git pull --ff-only"
-
-# 3. Rebuild + restart the stack. --build ensures image freshness; -d detaches.
-echo "→ docker compose up -d --build"
-"${SSH[@]}" "cd $VPS_PATH && docker compose up -d --build"
-
-# 4. Wait for postgres to be healthy, then run migrations inside the api
-#    container. The api service depends_on postgres (healthy), so by the time
-#    `up -d` returns the DB is accepting connections — but re-check explicitly.
-echo "→ waiting for postgres to be healthy"
-"${SSH[@]}" "cd $VPS_PATH && timeout 60 sh -c 'until docker compose ps postgres | grep -q \"healthy\"; do sleep 2; done'"
-
-echo "→ pnpm migrate"
-"${SSH[@]}" "cd $VPS_PATH && docker compose exec -T api pnpm migrate"
-
-echo "✓ Deploy complete. Stack status:"
-"${SSH[@]}" "cd $VPS_PATH && docker compose ps"
+Migrations run automatically on container start (Dockerfile CMD runs
+`node dist/migrate.js` before `node dist/index.js`).
+EOF

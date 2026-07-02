@@ -83,3 +83,14 @@ coverage/
 *~
 .worktrees/
 .worktrees
+
+# SDD scratch + agent working files
+.superpowers/
+.claude/
+
+# Firebase debug logs
+*-debug.log
+
+# Local env (never commit secrets)
+.env
+env/*.local.json

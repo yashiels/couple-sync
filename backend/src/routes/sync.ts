@@ -1,4 +1,4 @@
-import type { FastifyPluginCallback, FastifyRequest } from 'fastify';
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import type { WebSocket } from 'ws';
 import { authenticate } from '../auth.js';
 import { query } from '../db.js';
@@ -115,7 +115,7 @@ export async function membershipCheck(
  * token the socket is closed with code 4001. On success the uid is stashed
  * on the socket and the registries are populated.
  */
-export const syncRoutes: FastifyPluginCallback = (app) => {
+export const syncRoutes: FastifyPluginAsync = async (app) => {
   app.get('/sync', { websocket: true }, async (socket: WebSocket, req: FastifyRequest) => {
     let uid: string;
     try {

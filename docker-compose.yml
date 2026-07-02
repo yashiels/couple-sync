@@ -1,46 +1,30 @@
+# Production / managed-platform compose (Coolify, Traefik, etc.).
+#
+# - No Caddy: the platform reverse proxy (Traefik on Coolify) terminates TLS.
+# - No host port binding: the api container only `expose`s 3000; the platform
+#   proxy routes to it. The traefik label tells the proxy which port to hit.
+# - No bundled Postgres: provision Postgres as a separate managed resource on
+#   the platform and inject DATABASE_URL here. (For a self-contained local
+#   stack with a bundled postgres + localhost port, see docker-compose.override.yml.)
+# - All runtime config is injected via environment — no committed .env.
+#
+# Coolify: set DATABASE_URL, FIREBASE_PROJECT_ID, FIREBASE_SERVICE_ACCOUNT_JSON,
+# (optional ADMIN_TOKEN) in the service's Environment panel.
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: couple
-      POSTGRES_PASSWORD: couple
-      POSTGRES_DB: couplesync
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U couple -d couplesync"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
   api:
     build: ./backend
-    depends_on:
-      postgres:
-        condition: service_healthy
-    env_file:
-      - ./backend/.env
     environment:
-      DATABASE_URL: postgres://couple:couple@postgres:5432/couplesync
+      # `${VAR:-}` (not `${VAR:?}`) so the local-dev override can supply a
+      # literal DATABASE_URL without a parse-time failure. If the platform
+      # doesn't inject a required var, src/config.ts fails fast at app start.
+      DATABASE_URL: ${DATABASE_URL:-}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+      PORT: 3000
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
     expose:
       - "3000"
+    labels:
+      # Tell the platform proxy (Traefik) which container port to route to.
+      - traefik.http.services.api.loadbalancer.server.port=3000
     restart: unless-stopped
-
-  caddy:
-    image: caddy:2
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - api
-    restart: unless-stopped
-
-volumes:
-  pgdata:
-  caddy_data:
-  caddy_config:

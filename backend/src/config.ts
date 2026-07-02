@@ -29,7 +29,6 @@ export interface Config {
   databaseUrl: string;
   firebaseProjectId: string;
   firebaseServiceAccountJson: string;
-  domain: string;
   port: number;
   adminToken: string | null;
 }
@@ -42,7 +41,6 @@ export function loadConfig(): Config {
     databaseUrl: required('DATABASE_URL'),
     firebaseProjectId: required('FIREBASE_PROJECT_ID'),
     firebaseServiceAccountJson: required('FIREBASE_SERVICE_ACCOUNT_JSON'),
-    domain: optional('DOMAIN', 'api.example.com'),
     port: parseIntOrDefault('PORT', 3000),
     // Optional shared secret guarding POST /admin/* endpoints. When unset,
     // admin routes are disabled (respond 503). Not the same as Firebase auth

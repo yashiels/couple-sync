@@ -10,6 +10,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "migrate": "tsx src/migrate.ts",
+    "migrate:prod": "node dist/migrate.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -34,5 +35,6 @@
   },
   "engines": {
     "node": "22"
-  }
+  },
+  "packageManager": "pnpm@11.9.0"
 }

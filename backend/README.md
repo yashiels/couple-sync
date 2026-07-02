@@ -1,6 +1,6 @@
 # couple-sync-backend
 
-Self-hosted backend for Couple Sync — replaces Firestore/Cloud Functions with **Fastify + WebSocket + Postgres**, on a single VPS. Keeps **Firebase Auth + FCM** via the Admin SDK (Spark plan, free). $0/mo on an Oracle Always Free ARM box.
+Self-hosted backend for Couple Sync — replaces Firestore/Cloud Functions with **Fastify + WebSocket + Postgres**. Keeps **Firebase Auth + FCM** via the Admin SDK (Spark plan, free). Deploys as a managed Docker app behind a platform reverse proxy (Coolify/Traefik); no bundled Caddy, no host port binding.
 
 See `docs/superpowers/specs/2026-07-02-vps-self-host-design.md` for the full design.
 
@@ -15,88 +15,78 @@ See `docs/superpowers/specs/2026-07-02-vps-self-host-design.md` for the full des
 
 ## Prerequisites
 
-- **Node 22** + **pnpm** (local dev only; the VPS runs everything in Docker)
-- **Docker + Docker Compose** on the VPS
+- **Docker + Docker Compose** (local dev) or a **managed Docker platform** (Coolify) for prod
 - A **Firebase Spark (free) project** with:
   - Auth enabled (Email/Google/Apple sign-in providers)
   - FCM enabled (default on)
-  - A **service-account JSON key** — Firebase Console → Project Settings → Service Accounts → "Generate new private key". Paste the full JSON contents into `FIREBASE_SERVICE_ACCOUNT_JSON` (see `.env.example`).
+  - A **service-account JSON key** — Firebase Console → Project Settings → Service Accounts → "Generate new private key". Paste the full JSON contents into `FIREBASE_SERVICE_ACCOUNT_JSON`.
   - No Blaze plan required — Auth + FCM are free on Spark.
 
 ## Local dev
 
 ```bash
-# 1. Start a local Postgres (the compose `postgres` service, no api/caddy yet)
-docker compose up postgres -d
+# 1. Configure env (Firebase creds; DATABASE_URL defaults to the dev postgres)
+cp backend/.env.example backend/.env
+#   fill in FIREBASE_PROJECT_ID + FIREBASE_SERVICE_ACCOUNT_JSON
 
-# 2. Configure env
-cd backend
-cp .env.example .env
-# fill in FIREBASE_PROJECT_ID + FIREBASE_SERVICE_ACCOUNT_JSON
-# DATABASE_URL should point at the local container (default works)
+# 2. Up the full stack (auto-merges docker-compose.override.yml → postgres + api)
+docker compose up -d --build
+#    api listens on http://localhost:3000 ; migrations run on container start
+```
 
-# 3. Install + migrate + run
-pnpm install
+Or run the API outside Docker (faster iteration):
+
+```bash
+docker compose up postgres -d          # just the DB
+cd backend && pnpm install
 pnpm migrate      # applies src/migrations/001_init.sql
-pnpm dev          # tsx watch src/index.ts  → http://localhost:3000
+pnpm dev          # tsx watch src/index.ts → http://localhost:3000
 ```
 
 Health check: `GET http://localhost:3000/health` → `{ "status": "ok", "time": <ms> }`.
 
-## Deploy to the VPS
+## Deploy (Coolify / managed Docker platform)
 
-Easiest: from repo root,
+The backend ships as a plain container app: the platform reverse proxy (Traefik on Coolify) terminates TLS and routes to the container's port 3000. **No Caddy, no host port binding** — `docker-compose.yml` only `expose`s 3000 and sets `traefik.http.services.api.loadbalancer.server.port=3000`.
 
-```bash
-VPS_HOST=user@your-vps-host ./deploy.sh
-```
+1. **Provision Postgres** as a separate managed resource on the platform (Coolify: New Resource → Postgres). Note its connection string.
+2. **Create the app** from this repo (Coolify: New Resource → Git → pick the `backend/Dockerfile` or the `docker-compose.yml` build pack). Connect the branch you deploy from.
+3. **Set runtime env** in the service's Environment panel (not a committed .env):
+   - `DATABASE_URL` — the managed Postgres connection string.
+   - `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON`.
+   - `ADMIN_TOKEN` (optional).
+4. **Add a domain** in the platform (Coolify: Settings → Domains). The proxy issues the TLS cert automatically.
+5. Push to the branch (`./deploy.sh` or `git push`) — the platform builds + rolls the container. **Migrations run automatically on start** (the image CMD runs `node dist/migrate.js` before `node dist/index.js`).
+6. Health: `curl https://<your-api-domain>/health`.
 
-`deploy.sh` is idempotent and safe to re-run. It:
-1. `ssh`es to the VPS,
-2. `cd /opt/couple-sync && git pull --ff-only`,
-3. `docker compose up -d --build` (rebuilds api + restarts postgres + caddy),
-4. waits for postgres to be healthy, then `docker compose exec api pnpm migrate`.
+### Self-managed VPS (no Coolify)
 
-One-time bootstrap on the VPS (first deploy only):
-
-```bash
-ssh user@your-vps-host
-sudo mkdir -p /opt/couple-sync && sudo chown -R $USER /opt/couple-sync
-git clone <your-repo-url> /opt/couple-sync
-cd /opt/couple-sync
-cp backend/.env.example backend/.env
-# edit backend/.env — fill in FIREBASE_PROJECT_ID, FIREBASE_SERVICE_ACCOUNT_JSON, DOMAIN
-# log out, then locally: VPS_HOST=user@your-vps-host ./deploy.sh
-```
-
-Manual equivalent of `deploy.sh`:
+For a raw VPS using Compose directly (env-driven, still no Caddy — front it with your own reverse proxy or access `localhost:3000`):
 
 ```bash
-ssh user@your-vps-host
-cd /opt/couple-sync
-git pull --ff-only
-docker compose up -d --build
-docker compose exec api pnpm migrate
+ssh user@your-vps
+cd /opt/couple-sync && git pull --ff-only
+# provide env (DATABASE_URL, FIREBASE_*, ADMIN_TOKEN) via a root .env or shell
+DATABASE_URL=... FIREBASE_PROJECT_ID=... FIREBASE_SERVICE_ACCOUNT_JSON=... \
+  docker compose -f docker-compose.yml up -d --build
+# migrations run on container start; for a one-off: docker compose exec api node dist/migrate.js
 ```
-
-Caddy fronts `{$DOMAIN}` → `api:3000` with auto-TLS. Point your domain's A/AAAA record at the VPS IP first (see `docs/MANUAL_STEPS.md` → "VPS self-host setup").
 
 ## Env reference
 
-All vars live in `backend/.env` (loaded by `src/config.ts` via `dotenv`). The Docker compose `api` service reads this file via `env_file`.
+Loaded by `src/config.ts` (via `dotenv` locally; injected by the platform in prod). **No committed `.env` in prod.**
 
 | Var | Required | Default | Notes |
 |---|---|---|---|
-| `DATABASE_URL` | yes | — | Postgres connection string. Compose overrides to `postgres://couple:couple@postgres:5432/couplesync`. |
+| `DATABASE_URL` | yes | — | Postgres connection string. Injected by the platform (managed Postgres). Local dev: `postgres://couple:couple@localhost:5432/couplesync`. |
 | `FIREBASE_PROJECT_ID` | yes | — | Firebase Spark project ID. |
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | yes | — | Stringified JSON of the service-account key (Project Settings → Service Accounts → generate). |
-| `DOMAIN` | no | `api.example.com` | Domain Caddy serves on. Also drives the Flutter `baseUrl`. |
-| `PORT` | no | `3000` | Port the api container listens on. Caddy reverse-proxies to this. |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | yes | — | Stringified JSON of the service-account key. |
+| `PORT` | no | `3000` | Container listen port. The platform proxy routes here. |
 | `ADMIN_TOKEN` | no | `""` | Shared secret for `POST /admin/*` (manual cron triggers). When empty, admin routes respond 503. |
 
 ## API surface
 
-### REST (HTTPS, behind Caddy; `Authorization: Bearer <Firebase ID token>`)
+### REST (HTTPS, behind the platform proxy; `Authorization: Bearer <Firebase ID token>`)
 
 | Method | Path | Purpose |
 |---|---|---|

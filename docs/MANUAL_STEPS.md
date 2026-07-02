@@ -94,70 +94,48 @@ cd /Volumes/pulsar/apex-local/Developer/github/skyner-group/couple-sync
 2. Enforce App Check on **Cloud Firestore** (writes) and **Cloud Functions** (callables).
 3. Copy the debug secret; add to `firebase.json` `appCheck` debug token for local dev, or set via the debug provider in `lib/main.dart`.
 
-## VPS self-host setup
+## Self-host backend setup (managed Docker platform / Coolify)
 
-The self-hosted backend (Fastify + Postgres + WS, replacing Firestore/Cloud Functions) runs on the Oracle Always Free ARM VPS. These steps are manual console / DNS / firewall work — they cannot be automated by `deploy.sh`.
+The self-hosted backend (Fastify + Postgres + WS, replacing Firestore/Cloud Functions) deploys as a managed Docker app behind the platform's reverse proxy (Traefik on Coolify). **No Caddy, no host port binding** — the container only `expose`s 3000 and the platform proxy terminates TLS. These steps are manual console/DNS work — they cannot be automated.
 
 ### 1. Firebase Spark service account (free, no Blaze)
-The backend keeps Firebase Auth + FCM (both free on Spark). It needs a service-account key to call `admin.auth().verifyIdToken` and `admin.messaging().sendEachForMulticast` from the VPS.
+The backend keeps Firebase Auth + FCM (both free on Spark). It needs a service-account key to call `admin.auth().verifyIdToken` and `admin.messaging().sendEachForMulticast`.
 
 1. Firebase Console → pick your Spark project → **Project Settings → Service Accounts**.
 2. Click **"Generate new private key"** → download the JSON file.
-3. Stringify the JSON (e.g. `jq -c . < downloaded-key.json`) and paste the full single-line result into `backend/.env` as `FIREBASE_SERVICE_ACCOUNT_JSON`.
-4. Set `FIREBASE_PROJECT_ID` in the same `.env` to the project ID shown at the top of Project Settings.
+3. Stringify the JSON (e.g. `jq -c . < downloaded-key.json`) → paste the full single-line result into the platform's Environment panel as `FIREBASE_SERVICE_ACCOUNT_JSON` (locally: `backend/.env`).
+4. Set `FIREBASE_PROJECT_ID` to the project ID shown at the top of Project Settings.
 5. Confirm Auth providers (Email/Google/Apple) and FCM are enabled — they are by default on Spark.
 
-### 2. Point the API domain at the VPS IP
-1. In your DNS provider, create an **A record** for your chosen api subdomain (e.g. `api.yourdomain.tld`) pointing at the VPS public IP.
-2. Wait for propagation (`dig +short api.yourdomain.tld` should return the VPS IP).
-3. Set `DOMAIN=api.yourdomain.tld` in `backend/.env` on the VPS — Caddy reads this and auto-provisions TLS.
+### 2. Provision Postgres on the platform
+On Coolify: **New Resource → Postgres** (managed). Copy the generated connection string — you'll set it as `DATABASE_URL` on the api service. (For a self-managed VPS, run `postgres:16` in the compose override and use that connection string.)
 
-### 3. Open ports 80/443 on the Oracle VPS
-Oracle Cloud's default VCN security list blocks inbound HTTP/HTTPS. Two layers must be opened:
+### 3. Create the app + set runtime env
+On Coolify: **New Resource → Git** → pick this repo + branch; build pack = `docker-compose.yml` (or the `backend/Dockerfile`). In the service's **Environment** panel set:
+- `DATABASE_URL` — the managed Postgres connection string (NOT hardcoded `couple/couple`).
+- `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON`.
+- `ADMIN_TOKEN` (optional).
 
-**a. VCN Security List (Oracle Cloud Console)**
-1. Oracle Cloud Console → Networking → Virtual Cloud Networks → pick your VCN → Security Lists → Default Security List (or the one attached to your instance's subnet).
-2. Add **Ingress** rules:
-   - `0.0.0.0/0` TCP **80** (HTTP, Caddy HTTP-01 challenge + redirect)
-   - `0.0.0.0/0` TCP **443** (HTTPS)
-3. Save.
+**No committed `.env` in prod** — the platform injects these at runtime.
 
-**b. iptables on the VPS itself**
-Oracle's Ubuntu/Oracle-Linux images ship with iptables rules that drop everything except SSH even after the security list is opened. On the VPS:
+### 4. Add the domain (platform issues TLS)
+In Coolify: **Settings → Domains** → add `api.yourdomain.tld`. Point its DNS A record at the Coolify server IP. The platform proxy (Traefik) issues the Let's Encrypt cert automatically and routes to the container's port 3000 (the `traefik.http.services.api.loadbalancer.server.port=3000` label in `docker-compose.yml` tells it which port). **Do not bind host 80/443** — the platform already owns those.
 
+### 5. Deploy + verify
+Push to the branch (`./deploy.sh` or `git push`) → Coolify builds + rolls the container. Migrations run automatically on start (the image CMD runs `node dist/migrate.js` before `node dist/index.js`). For a one-off migration: `docker compose exec api node dist/migrate.js`.
+
+Verify: `curl https://api.yourdomain.tld/health` → `{"status":"ok"}`.
+
+### 6. Point the Flutter app at the API
+Build with `--dart-define` (or `--dart-define-from-file=env/prod.json`):
 ```bash
-sudo iptables -I INPUT 6 -p tcp --dport 80 -j ACCEPT
-sudo iptables -I INPUT 6 -p tcp --dport 443 -j ACCEPT
-sudo netfilter-persistent save   # Ubuntu/Debian
-# or: sudo /sbin/iptables-save | sudo tee /etc/iptables/rules.v4
+flutter build apk \
+  --dart-define=API_BASE_URL=https://api.yourdomain.tld \
+  --dart-define=WS_URL=wss://api.yourdomain.tld/sync
 ```
+See `lib/env/app_env.dart` + `env/dev.json`/`env/prod.json`.
 
-Verify from outside the VPS: `curl -sI http://api.yourdomain.tld/health` should reach Caddy (a redirect or 200, not a timeout).
-
-### 4. Bootstrap + deploy
-1. First-time only — on the VPS:
-   ```bash
-   sudo mkdir -p /opt/couple-sync && sudo chown -R $USER /opt/couple-sync
-   git clone <your-repo-url> /opt/couple-sync
-   cd /opt/couple-sync
-   cp backend/.env.example backend/.env
-   # edit backend/.env: DATABASE_URL is overridden by compose; set FIREBASE_PROJECT_ID,
-   # FIREBASE_SERVICE_ACCOUNT_JSON, DOMAIN. ADMIN_TOKEN optional.
-   ```
-2. From your laptop:
-   ```bash
-   VPS_HOST=user@your-vps-host ./deploy.sh
-   ```
-   The script pulls, rebuilds the stack, waits for postgres, and runs migrations. Re-runnable.
-
-### 5. Point the Flutter app at the API
-Set the backend `baseUrl` in the Flutter app config (see `lib/services/sync_service.dart`) to `https://api.yourdomain.tld`. The WS URL is `wss://api.yourdomain.tld/sync`.
-
-### 6. Postgres backups (optional, ~$0)
-Set a cron on the VPS for nightly `pg_dump` to a B2/S3 bucket:
-
-```bash
-0 3 * * *  docker compose -f /opt/couple-sync/docker-compose.yml exec -T postgres pg_dump -U couple couplesync | gzip > /backups/couplesync-$(date +\%F).sql.gz
-```
+### 7. Postgres backups (optional, ~$0)
+Nightly `pg_dump` from the managed Postgres to a B2/S3 bucket (Coolify has a built-in backup for managed Postgres, or run a cron sidecar).
 
 
