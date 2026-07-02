@@ -1,6 +1,5 @@
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
-import cron from 'node-cron';
 import pino from 'pino';
 import { getConfig } from './config.js';
 import { getPool, endPool } from './db.js';
@@ -10,6 +9,8 @@ import { syncRoutes } from './routes/sync.js';
 import { blockRoutes } from './routes/blocks.js';
 import { userRoutes } from './routes/users.js';
 import { coupleRoutes } from './routes/couples.js';
+import { inviteRoutes } from './routes/invites.js';
+import { adminRoutes, startCleanupCron } from './cron.js';
 
 const log = pino({ name: 'api' });
 
@@ -47,14 +48,15 @@ async function bootstrap() {
   await app.register(blockRoutes);
   // REST: user profile GET/PATCH (V3).
   await app.register(userRoutes);
-  // REST: couple GET (V3).
+  // REST: couple GET (V3) + unpair (V4).
   await app.register(coupleRoutes);
+  // REST: invite create + redeem (V4).
+  await app.register(inviteRoutes);
+  // REST: admin endpoints (V4 — manual cleanup trigger).
+  await app.register(adminRoutes);
 
-  // node-cron placeholder — cleanupExpiredInvites port comes later.
-  const cleanupJob = cron.schedule('0 * * * *', () => {
-    log.debug('cleanup tick (placeholder)');
-  });
-  cleanupJob.start();
+  // Daily 03:00 UTC cleanup of expired invites.
+  const cleanupJob = startCleanupCron(log);
 
   const shutdown = async (signal: string) => {
     log.info({ signal }, 'Shutting down');

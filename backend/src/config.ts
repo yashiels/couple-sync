@@ -31,6 +31,7 @@ export interface Config {
   firebaseServiceAccountJson: string;
   domain: string;
   port: number;
+  adminToken: string | null;
 }
 
 let cached: Config | null = null;
@@ -43,6 +44,10 @@ export function loadConfig(): Config {
     firebaseServiceAccountJson: required('FIREBASE_SERVICE_ACCOUNT_JSON'),
     domain: optional('DOMAIN', 'api.example.com'),
     port: parseIntOrDefault('PORT', 3000),
+    // Optional shared secret guarding POST /admin/* endpoints. When unset,
+    // admin routes are disabled (respond 503). Not the same as Firebase auth
+    // — this is a simple ops escape hatch for manual cron triggers.
+    adminToken: optional('ADMIN_TOKEN', ''),
   };
   return cached;
 }
