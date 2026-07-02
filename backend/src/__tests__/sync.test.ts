@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * V8 — `authorizeOverlapMessage` (the computedBy === socket-uid assertion).
@@ -44,7 +44,8 @@ vi.mock('../db.js', () => ({
   endPool: vi.fn(),
 }));
 
-import { authorizeOverlapMessage } from '../routes/sync.js';
+import { authorizeOverlapMessage, membershipCheck } from '../routes/sync.js';
+import { query } from '../db.js';
 
 const SOCKET_UID = 'uid-alex';
 
@@ -113,6 +114,65 @@ describe('authorizeOverlapMessage', () => {
     );
     expect(out).toBeNull();
     expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});
+
+describe('membershipCheck (WS overlap couple-membership gate)', () => {
+  // V9 — the WS overlap path must verify the socket uid is a member of the
+  // targeted couple BEFORE handleOverlapMessage persists or pushes. This
+  // closes the hole where any authed user who knows a couple UUID could
+  // overwrite overlaps_latest + trigger FCM to a real member.
+  beforeEach(() => {
+    (query as ReturnType<typeof vi.fn>).mockReset();
+  });
+
+  it('returns true when the uid is a member of the couple (user_a_uid)', async () => {
+    (query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      rows: [{ id: 'cpl-1', user_a_uid: SOCKET_UID, user_b_uid: 'uid-sam', status: 'active' }],
+    });
+    const ok = await membershipCheck('cpl-1', SOCKET_UID);
+    expect(ok).toBe(true);
+  });
+
+  it('returns true when the uid is the other member (user_b_uid)', async () => {
+    (query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      rows: [{ id: 'cpl-1', user_a_uid: 'uid-sam', user_b_uid: SOCKET_UID, status: 'active' }],
+    });
+    const ok = await membershipCheck('cpl-1', SOCKET_UID);
+    expect(ok).toBe(true);
+  });
+
+  it('returns false (not 403 throw) when the uid is NOT a member — no crash', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    (query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      rows: [{ id: 'cpl-1', user_a_uid: 'uid-sam', user_b_uid: 'uid-other', status: 'active' }],
+    });
+    const ok = await membershipCheck('cpl-1', SOCKET_UID);
+    expect(ok).toBe(false);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain(SOCKET_UID);
+    expect(warn.mock.calls[0][0]).toContain('cpl-1');
+    warn.mockRestore();
+  });
+
+  it('returns false when the couple does not exist (no existence leak, no crash)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    (query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ rows: [] });
+    const ok = await membershipCheck('cpl-missing', SOCKET_UID);
+    expect(ok).toBe(false);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it('returns false on a DB error without crashing the server', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    (query as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('connection refused'));
+    // membershipCheck swallows ALL throws (incl. DB errors) so a single bad
+    // message never kills the WS connection. The message is skipped (false).
+    const ok = await membershipCheck('cpl-1', SOCKET_UID);
+    expect(ok).toBe(false);
+    expect(warn).toHaveBeenCalledTimes(1);
     warn.mockRestore();
   });
 });

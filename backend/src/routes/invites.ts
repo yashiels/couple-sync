@@ -164,11 +164,27 @@ export const inviteRoutes: FastifyPluginAsync = async (app) => {
       const invite = inviteRes.rows[0];
 
       if (invite.status === 'redeemed' && invite.couple_id) {
-        // Idempotent: this code was already redeemed. Return the existing
-        // coupleId. (Same code by the same redeemer or a different user —
-        // either way the couple already exists, so surface it.)
+        // Idempotent: this code was already redeemed. Scope the coupleId
+        // leak to the two legitimate parties (inviter + original redeemer).
+        // Any other caller probing a redeemed code gets 409 with no coupleId.
+        const coupleRes = await client.query<{ user_a_uid: string; user_b_uid: string }>(
+          'SELECT user_a_uid, user_b_uid FROM couples WHERE id = $1',
+          [invite.couple_id]
+        );
+        const coupleRow = coupleRes.rows[0];
+        const inviter = invite.created_by_uid;
+        const redeemer = coupleRow
+          ? (coupleRow.user_a_uid === inviter ? coupleRow.user_b_uid : coupleRow.user_a_uid)
+          : null;
+        if (uid !== inviter && uid !== redeemer) {
+          await client.query('ROLLBACK');
+          return reply.code(409).send({
+            error: 'conflict',
+            message: 'Invite has already been redeemed',
+          });
+        }
         coupleId = invite.couple_id;
-        inviterUid = invite.created_by_uid;
+        inviterUid = inviter;
         await client.query('COMMIT');
       } else if (invite.status === 'expired' || Date.now() > invite.expires_at) {
         await client.query('ROLLBACK');

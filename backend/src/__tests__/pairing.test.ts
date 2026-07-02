@@ -73,11 +73,13 @@ import { adminRoutes, cleanupExpiredInvites } from '../cron.js';
 
 const UID = 'uid-alex';
 const PARTNER = 'uid-sam';
+const THIRD = 'uid-eve';
 const COUPLE_ID = 'cpl-1';
 const CODE = 'ABC234';
 
 const decodedToken = { uid: UID, email: 'alex@example.com', email_verified: true };
 const partnerToken = { uid: PARTNER, email: 'sam@example.com', email_verified: true };
+const thirdToken = { uid: THIRD, email: 'eve@example.com', email_verified: true };
 
 function makeInviteRow(overrides: Partial<{
   code: string;
@@ -129,6 +131,7 @@ async function buildApp(): Promise<FastifyInstance> {
 function authHeader(uid: string = UID): Record<string, string> {
   if (uid === UID) verifyIdToken.mockResolvedValue(decodedToken);
   if (uid === PARTNER) verifyIdToken.mockResolvedValue(partnerToken);
+  if (uid === THIRD) verifyIdToken.mockResolvedValue(thirdToken);
   return { authorization: 'Bearer valid-id-token' };
 }
 
@@ -265,13 +268,16 @@ describe('POST /invites/:code/redeem', () => {
       .mockResolvedValueOnce({
         rows: [makeInviteRow({ status: 'redeemed', couple_id: COUPLE_ID, created_by_uid: UID })],
       }) // SELECT FOR UPDATE -> already redeemed
+      .mockResolvedValueOnce({
+        rows: [{ user_a_uid: UID, user_b_uid: PARTNER }],
+      }) // SELECT couple members (scope check)
       .mockResolvedValueOnce({ rows: [] }); // COMMIT (no further writes)
 
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST',
       url: `/invites/${CODE}/redeem`,
-      headers: authHeader(PARTNER),
+      headers: authHeader(PARTNER), // PARTNER is the original redeemer
       payload: {},
     });
 
@@ -281,6 +287,63 @@ describe('POST /invites/:code/redeem', () => {
     // No couple INSERT happened (idempotent branch).
     const txSqls = mockClientQuery.mock.calls.map((c) => c[0] as string);
     expect(txSqls.some((s) => /INSERT INTO couples/.test(s))).toBe(false);
+    await app.close();
+  });
+
+  it('returns 409 with no coupleId when a third party probes a redeemed code', async () => {
+    mockClientQuery
+      .mockResolvedValueOnce({ rows: [] }) // BEGIN
+      .mockResolvedValueOnce({
+        rows: [makeInviteRow({ status: 'redeemed', couple_id: COUPLE_ID, created_by_uid: UID })],
+      }) // SELECT FOR UPDATE -> already redeemed
+      .mockResolvedValueOnce({
+        rows: [{ user_a_uid: UID, user_b_uid: PARTNER }],
+      }) // SELECT couple members (scope check)
+      .mockResolvedValueOnce({ rows: [] }); // ROLLBACK
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/invites/${CODE}/redeem`,
+      headers: authHeader(THIRD), // THIRD is neither inviter nor redeemer
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(409);
+    const body = res.json();
+    expect(body.coupleId).toBeUndefined();
+    expect(body.error).toBe('conflict');
+    expect(body.message).toMatch(/already been redeemed/i);
+
+    // ROLLBACK issued, no couple INSERT, no post-commit WS broadcast.
+    const txSqls = mockClientQuery.mock.calls.map((c) => c[0] as string);
+    expect(txSqls.some((s) => /ROLLBACK/.test(s))).toBe(true);
+    expect(txSqls.some((s) => /INSERT INTO couples/.test(s))).toBe(false);
+    expect(sendToUid).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('returns 200 with coupleId when the inviter re-probes a redeemed code', async () => {
+    mockClientQuery
+      .mockResolvedValueOnce({ rows: [] }) // BEGIN
+      .mockResolvedValueOnce({
+        rows: [makeInviteRow({ status: 'redeemed', couple_id: COUPLE_ID, created_by_uid: UID })],
+      }) // SELECT FOR UPDATE -> already redeemed
+      .mockResolvedValueOnce({
+        rows: [{ user_a_uid: UID, user_b_uid: PARTNER }],
+      }) // SELECT couple members
+      .mockResolvedValueOnce({ rows: [] }); // COMMIT
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/invites/${CODE}/redeem`,
+      headers: authHeader(UID), // UID is the inviter (created_by_uid)
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().coupleId).toBe(COUPLE_ID);
     await app.close();
   });
 

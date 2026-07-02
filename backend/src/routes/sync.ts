@@ -2,6 +2,7 @@ import type { FastifyPluginCallback, FastifyRequest } from 'fastify';
 import type { WebSocket } from 'ws';
 import { authenticate } from '../auth.js';
 import { query } from '../db.js';
+import { assertMember } from '../couples.js';
 import {
   parseOverlapMessage,
   handleOverlapMessage,
@@ -74,6 +75,36 @@ export function authorizeOverlapMessage(
     return null;
   }
   return { msg };
+}
+
+/**
+ * V9 — couple-membership gate for incoming `overlap` WS messages.
+ *
+ * `authorizeOverlapMessage` only checks `computedBy === socketUid`; it does
+ * NOT verify the socket's uid is a member of `msg.coupleId`. This thin async
+ * wrapper calls `assertMember(coupleId, uid)` (which queries the `couples`
+ * table and throws 403 on non-membership) and converts any throw into a
+ * logged rejection + `false`, so a single forbidden message never crashes
+ * the server. Returns `true` only when the caller is a verified member of
+ * the targeted couple.
+ *
+ * Exported so the WS membership boundary is unit-tested directly.
+ */
+export async function membershipCheck(
+  coupleId: string,
+  uid: string
+): Promise<boolean> {
+  try {
+    await assertMember(coupleId, uid);
+    return true;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[sync] overlap rejected: uid ${uid} is not a member of couple ${coupleId}` +
+        (err instanceof Error ? ` (${err.message})` : '')
+    );
+    return false;
+  }
 }
 
 /**
@@ -153,12 +184,28 @@ export const syncRoutes: FastifyPluginCallback = (app) => {
         const accepted = authorizeOverlapMessage(raw, uid);
         if (!accepted) return;
         const { msg } = accepted;
-        // Fire-and-forget; errors are logged inside the handler, not thrown
-        // back at the socket (a single bad overlap must not kill the connection).
-        handleOverlapMessage(msg, makeOverlapDeps()).catch((err) => {
-          // eslint-disable-next-line no-console
-          console.error('[sync] overlap handler failed:', err);
-        });
+        // Membership check: the socket uid must belong to msg.coupleId.
+        // authorizeOverlapMessage only asserts computedBy === socketUid; it
+        // does NOT verify the socket is a member of the targeted couple. Without
+        // this gate, any authed user who knows a couple UUID could overwrite
+        // the victim's overlaps_latest + trigger FCM to a real member.
+        // assertMember throws on non-membership (and on missing couples, to
+        // avoid leaking existence). In the WS path we cannot surface a 403 —
+        // log + skip the message instead of crashing the server.
+        membershipCheck(msg.coupleId, uid)
+          .then((ok) => {
+            if (!ok) return;
+            // Fire-and-forget; errors are logged inside the handler, not thrown
+            // back at the socket (a single bad overlap must not kill the connection).
+            handleOverlapMessage(msg, makeOverlapDeps()).catch((err) => {
+              // eslint-disable-next-line no-console
+              console.error('[sync] overlap handler failed:', err);
+            });
+          })
+          .catch((err) => {
+            // eslint-disable-next-line no-console
+            console.error('[sync] overlap membership check failed:', err);
+          });
       }
       // Unknown `t` → ignore (forward-compat with future message types).
     });
