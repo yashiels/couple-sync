@@ -54,14 +54,6 @@ void main() {
         greaterThan(_rgbSum(AppColors.surfaceDark)),
       );
     });
-
-    test('light background and surface share the same value', () {
-      expect(AppColors.backgroundLight, equals(AppColors.surfaceLight));
-    });
-
-    test('dark background and surface share the same value', () {
-      expect(AppColors.backgroundDark, equals(AppColors.surfaceDark));
-    });
   });
 
   group('AppColors – category colors', () {

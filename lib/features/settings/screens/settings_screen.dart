@@ -2,9 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/models/couple_model.dart';
 import '../../../core/router/routes.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../services/calendar_service.dart';
 import '../../../services/providers/auth_state_provider.dart';
@@ -12,20 +14,30 @@ import '../../../services/providers/calendar_provider.dart';
 import '../../../services/providers/couple_providers.dart';
 import '../widgets/settings_section_widget.dart';
 
-// TODO: STORY-019 - Implement Google Calendar sync functionality
-
 /// Provider for notification settings (local flag, doesn't affect FCM registration).
-/// This is a simple local preference that can be extended to persist to Firestore.
+/// Persisted to flutter_secure_storage so the toggle survives restarts.
 final notificationSettingsProvider = StateNotifierProvider<NotificationSettingsNotifier, bool>((ref) {
   return NotificationSettingsNotifier();
 });
 
 class NotificationSettingsNotifier extends StateNotifier<bool> {
-  NotificationSettingsNotifier() : super(true); // Default to enabled
+  static const _key = 'notif_enabled';
+  static const FlutterSecureStorage _storage = FlutterSecureStorage();
+
+  NotificationSettingsNotifier() : super(true) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final stored = await _storage.read(key: _key);
+    if (stored != null) {
+      state = stored == 'true';
+    }
+  }
 
   void toggle() {
     state = !state;
-    // TODO: Persist to Firestore user preferences if needed
+    _storage.write(key: _key, value: state.toString());
   }
 }
 
@@ -62,7 +74,7 @@ class SettingsScreen extends ConsumerWidget {
                       title: 'Google Calendar',
                       subtitle: 'Connect your Google Calendar for automatic sync',
                       status: isConnected ? 'Connected' : 'Not Connected',
-                      statusColor: isConnected ? Colors.green : Colors.orange,
+                      statusColor: isConnected ? AppColors.successLight : AppColors.categoryCommuteLight,
                       statusIcon:
                           isConnected ? Icons.cloud_done : Icons.cloud_off,
                     ),
@@ -70,14 +82,14 @@ class SettingsScreen extends ConsumerWidget {
                       title: 'Google Calendar',
                       subtitle: 'Connect your Google Calendar for automatic sync',
                       status: 'Checking...',
-                      statusColor: Colors.grey,
+                      statusColor: AppColors.outlineLight,
                       statusIcon: Icons.hourglass_empty,
                     ),
                     error: (error, _) => SettingsStatusItem(
                       title: 'Google Calendar',
                       subtitle: 'Connect your Google Calendar for automatic sync',
                       status: 'Error',
-                      statusColor: Colors.red,
+                      statusColor: AppColors.errorLight,
                       statusIcon: Icons.error_outline,
                     ),
                   );
@@ -88,7 +100,7 @@ class SettingsScreen extends ConsumerWidget {
                 title: 'Last Sync',
                 subtitle: 'Last time your calendar was synced',
                 status: _formatLastSyncTime(syncState.lastSyncTime),
-                statusColor: syncState.lastSyncTime != null ? Colors.green : Colors.grey,
+                statusColor: syncState.lastSyncTime != null ? AppColors.successLight : AppColors.outlineLight,
                 statusIcon: syncState.lastSyncTime != null ? Icons.sync : Icons.sync_disabled,
               ),
               // Connect/Disconnect button
@@ -165,8 +177,8 @@ class SettingsScreen extends ConsumerWidget {
                 subtitle: 'Your current timezone setting',
                 status: userProfile?.timezone ?? 'Not set',
                 statusColor: userProfile?.timezone.isNotEmpty == true
-                    ? Colors.green
-                    : Colors.grey,
+                    ? AppColors.successLight
+                    : AppColors.outlineLight,
                 statusIcon: Icons.public,
               ),
               SettingsButton(
@@ -208,16 +220,15 @@ class SettingsScreen extends ConsumerWidget {
                   ref.read(notificationSettingsProvider.notifier).toggle();
                 },
               ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                 child: Text(
                   'Toggle enables/disables local notifications. '
                   'This does not affect FCM registration.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
-                    fontStyle: FontStyle.italic,
-                  ),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontStyle: FontStyle.italic,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                 ),
               ),
             ],
@@ -225,7 +236,7 @@ class SettingsScreen extends ConsumerWidget {
 
           // Couple Section (only show if paired)
           if (userProfile?.coupleId != null)
-            _buildCoupleSectionFromProvider(context, ref, userProfile!),
+            _buildCoupleSectionFromProvider(context, ref),
 
           // Account Section
           SettingsSectionWidget(
@@ -302,7 +313,6 @@ class SettingsScreen extends ConsumerWidget {
   Widget _buildCoupleSectionFromProvider(
     BuildContext context,
     WidgetRef ref,
-    dynamic userProfile,
   ) {
     final coupleAsync = ref.watch(coupleProvider);
 
@@ -322,22 +332,25 @@ class SettingsScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             child: Text(
               'Failed to load couple data',
-              style: TextStyle(color: Colors.grey[600]),
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ),
         ],
       ),
       data: (couple) {
         if (couple == null) {
-          return const SettingsSectionWidget(
+          return SettingsSectionWidget(
             title: 'Couple',
             icon: Icons.favorite,
             children: [
               Padding(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Text(
                   'Couple data not available',
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(
+                      color:
+                          Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
               ),
             ],
@@ -464,7 +477,7 @@ class SettingsScreen extends ConsumerWidget {
               content: Text(
                 'Sync complete: ${result.blocksCreated} blocks synced',
               ),
-              backgroundColor: Colors.green,
+              backgroundColor: AppColors.successLight,
             ),
           );
         }
@@ -553,7 +566,7 @@ class SettingsScreen extends ConsumerWidget {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Google Calendar connected successfully'),
-                backgroundColor: Colors.green,
+                backgroundColor: AppColors.successLight,
               ),
             );
           }

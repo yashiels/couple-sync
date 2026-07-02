@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/providers/auth_state_provider.dart';
@@ -18,13 +19,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   String? _errorMessage;
 
   // ponytail: dev-only email controllers; only allocated when running against
-  // the Firebase emulators (USE_FIREBASE_EMULATOR dart-define).
+  // the Firebase emulators (USE_FIREBASE_EMULATOR dart-define). The prefilled
+  // credentials are guarded to debug+emulator builds so they can never leak
+  // into a release artifact.
   static const _useEmulator =
       bool.fromEnvironment('USE_FIREBASE_EMULATOR', defaultValue: false);
-  final TextEditingController _emailController =
-      TextEditingController(text: 'partnerA@example.com');
+  static const bool _allowDevCreds = kDebugMode && _useEmulator;
+  final TextEditingController _emailController = TextEditingController(
+      text: _allowDevCreds ? 'partnerA@example.com' : '');
   final TextEditingController _passwordController =
-      TextEditingController(text: 'password123');
+      TextEditingController(text: _allowDevCreds ? 'password123' : '');
 
   @override
   void initState() {
@@ -326,8 +330,6 @@ class _SignInButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Theme.of(context);
-
     // Apple button uses black background, Google uses white/outline
     final backgroundColor = isAppleButton ? Colors.black : Colors.white;
     final foregroundColor = isAppleButton ? Colors.white : Colors.black87;
@@ -384,7 +386,8 @@ class _SignInButton extends StatelessWidget {
   }
 }
 
-/// Google logo widget.
+/// Google logo widget — renders the official `assets/icons/google_g.png`
+/// asset instead of a hand-painted CustomPainter.
 class _GoogleLogo extends StatelessWidget {
   final double size;
 
@@ -395,86 +398,11 @@ class _GoogleLogo extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: CustomPaint(
-        painter: _GoogleLogoPainter(),
+      child: Image.asset(
+        'assets/icons/google_g.png',
+        fit: BoxFit.contain,
+        semanticLabel: 'Google logo',
       ),
     );
   }
-}
-
-/// Custom painter for the Google "G" logo.
-class _GoogleLogoPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..style = PaintingStyle.fill;
-
-    final width = size.width;
-    final height = size.height;
-    final strokeWidth = width * 0.12;
-
-    // Draw a simplified "G" using colored segments
-    final center = Offset(width / 2, height / 2);
-    final radius = width / 2 - strokeWidth / 2;
-
-    // Blue segment (right side and top right)
-    paint.color = const Color(0xFF4285F4);
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -1.5708, // Start at top
-      2.7489, // ~157 degrees
-      false,
-      paint..strokeWidth = strokeWidth..style = PaintingStyle.stroke..strokeCap = StrokeCap.round,
-    );
-
-    // Red segment (top left)
-    paint.color = const Color(0xFFEA4335);
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      1.1781, // ~67.5 degrees
-      0.7854, // ~45 degrees
-      false,
-      paint,
-    );
-
-    // Yellow segment (left side)
-    paint.color = const Color(0xFFFBBC05);
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      1.9635, // ~112.5 degrees
-      0.7854, // ~45 degrees
-      false,
-      paint,
-    );
-
-    // Green segment (bottom left)
-    paint.color = const Color(0xFF34A853);
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      2.7489, // ~157.5 degrees
-      0.7854, // ~45 degrees
-      false,
-      paint,
-    );
-
-    // Draw horizontal bar in center (part of "G")
-    paint.color = const Color(0xFF4285F4);
-    paint.style = PaintingStyle.fill;
-    final barWidth = width * 0.35;
-    final barHeight = strokeWidth;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          center.dx - barWidth * 0.3,
-          center.dy - barHeight / 2,
-          barWidth,
-          barHeight,
-        ),
-        Radius.circular(barHeight / 2),
-      ),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

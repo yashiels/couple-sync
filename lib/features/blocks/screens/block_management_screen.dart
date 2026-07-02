@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/models/time_block.dart';
 import '../../../core/router/routes.dart';
+import '../../../core/utils/block_labels.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../services/providers/auth_state_provider.dart';
 import '../../../services/providers/couple_providers.dart';
@@ -73,9 +74,9 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
           children: [
             _buildDetailRow('Source', block.source == TimeBlockSource.manual ? 'Manual' : 'Google'),
             const SizedBox(height: 8),
-            _buildDetailRow('Category', _getCategoryLabel(block.category)),
+            _buildDetailRow('Category', block.category.label),
             const SizedBox(height: 8),
-            _buildDetailRow('Type', _getTypeLabel(block.type)),
+            _buildDetailRow('Type', block.type.label),
             const SizedBox(height: 8),
             _buildDetailRow('Time', _formatDateTimeRange(block)),
             const SizedBox(height: 8),
@@ -83,7 +84,7 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
               _buildDetailRow('Recurs', 'Yes'),
               const SizedBox(height: 8),
             ],
-            _buildDetailRow('Visibility', _getVisibilityLabel(block.visibility)),
+            _buildDetailRow('Visibility', block.visibility.label),
           ],
         ),
         actions: [
@@ -140,35 +141,6 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
   String _formatDate(DateTime dateTime) =>
       '${dateTime.day} ${formatMonth(dateTime)} ${dateTime.year}';
 
-  String _getCategoryLabel(TimeBlockCategory category) {
-    switch (category) {
-      case TimeBlockCategory.work: return 'Work';
-      case TimeBlockCategory.study: return 'Study';
-      case TimeBlockCategory.commute: return 'Commute';
-      case TimeBlockCategory.exercise: return 'Exercise';
-      case TimeBlockCategory.social: return 'Social';
-      case TimeBlockCategory.meals: return 'Meals';
-      case TimeBlockCategory.sleep: return 'Sleep';
-      case TimeBlockCategory.personal: return 'Personal';
-      case TimeBlockCategory.other: return 'Other';
-    }
-  }
-
-  String _getTypeLabel(TimeBlockType type) {
-    switch (type) {
-      case TimeBlockType.busy: return 'Busy';
-      case TimeBlockType.free: return 'Free';
-      case TimeBlockType.tentative: return 'Tentative';
-    }
-  }
-
-  String _getVisibilityLabel(TimeBlockVisibility visibility) {
-    switch (visibility) {
-      case TimeBlockVisibility.bothPartners: return 'Both Partners';
-      case TimeBlockVisibility.onlyMe: return 'Only Me';
-    }
-  }
-
   /// Show filter bottom sheet
   void _showFilterSheet() {
     showModalBottomSheet(
@@ -200,7 +172,6 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
                     selected: _sourceFilter == null,
                     onSelected: (selected) {
                       setModalState(() => _sourceFilter = null);
-                      setState(() => _sourceFilter = null);
                     },
                   ),
                   _buildFilterChip(
@@ -208,7 +179,6 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
                     selected: _sourceFilter == TimeBlockSource.manual,
                     onSelected: (selected) {
                       setModalState(() => _sourceFilter = TimeBlockSource.manual);
-                      setState(() => _sourceFilter = TimeBlockSource.manual);
                     },
                   ),
                   _buildFilterChip(
@@ -216,7 +186,6 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
                     selected: _sourceFilter == TimeBlockSource.google,
                     onSelected: (selected) {
                       setModalState(() => _sourceFilter = TimeBlockSource.google);
-                      setState(() => _sourceFilter = TimeBlockSource.google);
                     },
                   ),
                 ],
@@ -238,15 +207,13 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
                     selected: _categoryFilter == null,
                     onSelected: (selected) {
                       setModalState(() => _categoryFilter = null);
-                      setState(() => _categoryFilter = null);
                     },
                   ),
                   ...TimeBlockCategory.values.map((category) => _buildFilterChip(
-                    label: _getCategoryLabel(category),
+                    label: category.label,
                     selected: _categoryFilter == category,
                     onSelected: (selected) {
                       setModalState(() => _categoryFilter = category);
-                      setState(() => _categoryFilter = category);
                     },
                   )),
                 ],
@@ -257,7 +224,10 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    setState(() {}); // refresh filtered list with new filters
+                  },
                   child: const Text('Apply Filters'),
                 ),
               ),
@@ -282,6 +252,7 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final authState = ref.watch(authStateProvider);
     final currentUserId = authState.uid;
     final blocksAsync = ref.watch(userBlocksProvider);
@@ -308,11 +279,12 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+              Icon(Icons.error_outline, size: 64,
+                  color: theme.colorScheme.onSurfaceVariant),
               const SizedBox(height: 16),
               Text(
                 'Failed to load blocks: $error',
-                style: const TextStyle(color: Colors.grey),
+                style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
@@ -334,6 +306,7 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
   }
 
   Widget _buildBlocksList(List<TimeBlock> blocks, String? currentUserId) {
+    final theme = Theme.of(context);
     final filteredBlocks = _filterBlocks(blocks);
 
     if (filteredBlocks.isEmpty) {
@@ -341,13 +314,14 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.event_busy, size: 64, color: Colors.grey),
+            Icon(Icons.event_busy, size: 64,
+                color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(height: 16),
             Text(
               blocks.isEmpty
                 ? 'No blocks yet\nTap + to create your first block'
                 : 'No blocks match your filters',
-              style: const TextStyle(color: Colors.grey),
+              style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
           ],
@@ -363,21 +337,20 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
         if (hasActiveFilters)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Theme.of(context).colorScheme.primaryContainer,
+            color: theme.colorScheme.primaryContainer,
             child: Row(
               children: [
                 Icon(
                   Icons.filter_list,
                   size: 16,
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  color: theme.colorScheme.onPrimaryContainer,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Filters active: ${filteredBlocks.length} of ${blocks.length} blocks',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      fontSize: 12,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onPrimaryContainer,
                     ),
                   ),
                 ),

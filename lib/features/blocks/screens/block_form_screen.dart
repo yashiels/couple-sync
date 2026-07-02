@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:timezone/timezone.dart';
 import '../../../core/models/time_block.dart';
 import '../../../core/router/routes.dart';
+import '../../../core/utils/block_labels.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../services/providers/auth_state_provider.dart';
 import '../../../services/providers/firestore_provider.dart';
@@ -325,7 +326,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                       items: TimeBlockType.values.map((type) {
                         return DropdownMenuItem(
                           value: type,
-                          child: Text(_getTypeLabel(type)),
+                          child: Text(type.label),
                         );
                       }).toList(),
                       onChanged: (value) {
@@ -346,7 +347,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                       items: TimeBlockCategory.values.map((category) {
                         return DropdownMenuItem(
                           value: category,
-                          child: Text(_getCategoryLabel(category)),
+                          child: Text(category.label),
                         );
                       }).toList(),
                       onChanged: (value) {
@@ -367,7 +368,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                       items: TimeBlockVisibility.values.map((visibility) {
                         return DropdownMenuItem(
                           value: visibility,
-                          child: Text(_getVisibilityLabel(visibility)),
+                          child: Text(visibility.label),
                         );
                       }).toList(),
                       onChanged: (value) {
@@ -565,49 +566,6 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
               ),
             ),
     );
-  }
-
-  String _getTypeLabel(TimeBlockType type) {
-    switch (type) {
-      case TimeBlockType.busy:
-        return 'Busy';
-      case TimeBlockType.free:
-        return 'Free';
-      case TimeBlockType.tentative:
-        return 'Tentative';
-    }
-  }
-
-  String _getCategoryLabel(TimeBlockCategory category) {
-    switch (category) {
-      case TimeBlockCategory.work:
-        return 'Work';
-      case TimeBlockCategory.study:
-        return 'Study';
-      case TimeBlockCategory.commute:
-        return 'Commute';
-      case TimeBlockCategory.exercise:
-        return 'Exercise';
-      case TimeBlockCategory.social:
-        return 'Social';
-      case TimeBlockCategory.meals:
-        return 'Meals';
-      case TimeBlockCategory.sleep:
-        return 'Sleep';
-      case TimeBlockCategory.personal:
-        return 'Personal';
-      case TimeBlockCategory.other:
-        return 'Other';
-    }
-  }
-
-  String _getVisibilityLabel(TimeBlockVisibility visibility) {
-    switch (visibility) {
-      case TimeBlockVisibility.bothPartners:
-        return 'Both Partners';
-      case TimeBlockVisibility.onlyMe:
-        return 'Only Me';
-    }
   }
 
   /// Build a readable timezone label: IANA id + UTC offset + current local time.

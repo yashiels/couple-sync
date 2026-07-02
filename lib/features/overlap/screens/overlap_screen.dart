@@ -367,46 +367,20 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
               runSpacing: 4,
               children: [
                 if (_minDurationMinutes != null)
-                  _buildFilterChip(
-                    'Min ${_formatDuration(_minDurationMinutes!)}',
-                    () => setState(() => _minDurationMinutes = null),
+                  FilterChip(
+                    label: Text('Min ${_formatDuration(_minDurationMinutes!)}'),
+                    selected: true,
+                    onSelected: (_) =>
+                        setState(() => _minDurationMinutes = null),
                   ),
                 if (_minScore != null)
-                  _buildFilterChip(
-                    'Min score ${_minScore!.round()}',
-                    () => setState(() => _minScore = null),
+                  FilterChip(
+                    label: Text('Min score ${_minScore!.round()}'),
+                    selected: true,
+                    onSelected: (_) =>
+                        setState(() => _minScore = null),
                   ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterChip(String label, VoidCallback onRemove) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
-                ),
-          ),
-          const SizedBox(width: 4),
-          InkWell(
-            onTap: onRemove,
-            child: Icon(
-              Icons.close,
-              size: 14,
-              color: Theme.of(context).colorScheme.onPrimaryContainer,
             ),
           ),
         ],
@@ -488,6 +462,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
               FilledButton(
                 onPressed: () {
                   Navigator.of(context).pop();
+                  setState(() {}); // refresh filter summary + list with new filters
                 },
                 child: const Text('Apply'),
               ),
@@ -506,7 +481,6 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
       selected: isSelected,
       onSelected: (selected) {
         setDialogState(() => _minDurationMinutes = selected ? minutes : null);
-        setState(() => _minDurationMinutes = selected ? minutes : null);
       },
     );
   }
@@ -519,7 +493,6 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
       selected: isSelected,
       onSelected: (selected) {
         setDialogState(() => _minScore = selected ? score : null);
-        setState(() => _minScore = selected ? score : null);
       },
     );
   }
@@ -535,7 +508,6 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
       onSelected: (selected) {
         if (!selected) return;
         setDialogState(() => _sortBy = sortBy);
-        setState(() => _sortBy = sortBy);
       },
     );
   }

@@ -52,20 +52,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  void _handleFabAction(String action) {
-    switch (action) {
-      case 'add_block':
-        context.go(AppRoutes.blockForm);
-        break;
-      case 'sync_calendar':
-        _handleRefresh();
-        break;
-      case 'view_all':
-        context.go(AppRoutes.overlap);
-        break;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -297,7 +283,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               subtitle: const Text('Block out time in your schedule'),
               onTap: () {
                 Navigator.pop(context);
-                _handleFabAction('add_block');
+                context.go(AppRoutes.blockForm);
               },
             ),
             ListTile(
@@ -306,7 +292,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               subtitle: const Text('Refresh from Google Calendar'),
               onTap: () {
                 Navigator.pop(context);
-                _handleFabAction('sync_calendar');
+                _handleRefresh();
               },
             ),
             ListTile(
@@ -315,7 +301,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               subtitle: const Text('See all upcoming free times'),
               onTap: () {
                 Navigator.pop(context);
-                _handleFabAction('view_all');
+                context.go(AppRoutes.overlap);
               },
             ),
           ],

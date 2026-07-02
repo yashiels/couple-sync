@@ -170,22 +170,26 @@ class _WeekViewScreenState extends ConsumerState<WeekViewScreen> {
   }
 
   Widget _buildErrorState(String message, Object? error, VoidCallback onRetry) {
+    final theme = Theme.of(context);
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+          Icon(Icons.error_outline, size: 64,
+              color: theme.colorScheme.onSurfaceVariant),
           const SizedBox(height: 16),
           Text(
             message,
-            style: const TextStyle(color: Colors.grey),
+            style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
             textAlign: TextAlign.center,
           ),
           if (error != null) ...[
             const SizedBox(height: 8),
             Text(
               error.toString(),
-              style: const TextStyle(color: Colors.grey, fontSize: 12),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
           ],

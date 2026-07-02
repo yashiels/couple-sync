@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/time_block.dart';
 import 'app_colors.dart';
 
 /// Application theme configuration following Material Design 3 guidelines.
@@ -262,57 +263,38 @@ class AppTheme {
   // ============== Helper Methods ==============
 
   /// Get category color for a specific block category in light mode
-  static Color getCategoryColorLight(String category) {
-    switch (category.toLowerCase()) {
-      case 'work':
-        return AppColors.categoryWorkLight;
-      case 'study':
-        return AppColors.categoryStudyLight;
-      case 'commute':
-        return AppColors.categoryCommuteLight;
-      case 'exercise':
-        return AppColors.categoryExerciseLight;
-      case 'social':
-        return AppColors.categorySocialLight;
-      case 'meals':
-        return AppColors.categoryMealsLight;
-      case 'sleep':
-        return AppColors.categorySleepLight;
-      case 'personal':
-        return AppColors.categoryPersonalLight;
-      case 'other':
-      default:
-        return AppColors.categoryOtherLight;
-    }
+  static Color getCategoryColorLight(TimeBlockCategory category) {
+    return switch (category) {
+      TimeBlockCategory.work => AppColors.categoryWorkLight,
+      TimeBlockCategory.study => AppColors.categoryStudyLight,
+      TimeBlockCategory.commute => AppColors.categoryCommuteLight,
+      TimeBlockCategory.exercise => AppColors.categoryExerciseLight,
+      TimeBlockCategory.social => AppColors.categorySocialLight,
+      TimeBlockCategory.meals => AppColors.categoryMealsLight,
+      TimeBlockCategory.sleep => AppColors.categorySleepLight,
+      TimeBlockCategory.personal => AppColors.categoryPersonalLight,
+      TimeBlockCategory.other => AppColors.categoryOtherLight,
+    };
   }
 
   /// Get category color for a specific block category in dark mode
-  static Color getCategoryColorDark(String category) {
-    switch (category.toLowerCase()) {
-      case 'work':
-        return AppColors.categoryWorkDark;
-      case 'study':
-        return AppColors.categoryStudyDark;
-      case 'commute':
-        return AppColors.categoryCommuteDark;
-      case 'exercise':
-        return AppColors.categoryExerciseDark;
-      case 'social':
-        return AppColors.categorySocialDark;
-      case 'meals':
-        return AppColors.categoryMealsDark;
-      case 'sleep':
-        return AppColors.categorySleepDark;
-      case 'personal':
-        return AppColors.categoryPersonalDark;
-      case 'other':
-      default:
-        return AppColors.categoryOtherDark;
-    }
+  static Color getCategoryColorDark(TimeBlockCategory category) {
+    return switch (category) {
+      TimeBlockCategory.work => AppColors.categoryWorkDark,
+      TimeBlockCategory.study => AppColors.categoryStudyDark,
+      TimeBlockCategory.commute => AppColors.categoryCommuteDark,
+      TimeBlockCategory.exercise => AppColors.categoryExerciseDark,
+      TimeBlockCategory.social => AppColors.categorySocialDark,
+      TimeBlockCategory.meals => AppColors.categoryMealsDark,
+      TimeBlockCategory.sleep => AppColors.categorySleepDark,
+      TimeBlockCategory.personal => AppColors.categoryPersonalDark,
+      TimeBlockCategory.other => AppColors.categoryOtherDark,
+    };
   }
 
   /// Get category color based on theme brightness
-  static Color getCategoryColor(String category, Brightness brightness) {
+  static Color getCategoryColor(
+      TimeBlockCategory category, Brightness brightness) {
     return brightness == Brightness.dark
         ? getCategoryColorDark(category)
         : getCategoryColorLight(category);
