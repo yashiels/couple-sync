@@ -63,6 +63,13 @@ dependencies:
   # HTTP Client
   http: ^1.2.0
 
+  # WebSocket (real-time blocks + overlap stream from self-host backend)
+  web_socket_channel: ^3.0.3
+
+  # Offline cache (blocks keyed by coupleId, rendered on cold start)
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
   # Utilities
   crypto: ^3.0.6   # pub.dev latest 3.0.7
   rrule: ^0.2.0    # pub.dev latest 0.2.18
