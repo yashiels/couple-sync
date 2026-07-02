@@ -61,7 +61,9 @@ List<Interval> expandBlock(TimeBlock block, int windowStart, int windowEnd) {
     if (block.endUtc <= windowStart || block.startUtc >= windowEnd) return [];
     final s = block.startUtc > windowStart ? block.startUtc : windowStart;
     final e = block.endUtc < windowEnd ? block.endUtc : windowEnd;
-    return [[s, e]];
+    return [
+      [s, e],
+    ];
   }
 
   final ruleStr = block.recurrenceRule!.startsWith('RRULE:')
@@ -75,7 +77,10 @@ List<Interval> expandBlock(TimeBlock block, int windowStart, int windowEnd) {
   // window reproduces the TS `between(windowStart - duration, windowEnd, true)`
   // inclusive lookback: an occurrence starting just before the window that extends
   // into it is kept because its end > windowStart.
-  final dtStart = DateTime.fromMillisecondsSinceEpoch(block.startUtc, isUtc: true);
+  final dtStart = DateTime.fromMillisecondsSinceEpoch(
+    block.startUtc,
+    isUtc: true,
+  );
   final occurrences = <DateTime>[];
   for (final occ in rule.getInstances(start: dtStart)) {
     final s = occ.millisecondsSinceEpoch;
@@ -84,27 +89,26 @@ List<Interval> expandBlock(TimeBlock block, int windowStart, int windowEnd) {
     if (e > windowStart) occurrences.add(occ);
   }
 
-  return occurrences
-      .map((occ) {
-        final s = occ.millisecondsSinceEpoch;
-        final e = s + duration;
-        return [
-          s > windowStart ? s : windowStart,
-          e < windowEnd ? e : windowEnd,
-        ];
-      })
-      .toList();
+  return occurrences.map((occ) {
+    final s = occ.millisecondsSinceEpoch;
+    final e = s + duration;
+    return [s > windowStart ? s : windowStart, e < windowEnd ? e : windowEnd];
+  }).toList();
 }
 
 /// Build the free intervals (the complement of busy+tentative) within
 /// [windowStart, windowEnd].
 List<Interval> computeFreeIntervals(
-    List<TimeBlock> blocks, int windowStart, int windowEnd) {
+  List<TimeBlock> blocks,
+  int windowStart,
+  int windowEnd,
+) {
   final busy = mergeIntervals(
     blocks
-        .where((b) =>
-            b.type == TimeBlockType.busy ||
-            b.type == TimeBlockType.tentative)
+        .where(
+          (b) =>
+              b.type == TimeBlockType.busy || b.type == TimeBlockType.tentative,
+        )
         .expand((b) => expandBlock(b, windowStart, windowEnd))
         .toList(),
   );
@@ -186,7 +190,12 @@ List<Interval> clipToDayBoundaries(List<Interval> intervals, String timezone) {
           : dayStart.millisecondsSinceEpoch;
       final clipEnd = iv[1] < dayEnd ? iv[1] : dayEnd;
       if (clipStart < clipEnd) result.add([clipStart, clipEnd]);
-      dayStart = TZDateTime(loc, dayStart.year, dayStart.month, dayStart.day + 1);
+      dayStart = TZDateTime(
+        loc,
+        dayStart.year,
+        dayStart.month,
+        dayStart.day + 1,
+      );
     }
   }
   return result;
@@ -221,7 +230,10 @@ double scoreWindow(int startUtc, int endUtc, String timezoneA, int now) {
 String computeBlockHash(List<TimeBlock> blocks) {
   final sorted = [...blocks]..sort((a, b) => a.startUtc.compareTo(b.startUtc));
   final str = sorted
-      .map((b) => '${b.startUtc}:${b.endUtc}:${b.recurrenceRule ?? ''}:${b.type.name}')
+      .map(
+        (b) =>
+            '${b.startUtc}:${b.endUtc}:${b.recurrenceRule ?? ''}:${b.type.name}',
+      )
       .join('|');
   return sha256.convert(utf8.encode(str)).toString().substring(0, 16);
 }
@@ -260,16 +272,20 @@ List<OverlapWindow> computeOverlap(
       !prefsA.showLateNightWindows && !prefsB.showLateNightWindows;
 
   final windows = clipped
-      .map((iv) => OverlapWindow(
-            startUtc: iv[0],
-            endUtc: iv[1],
-            durationMinutes: ((iv[1] - iv[0]) / 60000).round(),
-            score: scoreWindow(iv[0], iv[1], timezoneA, now),
-            reasonableBoth: reasonableBoth,
-          ))
+      .map(
+        (iv) => OverlapWindow(
+          startUtc: iv[0],
+          endUtc: iv[1],
+          durationMinutes: ((iv[1] - iv[0]) / 60000).round(),
+          score: scoreWindow(iv[0], iv[1], timezoneA, now),
+          reasonableBoth: reasonableBoth,
+        ),
+      )
       .where((w) => w.durationMinutes >= kMinWindowMinutes)
       .toList();
 
   windows.sort((a, b) => b.score.compareTo(a.score));
-  return windows.length > kMaxWindows ? windows.sublist(0, kMaxWindows) : windows;
+  return windows.length > kMaxWindows
+      ? windows.sublist(0, kMaxWindows)
+      : windows;
 }

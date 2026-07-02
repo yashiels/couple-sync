@@ -9,11 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
-@GenerateMocks([
-  FirebaseAuth,
-  AuthService,
-  User,
-])
+@GenerateMocks([FirebaseAuth, AuthService, User])
 import 'auth_state_provider_test.mocks.dart';
 
 void main() {
@@ -168,8 +164,9 @@ void main() {
       nextProfile = null;
       nextError = null;
 
-      when(mockAuth.authStateChanges())
-          .thenAnswer((_) => authStreamController.stream);
+      when(
+        mockAuth.authStateChanges(),
+      ).thenAnswer((_) => authStreamController.stream);
     });
 
     tearDown(() {
@@ -233,8 +230,7 @@ void main() {
       expect(fetchCalls, contains('uid-123'));
     });
 
-    test('sets null profile when backend returns null after retry',
-        () async {
+    test('sets null profile when backend returns null after retry', () async {
       final mockUser = MockUser();
       when(mockUser.uid).thenReturn('uid-new');
       // fetchProfile returns null by default → triggers one retry then null.
@@ -272,9 +268,7 @@ void main() {
       test('refetches profile from the backend', () async {
         final mockUser = MockUser();
         when(mockUser.uid).thenReturn('uid-refresh');
-        nextProfile = _createUserModel(
-          timezone: 'Europe/London',
-        );
+        nextProfile = _createUserModel(timezone: 'Europe/London');
 
         final notifier = createNotifier();
 
@@ -303,8 +297,9 @@ void main() {
 
     group('signInWithGoogle', () {
       test('returns true on success', () async {
-        when(mockAuthService.signInWithGoogle())
-            .thenAnswer((_) async => MockUser());
+        when(
+          mockAuthService.signInWithGoogle(),
+        ).thenAnswer((_) async => MockUser());
 
         final notifier = createNotifier();
         final result = await notifier.signInWithGoogle();
@@ -328,8 +323,9 @@ void main() {
 
     group('signInWithApple', () {
       test('returns true on success', () async {
-        when(mockAuthService.signInWithApple())
-            .thenAnswer((_) async => MockUser());
+        when(
+          mockAuthService.signInWithApple(),
+        ).thenAnswer((_) async => MockUser());
 
         final notifier = createNotifier();
         final result = await notifier.signInWithApple();
@@ -381,9 +377,9 @@ void main() {
       });
 
       test('clearError resets lastError to null', () async {
-        when(mockAuthService.signInWithGoogle()).thenThrow(
-          const AuthException(code: 'err', message: 'Error'),
-        );
+        when(
+          mockAuthService.signInWithGoogle(),
+        ).thenThrow(const AuthException(code: 'err', message: 'Error'));
 
         final notifier = createNotifier();
         await notifier.signInWithGoogle();
@@ -394,17 +390,18 @@ void main() {
       });
 
       test('signInWithGoogle clears previous error on new attempt', () async {
-        when(mockAuthService.signInWithGoogle()).thenThrow(
-          const AuthException(code: 'err', message: 'First error'),
-        );
+        when(
+          mockAuthService.signInWithGoogle(),
+        ).thenThrow(const AuthException(code: 'err', message: 'First error'));
 
         final notifier = createNotifier();
         await notifier.signInWithGoogle();
         expect(notifier.lastError, 'First error');
 
         // Second attempt succeeds
-        when(mockAuthService.signInWithGoogle())
-            .thenAnswer((_) async => MockUser());
+        when(
+          mockAuthService.signInWithGoogle(),
+        ).thenAnswer((_) async => MockUser());
         await notifier.signInWithGoogle();
         expect(notifier.lastError, isNull);
       });
@@ -445,9 +442,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           authStateProvider.overrideWith(
-            (ref) => _FakeAuthStateNotifier(
-              const AuthState(isLoading: false),
-            ),
+            (ref) => _FakeAuthStateNotifier(const AuthState(isLoading: false)),
           ),
         ],
       );
@@ -476,9 +471,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           authStateProvider.overrideWith(
-            (ref) => _FakeAuthStateNotifier(
-              const AuthState(isLoading: false),
-            ),
+            (ref) => _FakeAuthStateNotifier(const AuthState(isLoading: false)),
           ),
         ],
       );

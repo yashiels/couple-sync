@@ -22,13 +22,17 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   // the Firebase emulators (USE_FIREBASE_EMULATOR dart-define). The prefilled
   // credentials are guarded to debug+emulator builds so they can never leak
   // into a release artifact.
-  static const _useEmulator =
-      bool.fromEnvironment('USE_FIREBASE_EMULATOR', defaultValue: false);
+  static const _useEmulator = bool.fromEnvironment(
+    'USE_FIREBASE_EMULATOR',
+    defaultValue: false,
+  );
   static const bool _allowDevCreds = kDebugMode && _useEmulator;
   final TextEditingController _emailController = TextEditingController(
-      text: _allowDevCreds ? 'partnerA@example.com' : '');
-  final TextEditingController _passwordController =
-      TextEditingController(text: _allowDevCreds ? 'password123' : '');
+    text: _allowDevCreds ? 'partnerA@example.com' : '',
+  );
+  final TextEditingController _passwordController = TextEditingController(
+    text: _allowDevCreds ? 'password123' : '',
+  );
 
   @override
   void initState() {
@@ -76,7 +80,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       _errorMessage = null;
     });
 
-    final success = await ref.read(authStateProvider.notifier).signInWithGoogle();
+    final success = await ref
+        .read(authStateProvider.notifier)
+        .signInWithGoogle();
 
     if (mounted) {
       setState(() {
@@ -96,7 +102,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       _errorMessage = null;
     });
 
-    final success = await ref.read(authStateProvider.notifier).signInWithApple();
+    final success = await ref
+        .read(authStateProvider.notifier)
+        .signInWithApple();
 
     if (mounted) {
       setState(() {
@@ -213,7 +221,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   button: true,
                   enabled: !_isGoogleLoading && !_isAppleLoading,
                   label: 'Continue with Google',
-                  hint: _isGoogleLoading ? 'Signing in with Google' : 'Sign in using your Google account',
+                  hint: _isGoogleLoading
+                      ? 'Signing in with Google'
+                      : 'Sign in using your Google account',
                   child: _SignInButton(
                     text: 'Continue with Google',
                     icon: _buildGoogleIcon(),
@@ -228,7 +238,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   button: true,
                   enabled: !_isGoogleLoading && !_isAppleLoading,
                   label: 'Continue with Apple',
-                  hint: _isAppleLoading ? 'Signing in with Apple' : 'Sign in using your Apple ID',
+                  hint: _isAppleLoading
+                      ? 'Signing in with Apple'
+                      : 'Sign in using your Apple ID',
                   child: _SignInButton(
                     text: 'Continue with Apple',
                     icon: _buildAppleIcon(),
@@ -304,11 +316,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   }
 
   Widget _buildAppleIcon() {
-    return const Icon(
-      Icons.apple,
-      size: 20,
-      color: Colors.white,
-    );
+    return const Icon(Icons.apple, size: 20, color: Colors.white);
   }
 }
 

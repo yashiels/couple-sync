@@ -102,9 +102,18 @@ void main() {
 
   group('AppTheme.getCategoryColorLight', () {
     test('returns correct color for known categories', () {
-      expect(AppTheme.getCategoryColorLight(TimeBlockCategory.work), equals(AppColors.categoryWorkLight));
-      expect(AppTheme.getCategoryColorLight(TimeBlockCategory.study), equals(AppColors.categoryStudyLight));
-      expect(AppTheme.getCategoryColorLight(TimeBlockCategory.sleep), equals(AppColors.categorySleepLight));
+      expect(
+        AppTheme.getCategoryColorLight(TimeBlockCategory.work),
+        equals(AppColors.categoryWorkLight),
+      );
+      expect(
+        AppTheme.getCategoryColorLight(TimeBlockCategory.study),
+        equals(AppColors.categoryStudyLight),
+      );
+      expect(
+        AppTheme.getCategoryColorLight(TimeBlockCategory.sleep),
+        equals(AppColors.categorySleepLight),
+      );
     });
 
     test('returns Other color for the other category', () {
@@ -117,8 +126,14 @@ void main() {
 
   group('AppTheme.getCategoryColorDark', () {
     test('returns correct color for known categories', () {
-      expect(AppTheme.getCategoryColorDark(TimeBlockCategory.work), equals(AppColors.categoryWorkDark));
-      expect(AppTheme.getCategoryColorDark(TimeBlockCategory.exercise), equals(AppColors.categoryExerciseDark));
+      expect(
+        AppTheme.getCategoryColorDark(TimeBlockCategory.work),
+        equals(AppColors.categoryWorkDark),
+      );
+      expect(
+        AppTheme.getCategoryColorDark(TimeBlockCategory.exercise),
+        equals(AppColors.categoryExerciseDark),
+      );
     });
 
     test('returns Other color for the other category', () {

@@ -10,6 +10,7 @@ String formatDurationMinutes(int minutes) {
 }
 
 String formatDateYMd(DateTime dt) => DateFormat.yMd().format(dt);
+
 /// Locale-aware clock time — `jm()` gives 12h with am/pm where the locale
 /// expects it (never the 24h-only `Hm` skeleton).
 String formatTimeHm(DateTime dt) => DateFormat.jm().format(dt);

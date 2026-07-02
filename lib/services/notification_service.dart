@@ -37,10 +37,10 @@ class NotificationService {
     required SyncService syncService,
     LocalNotificationDisplay? display,
     Stream<RemoteMessage>? messageStream,
-  })  : _messaging = messaging ?? FirebaseMessaging.instance,
-        _syncService = syncService,
-        _display = display,
-        _messageStream = messageStream ?? FirebaseMessaging.onMessage;
+  }) : _messaging = messaging ?? FirebaseMessaging.instance,
+       _syncService = syncService,
+       _display = display,
+       _messageStream = messageStream ?? FirebaseMessaging.onMessage;
 
   /// Initialize FCM: request permissions, register token, set up handlers.
   ///
@@ -48,11 +48,7 @@ class NotificationService {
   /// authenticated so the token can be stored against their UID.
   Future<void> initialize(String userId) async {
     // Request permissions — required on iOS, no-op on Android
-    await _messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    await _messaging.requestPermission(alert: true, badge: true, sound: true);
 
     // Get current token and store in Firestore
     final token = await _messaging.getToken();

@@ -34,10 +34,9 @@ Widget _buildSubject({
   return ProviderScope(
     overrides: [
       authStateProvider.overrideWith((_) {
-        return _SimpleAuthStateNotifier(AuthState(
-          userProfile: profile,
-          isLoading: false,
-        ));
+        return _SimpleAuthStateNotifier(
+          AuthState(userProfile: profile, isLoading: false),
+        );
       }),
       calendarConnectionNotifierProvider.overrideWith((ref) {
         return _SimpleCalendarNotifier(calendarConnected);
@@ -73,8 +72,7 @@ class _SimpleAuthStateNotifier extends StateNotifier<AuthState>
 /// Simple notifier that holds a fixed calendar connection state.
 class _SimpleCalendarNotifier extends StateNotifier<AsyncValue<bool>>
     implements CalendarConnectionNotifier {
-  _SimpleCalendarNotifier(bool connected)
-      : super(AsyncValue.data(connected));
+  _SimpleCalendarNotifier(bool connected) : super(AsyncValue.data(connected));
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
@@ -84,7 +82,7 @@ class _SimpleCalendarNotifier extends StateNotifier<AsyncValue<bool>>
 class _SimpleCalendarSyncNotifier extends StateNotifier<CalendarSyncState>
     implements CalendarSyncNotifier {
   _SimpleCalendarSyncNotifier([CalendarSyncState? initialState])
-      : super(initialState ?? const CalendarSyncState());
+    : super(initialState ?? const CalendarSyncState());
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
@@ -125,16 +123,18 @@ void main() {
       expect(find.text('Timezone'), findsOneWidget);
     });
 
-    testWidgets('displays Window Preferences section after scrolling',
-        (tester) async {
+    testWidgets('displays Window Preferences section after scrolling', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildSubject());
       await tester.pumpAndSettle();
       await _scrollUntilVisible(tester, find.text('Window Preferences'));
       expect(find.text('Window Preferences'), findsOneWidget);
     });
 
-    testWidgets('displays Notifications section after scrolling',
-        (tester) async {
+    testWidgets('displays Notifications section after scrolling', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildSubject());
       await tester.pumpAndSettle();
       await _scrollUntilVisible(tester, find.text('Notifications'));
@@ -168,8 +168,9 @@ void main() {
       expect(find.text('Last Sync'), findsOneWidget);
     });
 
-    testWidgets('shows Connect Calendar button when not connected',
-        (tester) async {
+    testWidgets('shows Connect Calendar button when not connected', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildSubject(calendarConnected: false));
       await tester.pumpAndSettle();
       expect(find.text('Connect Calendar'), findsAtLeast(1));
@@ -190,9 +191,11 @@ void main() {
 
   group('SettingsScreen Timezone section', () {
     testWidgets('shows current timezone', (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        userProfile: _createMockUser(timezone: 'Africa/Johannesburg'),
-      ));
+      await tester.pumpWidget(
+        _buildSubject(
+          userProfile: _createMockUser(timezone: 'Africa/Johannesburg'),
+        ),
+      );
       await tester.pumpAndSettle();
       await _scrollUntilVisible(tester, find.text('Africa/Johannesburg'));
       expect(find.text('Africa/Johannesburg'), findsOneWidget);
@@ -256,18 +259,18 @@ void main() {
 
   group('SettingsScreen Account section', () {
     testWidgets('shows user email', (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        userProfile: _createMockUser(email: 'test@example.com'),
-      ));
+      await tester.pumpWidget(
+        _buildSubject(userProfile: _createMockUser(email: 'test@example.com')),
+      );
       await tester.pumpAndSettle();
       await _scrollUntilVisible(tester, find.text('test@example.com'));
       expect(find.text('test@example.com'), findsOneWidget);
     });
 
     testWidgets('shows display name', (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        userProfile: _createMockUser(displayName: 'Test User'),
-      ));
+      await tester.pumpWidget(
+        _buildSubject(userProfile: _createMockUser(displayName: 'Test User')),
+      );
       await tester.pumpAndSettle();
       await _scrollUntilVisible(tester, find.text('Test User'));
       expect(find.text('Test User'), findsOneWidget);
@@ -297,11 +300,12 @@ void main() {
   });
 
   group('SettingsScreen without couple', () {
-    testWidgets('does not show Couple section when user has no coupleId',
-        (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        userProfile: _createMockUser(coupleId: null),
-      ));
+    testWidgets('does not show Couple section when user has no coupleId', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _buildSubject(userProfile: _createMockUser(coupleId: null)),
+      );
       await tester.pumpAndSettle();
 
       // Scroll through entire list to be sure

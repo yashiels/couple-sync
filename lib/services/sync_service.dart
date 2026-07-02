@@ -91,7 +91,7 @@ class HiveBlockCache implements BlockCache {
   dynamic _box;
 
   HiveBlockCache({Future<dynamic> Function()? boxOpener})
-      : _boxOpener = boxOpener;
+    : _boxOpener = boxOpener;
 
   Future<dynamic> _ensureBox() async {
     if (_box != null) return _box;
@@ -132,7 +132,10 @@ class HiveBlockCache implements BlockCache {
     } else {
       blocks.add(block);
     }
-    await box.put(_key(coupleId), jsonEncode(blocks.map(_blockToJsonWithId).toList()));
+    await box.put(
+      _key(coupleId),
+      jsonEncode(blocks.map(_blockToJsonWithId).toList()),
+    );
   }
 
   @override
@@ -141,7 +144,10 @@ class HiveBlockCache implements BlockCache {
     final box = _box;
     if (box == null) return;
     final blocks = getBlocks(coupleId).where((b) => b.id != blockId).toList();
-    await box.put(_key(coupleId), jsonEncode(blocks.map(_blockToJsonWithId).toList()));
+    await box.put(
+      _key(coupleId),
+      jsonEncode(blocks.map(_blockToJsonWithId).toList()),
+    );
   }
 
   @override
@@ -149,7 +155,10 @@ class HiveBlockCache implements BlockCache {
     await _ensureBox();
     final box = _box;
     if (box == null) return;
-    await box.put(_key(coupleId), jsonEncode(blocks.map(_blockToJsonWithId).toList()));
+    await box.put(
+      _key(coupleId),
+      jsonEncode(blocks.map(_blockToJsonWithId).toList()),
+    );
   }
 }
 
@@ -160,9 +169,9 @@ class HiveBlockCache implements BlockCache {
 // ---------------------------------------------------------------------------
 
 Map<String, dynamic> _blockToJsonWithId(TimeBlock b) => {
-      ...b.toJson(),
-      'id': b.id,
-    };
+  ...b.toJson(),
+  'id': b.id,
+};
 
 Map<String, dynamic> _blockToJson(TimeBlock b) => b.toJson();
 
@@ -197,10 +206,10 @@ class _CoupleSession {
     required BlockCache cache,
     required WsConnectionFactory wsConnect,
     required Duration Function(int attempt) backoffFor,
-  })  : _service = service,
-        _cache = cache,
-        _wsConnect = wsConnect,
-        _backoffFor = backoffFor {
+  }) : _service = service,
+       _cache = cache,
+       _wsConnect = wsConnect,
+       _backoffFor = backoffFor {
     _blocks = _cache.getBlocks(coupleId);
     // Seed both controllers from cache as soon as a listener attaches.
     _blocksController.onListen = _seedBlocks;
@@ -277,11 +286,9 @@ class _CoupleSession {
   void _onBlockSet(Map<String, dynamic> msg) {
     final blockJson = msg['block'] as Map<String, dynamic>?;
     if (blockJson == null) return;
-    final id = (blockJson['id'] as String?) ?? (blockJson['blockId'] as String?) ?? '';
-    final block = TimeBlock.fromJson(
-      Map<String, dynamic>.from(blockJson),
-      id,
-    );
+    final id =
+        (blockJson['id'] as String?) ?? (blockJson['blockId'] as String?) ?? '';
+    final block = TimeBlock.fromJson(Map<String, dynamic>.from(blockJson), id);
     final idx = _blocks.indexWhere((b) => b.id == block.id);
     if (idx >= 0) {
       _blocks = [..._blocks]..[idx] = block;
@@ -302,8 +309,12 @@ class _CoupleSession {
 
   void _onOverlap(Map<String, dynamic> msg) {
     final windowsRaw = msg['windows'] as List<dynamic>?;
-    final windows = windowsRaw
-            ?.map((e) => OverlapWindow.fromJson(Map<String, dynamic>.from(e as Map)))
+    final windows =
+        windowsRaw
+            ?.map(
+              (e) =>
+                  OverlapWindow.fromJson(Map<String, dynamic>.from(e as Map)),
+            )
             .toList() ??
         const <OverlapWindow>[];
     final result = OverlapResult(
@@ -330,12 +341,14 @@ class _CoupleSession {
         message: 'WebSocket is not connected; cannot publish overlap',
       );
     }
-    s.send(jsonEncode({
-      't': 'overlap',
-      'windows': result.windows.map((w) => w.toJson()).toList(),
-      'inputHash': result.inputHash,
-      'computedBy': computedBy,
-    }));
+    s.send(
+      jsonEncode({
+        't': 'overlap',
+        'windows': result.windows.map((w) => w.toJson()).toList(),
+        'inputHash': result.inputHash,
+        'computedBy': computedBy,
+      }),
+    );
   }
 
   Future<void> dispose() async {
@@ -379,10 +392,10 @@ class SyncService {
     WsConnectionFactory? wsConnect,
     BlockCache? cache,
     Duration Function(int attempt)? backoffFor,
-  })  : _httpClient = httpClient ?? http.Client(),
-        _wsConnect = wsConnect ?? _defaultWsConnect,
-        _cache = cache ?? HiveBlockCache(),
-        _backoffFor = backoffFor ?? _defaultBackoff;
+  }) : _httpClient = httpClient ?? http.Client(),
+       _wsConnect = wsConnect ?? _defaultWsConnect,
+       _cache = cache ?? HiveBlockCache(),
+       _backoffFor = backoffFor ?? _defaultBackoff;
 
   static Duration _defaultBackoff(int attempt) {
     // 1s, 2s, 4s, 8s, 16s, then capped at 30s.
@@ -453,13 +466,9 @@ class SyncService {
     final res = await _get('/blocks/$blockId?coupleId=$coupleId');
     if (res.statusCode == 404) return null;
     final body = _decodeOrThrow(res, 'Failed to get block');
-    final id = (body['id'] as String?) ??
-        (body['blockId'] as String?) ??
-        blockId;
-    return TimeBlock.fromJson(
-      Map<String, dynamic>.from(body as Map),
-      id,
-    );
+    final id =
+        (body['id'] as String?) ?? (body['blockId'] as String?) ?? blockId;
+    return TimeBlock.fromJson(Map<String, dynamic>.from(body as Map), id);
   }
 
   // ==========================================================================
@@ -474,8 +483,9 @@ class SyncService {
     // userId filter is applied client-side for V1 parity; the backend streams
     // all couple blocks and the overlap engine needs both partners' blocks.
     if (userId == null) return session.blocks;
-    return session.blocks.map((blocks) =>
-        blocks.where((b) => b.userId == userId).toList());
+    return session.blocks.map(
+      (blocks) => blocks.where((b) => b.userId == userId).toList(),
+    );
   }
 
   /// POST /blocks — create a block; returns the server-generated id.
@@ -485,9 +495,7 @@ class SyncService {
       ..._blockToJson(block),
     });
     final body = _decodeOrThrow(res, 'Failed to create block');
-    return (body['id'] as String?) ??
-        (body['blockId'] as String?) ??
-        '';
+    return (body['id'] as String?) ?? (body['blockId'] as String?) ?? '';
   }
 
   /// PUT /blocks/:id — partial update.
@@ -509,7 +517,7 @@ class SyncService {
   /// POST /blocks/batch — atomic replace of google-sourced blocks for a user.
   /// Returns (deletedCount, createdCount) as reported by the server.
   Future<({int deletedCount, int createdCount})>
-      atomicReplaceGoogleSourcedBlocks(
+  atomicReplaceGoogleSourcedBlocks(
     String coupleId,
     String userId,
     List<TimeBlock> blocks,
@@ -520,8 +528,12 @@ class SyncService {
       'source': 'google',
       'blocks': blocks.map(_blockToJson).toList(),
     });
-    final body = _decodeOrThrow(res,
-        'Failed to atomically replace google-sourced blocks') as Map<String, dynamic>;
+    final body =
+        _decodeOrThrow(
+              res,
+              'Failed to atomically replace google-sourced blocks',
+            )
+            as Map<String, dynamic>;
     return (
       deletedCount: (body['deletedCount'] as num?)?.toInt() ?? 0,
       createdCount: (body['createdCount'] as num?)?.toInt() ?? blocks.length,
@@ -569,9 +581,7 @@ class SyncService {
   Future<String> createInvite(String createdByUid) async {
     final res = await _post('/invites', {'createdByUid': createdByUid});
     final body = _decodeOrThrow(res, 'Failed to create invite');
-    return (body['code'] as String?) ??
-        (body['inviteCode'] as String?) ??
-        '';
+    return (body['code'] as String?) ?? (body['inviteCode'] as String?) ?? '';
   }
 
   /// POST /invites/:code/redeem — atomic pairing. Returns the coupleId.

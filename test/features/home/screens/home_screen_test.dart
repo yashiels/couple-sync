@@ -22,13 +22,15 @@ OverlapResult _generateMockOverlapResult() {
     final start = now.add(Duration(days: i + 1, hours: 18));
     final end = start.add(const Duration(hours: 2));
 
-    windows.add(OverlapWindow(
-      startUtc: start.millisecondsSinceEpoch,
-      endUtc: end.millisecondsSinceEpoch,
-      durationMinutes: 120,
-      score: 45 - (i * 3).toDouble(),
-      reasonableBoth: true,
-    ));
+    windows.add(
+      OverlapWindow(
+        startUtc: start.millisecondsSinceEpoch,
+        endUtc: end.millisecondsSinceEpoch,
+        durationMinutes: 120,
+        score: 45 - (i * 3).toDouble(),
+        reasonableBoth: true,
+      ),
+    );
   }
 
   return OverlapResult(
@@ -71,8 +73,9 @@ Widget _buildSubject({
   return ProviderScope(
     overrides: [
       currentUserProfileProvider.overrideWithValue(effectiveUserProfile),
-      partnerProfileProvider
-          .overrideWith((ref) async => effectivePartnerProfile),
+      partnerProfileProvider.overrideWith(
+        (ref) async => effectivePartnerProfile,
+      ),
       // home_screen now reads overlapControllerProvider(coupleId) (the
       // device-side AsyncNotifier), not overlapWindowsProvider. Override the
       // family with a stub controller that returns the test OverlapResult.
@@ -83,9 +86,7 @@ Widget _buildSubject({
         (ref) => _NoOpCalendarSyncNotifier(),
       ),
     ],
-    child: const MaterialApp(
-      home: HomeScreen(),
-    ),
+    child: const MaterialApp(home: HomeScreen()),
   );
 }
 
@@ -113,9 +114,7 @@ Widget _buildNoCoupleSubject() {
         (ref) => _NoOpCalendarSyncNotifier(),
       ),
     ],
-    child: const MaterialApp(
-      home: HomeScreen(),
-    ),
+    child: const MaterialApp(home: HomeScreen()),
   );
 }
 
@@ -170,28 +169,28 @@ void main() {
   });
 
   group('HomeScreen no couple state', () {
-    testWidgets('shows "No partner yet" when user has no coupleId',
-        (tester) async {
+    testWidgets('shows "No partner yet" when user has no coupleId', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildNoCoupleSubject());
       await tester.pumpAndSettle();
       expect(find.text('No partner yet'), findsOneWidget);
     });
 
-    testWidgets('shows pairing message when user has no coupleId',
-        (tester) async {
+    testWidgets('shows pairing message when user has no coupleId', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildNoCoupleSubject());
       await tester.pumpAndSettle();
       expect(
-        find.text(
-            'Pair with your partner to start finding mutual free time.'),
+        find.text('Pair with your partner to start finding mutual free time.'),
         findsOneWidget,
       );
     });
   });
 
   group('HomeScreen FAB quick actions', () {
-    testWidgets('tapping FAB shows bottom sheet with actions',
-        (tester) async {
+    testWidgets('tapping FAB shows bottom sheet with actions', (tester) async {
       await tester.pumpWidget(_buildSubject());
       await tester.pumpAndSettle();
 
@@ -203,8 +202,7 @@ void main() {
       expect(find.text('View All Windows'), findsOneWidget);
     });
 
-    testWidgets('bottom sheet shows subtitles for each action',
-        (tester) async {
+    testWidgets('bottom sheet shows subtitles for each action', (tester) async {
       await tester.pumpWidget(_buildSubject());
       await tester.pumpAndSettle();
 
@@ -228,8 +226,7 @@ void main() {
       expect(find.byIcon(Icons.calendar_view_day), findsOneWidget);
     });
 
-    testWidgets('tapping Sync Calendar dismisses bottom sheet',
-        (tester) async {
+    testWidgets('tapping Sync Calendar dismisses bottom sheet', (tester) async {
       await tester.pumpWidget(_buildSubject());
       await tester.pumpAndSettle();
 
@@ -263,8 +260,9 @@ void main() {
   });
 
   group('HomeScreen upcoming windows list', () {
-    testWidgets('renders upcoming window cards with score numbers',
-        (tester) async {
+    testWidgets('renders upcoming window cards with score numbers', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildSubject());
       await tester.pumpAndSettle();
 
@@ -293,11 +291,11 @@ class _NoOpCalendarSyncNotifier extends StateNotifier<CalendarSyncState>
 
   @override
   Future<CalendarSyncResult> sync() async => CalendarSyncResult(
-        blocksFetched: 0,
-        blocksDeleted: 0,
-        blocksCreated: 0,
-        syncedAt: DateTime.now(),
-      );
+    blocksFetched: 0,
+    blocksDeleted: 0,
+    blocksCreated: 0,
+    syncedAt: DateTime.now(),
+  );
 
   @override
   Future<void> refreshLastSyncTime() async {}

@@ -17,7 +17,7 @@ class SettingsSectionWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Padding(
@@ -28,11 +28,7 @@ class SettingsSectionWidget extends StatelessWidget {
             Row(
               children: [
                 if (icon != null) ...[
-                  Icon(
-                    icon,
-                    size: 20,
-                    color: theme.colorScheme.primary,
-                  ),
+                  Icon(icon, size: 20, color: theme.colorScheme.primary),
                   const SizedBox(width: 8),
                 ],
                 Text(
@@ -73,7 +69,7 @@ class SettingsItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return InkWell(
       onTap: enabled ? onTap : null,
       borderRadius: BorderRadius.circular(8),
@@ -88,7 +84,7 @@ class SettingsItem extends StatelessWidget {
                   Text(
                     title,
                     style: theme.textTheme.bodyLarge?.copyWith(
-                      color: enabled 
+                      color: enabled
                           ? theme.textTheme.bodyLarge?.color
                           : theme.disabledColor,
                     ),
@@ -98,7 +94,7 @@ class SettingsItem extends StatelessWidget {
                     Text(
                       subtitle!,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: enabled 
+                        color: enabled
                             ? theme.textTheme.bodySmall?.color
                             : theme.disabledColor,
                       ),
@@ -138,10 +134,7 @@ class SettingsToggle extends StatelessWidget {
       title: title,
       subtitle: subtitle,
       enabled: enabled,
-      trailing: Switch(
-        value: value,
-        onChanged: enabled ? onChanged : null,
-      ),
+      trailing: Switch(value: value, onChanged: enabled ? onChanged : null),
     );
   }
 }
@@ -172,10 +165,10 @@ class SettingsButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final buttonColor = isDestructive 
-        ? theme.colorScheme.error 
+    final buttonColor = isDestructive
+        ? theme.colorScheme.error
         : (color ?? theme.colorScheme.primary);
-    
+
     return SettingsItem(
       title: title,
       subtitle: subtitle,
@@ -183,13 +176,10 @@ class SettingsButton extends StatelessWidget {
       onTap: onTap,
       trailing: TextButton.icon(
         onPressed: enabled ? onTap : null,
-        icon: icon != null 
+        icon: icon != null
             ? Icon(icon, size: 18, color: buttonColor)
             : const SizedBox.shrink(),
-        label: Text(
-          label,
-          style: TextStyle(color: buttonColor),
-        ),
+        label: Text(label, style: TextStyle(color: buttonColor)),
       ),
     );
   }
@@ -216,7 +206,7 @@ class SettingsStatusItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = statusColor ?? theme.colorScheme.onSurface;
-    
+
     return SettingsItem(
       title: title,
       subtitle: subtitle,

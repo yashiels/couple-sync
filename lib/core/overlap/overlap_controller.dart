@@ -38,17 +38,24 @@ String computeOverlapInputHash({
   required PartnerPrefs prefsB,
   required int nowBucket,
 }) {
-  final sortedA = [...blocksA]..sort((a, b) => a.startUtc.compareTo(b.startUtc));
-  final sortedB = [...blocksB]..sort((a, b) => a.startUtc.compareTo(b.startUtc));
+  final sortedA = [...blocksA]
+    ..sort((a, b) => a.startUtc.compareTo(b.startUtc));
+  final sortedB = [...blocksB]
+    ..sort((a, b) => a.startUtc.compareTo(b.startUtc));
   final a = sortedA
-      .map((b) =>
-          '${b.startUtc}:${b.endUtc}:${b.recurrenceRule ?? ''}:${b.type.name}')
+      .map(
+        (b) =>
+            '${b.startUtc}:${b.endUtc}:${b.recurrenceRule ?? ''}:${b.type.name}',
+      )
       .join('|');
   final b = sortedB
-      .map((b) =>
-          '${b.startUtc}:${b.endUtc}:${b.recurrenceRule ?? ''}:${b.type.name}')
+      .map(
+        (b) =>
+            '${b.startUtc}:${b.endUtc}:${b.recurrenceRule ?? ''}:${b.type.name}',
+      )
       .join('|');
-  final str = '$a#$b#$tzA#$tzB#${prefsA.showLateNightWindows}#'
+  final str =
+      '$a#$b#$tzA#$tzB#${prefsA.showLateNightWindows}#'
       '${prefsB.showLateNightWindows}#$kAlgoVersion#$nowBucket';
   return sha256.convert(utf8.encode(str)).toString().substring(0, 16);
 }
@@ -114,19 +121,23 @@ class OverlapController
     _blocksSub = sync.watchBlocks(coupleId).listen((blocks) {
       final a = _userAUid;
       final b = _userBUid;
-      _blocksA =
-          a == null ? const [] : blocks.where((bl) => bl.userId == a).toList();
-      _blocksB =
-          b == null ? const [] : blocks.where((bl) => bl.userId == b).toList();
+      _blocksA = a == null
+          ? const []
+          : blocks.where((bl) => bl.userId == a).toList();
+      _blocksB = b == null
+          ? const []
+          : blocks.where((bl) => bl.userId == b).toList();
       _scheduleCompute(sync, coupleId, myUid);
     });
 
     // Initial idle state — real value arrives once streams fire.
-    return Future.value(OverlapResult(
-      windows: const [],
-      computedAt: DateTime.now().toUtc(),
-      inputHash: '',
-    ));
+    return Future.value(
+      OverlapResult(
+        windows: const [],
+        computedAt: DateTime.now().toUtc(),
+        inputHash: '',
+      ),
+    );
   }
 
   Future<void> _resolveCoupleAndProfiles(
@@ -180,8 +191,9 @@ class OverlapController
     if (a == null || b == null) return; // wait for both profiles
     if (myUid == null) return;
 
-    final nowBucket =
-        floorToHour(DateTime.now().toUtc().millisecondsSinceEpoch);
+    final nowBucket = floorToHour(
+      DateTime.now().toUtc().millisecondsSinceEpoch,
+    );
     final windows = computeOverlap(
       _blocksA,
       _blocksB,
@@ -226,7 +238,8 @@ class OverlapController
 /// `AsyncValue<OverlapResult>` for the given couple. Auto-disposed so the
 /// stream subscriptions are cancelled when no screen is watching.
 final overlapControllerProvider =
-    AutoDisposeAsyncNotifierProviderFamily<OverlapController, OverlapResult,
-        String>(
-  OverlapController.new,
-);
+    AutoDisposeAsyncNotifierProviderFamily<
+      OverlapController,
+      OverlapResult,
+      String
+    >(OverlapController.new);

@@ -11,12 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
-@GenerateMocks([
-  FirebaseAuth,
-  AuthService,
-  SyncService,
-  User,
-])
+@GenerateMocks([FirebaseAuth, AuthService, SyncService, User])
 import 'enter_code_tab_test.mocks.dart';
 
 UserModel _testProfile({
@@ -61,11 +56,9 @@ _TestAuthStateNotifier _createNotifier({
     authService: authService,
     fetchProfile: (uid) => syncService.getUser(uid),
   );
-  notifier.setTestState(AuthState(
-    firebaseUser: user,
-    userProfile: profile,
-    isLoading: false,
-  ));
+  notifier.setTestState(
+    AuthState(firebaseUser: user, userProfile: profile, isLoading: false),
+  );
   return notifier;
 }
 
@@ -80,9 +73,7 @@ Future<void> _pumpWidget(
         authStateProvider.overrideWith((_) => notifier),
         syncServiceProvider.overrideWithValue(syncService),
       ],
-      child: const MaterialApp(
-        home: Scaffold(body: EnterCodeTab()),
-      ),
+      child: const MaterialApp(home: Scaffold(body: EnterCodeTab())),
     ),
   );
   await tester.pump();
@@ -117,7 +108,11 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpWidget(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpWidget(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       expect(find.text("Enter Partner's Code"), findsOneWidget);
     });
@@ -131,7 +126,11 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpWidget(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpWidget(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       expect(
         find.text('Enter the code your partner shared with you'),
@@ -148,7 +147,11 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpWidget(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpWidget(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       expect(find.byIcon(Icons.vpn_key_outlined), findsOneWidget);
     });
@@ -162,7 +165,11 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpWidget(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpWidget(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       expect(find.byType(TextField), findsOneWidget);
       expect(find.text('XXXXXX'), findsOneWidget);
@@ -177,7 +184,11 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpWidget(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpWidget(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       expect(find.text('Redeem Code'), findsOneWidget);
       expect(find.byIcon(Icons.check_circle), findsOneWidget);
@@ -192,7 +203,11 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpWidget(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpWidget(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       await tester.enterText(find.byType(TextField), 'abcdef');
       await tester.pump();
@@ -200,8 +215,9 @@ void main() {
       expect(find.text('ABCDEF'), findsOneWidget);
     });
 
-    testWidgets('shows error when code is less than 6 characters',
-        (tester) async {
+    testWidgets('shows error when code is less than 6 characters', (
+      tester,
+    ) async {
       final notifier = _createNotifier(
         auth: mockAuth,
         authService: mockAuthService,
@@ -210,7 +226,11 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpWidget(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpWidget(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       await tester.enterText(find.byType(TextField), 'ABC');
       await tester.pump();
@@ -230,7 +250,11 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpWidget(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpWidget(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       await tester.enterText(find.byType(TextField), 'AB');
       await tester.pump();
@@ -250,14 +274,19 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpWidget(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpWidget(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       final textField = tester.widget<TextField>(find.byType(TextField));
       expect(textField.maxLength, 6);
     });
 
-    testWidgets('input field has text capitalization set to characters',
-        (tester) async {
+    testWidgets('input field has text capitalization set to characters', (
+      tester,
+    ) async {
       final notifier = _createNotifier(
         auth: mockAuth,
         authService: mockAuthService,
@@ -266,7 +295,11 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpWidget(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpWidget(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       final textField = tester.widget<TextField>(find.byType(TextField));
       expect(textField.textCapitalization, TextCapitalization.characters);
@@ -281,22 +314,29 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpWidget(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpWidget(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       // Only one check_circle icon exists (the button's icon), no success message icon
       expect(find.byIcon(Icons.check_circle), findsOneWidget);
       expect(find.byIcon(Icons.error), findsNothing);
     });
 
-    testWidgets('redeems successfully via SyncService.redeemInvite',
-        (tester) async {
-      when(mockSyncService.redeemInvite(any))
-          .thenAnswer((_) async => 'couple-123');
+    testWidgets('redeems successfully via SyncService.redeemInvite', (
+      tester,
+    ) async {
+      when(
+        mockSyncService.redeemInvite(any),
+      ).thenAnswer((_) async => 'couple-123');
       // refreshProfile() is called after a successful redeem; stub getUser so
       // it resolves with a profile instead of null (which would schedule a
       // retry timer that outlives the test).
-      when(mockSyncService.getUser(any))
-          .thenAnswer((_) async => _testProfile(coupleId: 'couple-123'));
+      when(
+        mockSyncService.getUser(any),
+      ).thenAnswer((_) async => _testProfile(coupleId: 'couple-123'));
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -306,7 +346,11 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpWidget(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpWidget(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       await tester.enterText(find.byType(TextField), 'ABCDEF');
       await tester.pump();
@@ -323,10 +367,9 @@ void main() {
     });
 
     testWidgets('maps http-404 to invalid invite code message', (tester) async {
-      when(mockSyncService.redeemInvite(any)).thenThrow(const SyncException(
-        code: 'http-404',
-        message: 'not found',
-      ));
+      when(
+        mockSyncService.redeemInvite(any),
+      ).thenThrow(const SyncException(code: 'http-404', message: 'not found'));
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -336,7 +379,11 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpWidget(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpWidget(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       await tester.enterText(find.byType(TextField), 'ABCDEF');
       await tester.pump();
@@ -348,11 +395,13 @@ void main() {
     });
 
     testWidgets('maps http-409 expired to expired message', (tester) async {
-      when(mockSyncService.redeemInvite(any)).thenThrow(const SyncException(
-        code: 'http-409',
-        message: 'conflict',
-        originalError: 'The invite code has expired',
-      ));
+      when(mockSyncService.redeemInvite(any)).thenThrow(
+        const SyncException(
+          code: 'http-409',
+          message: 'conflict',
+          originalError: 'The invite code has expired',
+        ),
+      );
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -362,7 +411,11 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpWidget(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpWidget(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       await tester.enterText(find.byType(TextField), 'ABCDEF');
       await tester.pump();

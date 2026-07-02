@@ -15,9 +15,10 @@ import '../widgets/settings_section_widget.dart';
 
 /// Provider for notification settings (local flag, doesn't affect FCM registration).
 /// Persisted to flutter_secure_storage so the toggle survives restarts.
-final notificationSettingsProvider = StateNotifierProvider<NotificationSettingsNotifier, bool>((ref) {
-  return NotificationSettingsNotifier();
-});
+final notificationSettingsProvider =
+    StateNotifierProvider<NotificationSettingsNotifier, bool>((ref) {
+      return NotificationSettingsNotifier();
+    });
 
 class NotificationSettingsNotifier extends StateNotifier<bool> {
   static const _key = 'notif_enabled';
@@ -53,9 +54,7 @@ class SettingsScreen extends ConsumerWidget {
     final syncState = ref.watch(calendarSyncNotifierProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-      ),
+      appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         children: [
           // Calendar Section
@@ -66,27 +65,34 @@ class SettingsScreen extends ConsumerWidget {
               // Calendar connection status
               Consumer(
                 builder: (context, ref, child) {
-                  final connectionState =
-                      ref.watch(calendarConnectionNotifierProvider);
+                  final connectionState = ref.watch(
+                    calendarConnectionNotifierProvider,
+                  );
                   return connectionState.when(
                     data: (isConnected) => SettingsStatusItem(
                       title: 'Google Calendar',
-                      subtitle: 'Connect your Google Calendar for automatic sync',
+                      subtitle:
+                          'Connect your Google Calendar for automatic sync',
                       status: isConnected ? 'Connected' : 'Not Connected',
-                      statusColor: isConnected ? AppColors.successLight : AppColors.categoryCommuteLight,
-                      statusIcon:
-                          isConnected ? Icons.cloud_done : Icons.cloud_off,
+                      statusColor: isConnected
+                          ? AppColors.successLight
+                          : AppColors.categoryCommuteLight,
+                      statusIcon: isConnected
+                          ? Icons.cloud_done
+                          : Icons.cloud_off,
                     ),
                     loading: () => const SettingsStatusItem(
                       title: 'Google Calendar',
-                      subtitle: 'Connect your Google Calendar for automatic sync',
+                      subtitle:
+                          'Connect your Google Calendar for automatic sync',
                       status: 'Checking...',
                       statusColor: AppColors.outlineLight,
                       statusIcon: Icons.hourglass_empty,
                     ),
                     error: (error, _) => SettingsStatusItem(
                       title: 'Google Calendar',
-                      subtitle: 'Connect your Google Calendar for automatic sync',
+                      subtitle:
+                          'Connect your Google Calendar for automatic sync',
                       status: 'Error',
                       statusColor: AppColors.errorLight,
                       statusIcon: Icons.error_outline,
@@ -99,14 +105,19 @@ class SettingsScreen extends ConsumerWidget {
                 title: 'Last Sync',
                 subtitle: 'Last time your calendar was synced',
                 status: _formatLastSyncTime(syncState.lastSyncTime),
-                statusColor: syncState.lastSyncTime != null ? AppColors.successLight : AppColors.outlineLight,
-                statusIcon: syncState.lastSyncTime != null ? Icons.sync : Icons.sync_disabled,
+                statusColor: syncState.lastSyncTime != null
+                    ? AppColors.successLight
+                    : AppColors.outlineLight,
+                statusIcon: syncState.lastSyncTime != null
+                    ? Icons.sync
+                    : Icons.sync_disabled,
               ),
               // Connect/Disconnect button
               Consumer(
                 builder: (context, ref, child) {
-                  final connectionState =
-                      ref.watch(calendarConnectionNotifierProvider);
+                  final connectionState = ref.watch(
+                    calendarConnectionNotifierProvider,
+                  );
                   return connectionState.when(
                     data: (isConnected) => SettingsButton(
                       title: isConnected ? 'Disconnect' : 'Connect Calendar',
@@ -116,11 +127,8 @@ class SettingsScreen extends ConsumerWidget {
                       label: isConnected ? 'Disconnect' : 'Connect',
                       icon: isConnected ? Icons.link_off : Icons.link,
                       isDestructive: isConnected,
-                      onTap: () => _handleCalendarConnection(
-                        context,
-                        ref,
-                        isConnected,
-                      ),
+                      onTap: () =>
+                          _handleCalendarConnection(context, ref, isConnected),
                     ),
                     loading: () => const SettingsButton(
                       title: 'Connect Calendar',
@@ -135,11 +143,8 @@ class SettingsScreen extends ConsumerWidget {
                       subtitle: 'Authorize Google Calendar access',
                       label: 'Connect',
                       icon: Icons.link,
-                      onTap: () => _handleCalendarConnection(
-                        context,
-                        ref,
-                        false,
-                      ),
+                      onTap: () =>
+                          _handleCalendarConnection(context, ref, false),
                     ),
                   );
                 },
@@ -147,10 +152,13 @@ class SettingsScreen extends ConsumerWidget {
               // Manual Sync
               Consumer(
                 builder: (context, ref, child) {
-                  final connectionState =
-                      ref.watch(calendarConnectionNotifierProvider);
+                  final connectionState = ref.watch(
+                    calendarConnectionNotifierProvider,
+                  );
                   final isConnected = connectionState.valueOrNull ?? false;
-                  final currentSyncState = ref.watch(calendarSyncNotifierProvider);
+                  final currentSyncState = ref.watch(
+                    calendarSyncNotifierProvider,
+                  );
                   return SettingsButton(
                     title: 'Manual Sync',
                     subtitle: 'Force sync your calendar now',
@@ -197,8 +205,7 @@ class SettingsScreen extends ConsumerWidget {
             children: [
               SettingsToggle(
                 title: 'Show late-night windows',
-                subtitle:
-                    'Include 23:00–07:00 local time in overlap windows',
+                subtitle: 'Include 23:00–07:00 local time in overlap windows',
                 value: userProfile?.showLateNightWindows ?? false,
                 onChanged: (value) =>
                     _setLateNightWindows(context, ref, authState.uid, value),
@@ -225,9 +232,9 @@ class SettingsScreen extends ConsumerWidget {
                   'Toggle enables/disables local notifications. '
                   'This does not affect FCM registration.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontStyle: FontStyle.italic,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                    fontStyle: FontStyle.italic,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ],
@@ -280,9 +287,9 @@ class SettingsScreen extends ConsumerWidget {
   ) async {
     if (uid == null) return;
     try {
-      await ref
-          .read(syncServiceProvider)
-          .updateUser(uid, {'showLateNightWindows': value});
+      await ref.read(syncServiceProvider).updateUser(uid, {
+        'showLateNightWindows': value,
+      });
       await ref.read(authStateProvider.notifier).refreshProfile();
     } catch (e) {
       if (context.mounted) {
@@ -308,19 +315,14 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   /// Build the Couple section using coupleProvider and partnerProfileProvider.
-  Widget _buildCoupleSectionFromProvider(
-    BuildContext context,
-    WidgetRef ref,
-  ) {
+  Widget _buildCoupleSectionFromProvider(BuildContext context, WidgetRef ref) {
     final coupleAsync = ref.watch(coupleProvider);
 
     return coupleAsync.when(
       loading: () => const SettingsSectionWidget(
         title: 'Couple',
         icon: Icons.favorite,
-        children: [
-          Center(child: CircularProgressIndicator()),
-        ],
+        children: [Center(child: CircularProgressIndicator())],
       ),
       error: (error, _) => SettingsSectionWidget(
         title: 'Couple',
@@ -331,7 +333,8 @@ class SettingsScreen extends ConsumerWidget {
             child: Text(
               'Failed to load couple data',
               style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
         ],
@@ -347,8 +350,8 @@ class SettingsScreen extends ConsumerWidget {
                 child: Text(
                   'Couple data not available',
                   style: TextStyle(
-                      color:
-                          Theme.of(context).colorScheme.onSurfaceVariant),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ],
@@ -460,7 +463,9 @@ class SettingsScreen extends ConsumerWidget {
   /// Handle manual calendar sync.
   Future<void> _handleManualSync(BuildContext context, WidgetRef ref) async {
     try {
-      final result = await ref.read(calendarSyncNotifierProvider.notifier).sync();
+      final result = await ref
+          .read(calendarSyncNotifierProvider.notifier)
+          .sync();
       if (context.mounted) {
         if (result.error != null) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -531,9 +536,7 @@ class SettingsScreen extends ConsumerWidget {
         await notifier.disconnect();
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Google Calendar disconnected'),
-            ),
+            const SnackBar(content: Text('Google Calendar disconnected')),
           );
         }
       } on CalendarException catch (e) {
@@ -591,7 +594,11 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
-  void _showUnpairDialog(BuildContext context, WidgetRef ref, CoupleModel couple) {
+  void _showUnpairDialog(
+    BuildContext context,
+    WidgetRef ref,
+    CoupleModel couple,
+  ) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

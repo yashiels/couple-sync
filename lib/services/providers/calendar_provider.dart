@@ -48,7 +48,9 @@ class CalendarSyncState {
       isSyncing: isSyncing ?? this.isSyncing,
       lastSyncTime: lastSyncTime ?? this.lastSyncTime,
       syncError: clearSyncError ? null : (syncError ?? this.syncError),
-      lastSyncResult: clearLastSyncResult ? null : (lastSyncResult ?? this.lastSyncResult),
+      lastSyncResult: clearLastSyncResult
+          ? null
+          : (lastSyncResult ?? this.lastSyncResult),
     );
   }
 }
@@ -59,7 +61,7 @@ class CalendarConnectionNotifier extends StateNotifier<AsyncValue<bool>> {
   final Ref _ref;
 
   CalendarConnectionNotifier(this._calendarService, this._ref)
-      : super(const AsyncValue.loading()) {
+    : super(const AsyncValue.loading()) {
     _loadConnectionState();
   }
 
@@ -110,7 +112,7 @@ class CalendarSyncNotifier extends StateNotifier<CalendarSyncState> {
   final Ref _ref;
 
   CalendarSyncNotifier(this._calendarService, this._syncService, this._ref)
-      : super(const CalendarSyncState()) {
+    : super(const CalendarSyncState()) {
     _loadLastSyncTime();
   }
 
@@ -178,12 +180,8 @@ class CalendarSyncNotifier extends StateNotifier<CalendarSyncState> {
       // 3. Atomically delete existing google-sourced blocks and write new ones
       //    in a single WriteBatch commit — eliminates the data-loss window that
       //    existed when delete and write were two separate operations.
-      final (:deletedCount, :createdCount) =
-          await _syncService.atomicReplaceGoogleSourcedBlocks(
-        coupleId,
-        userId,
-        newBlocks,
-      );
+      final (:deletedCount, :createdCount) = await _syncService
+          .atomicReplaceGoogleSourcedBlocks(coupleId, userId, newBlocks);
 
       // 4. Update last sync time
       await _calendarService.updateLastSyncTime();
@@ -255,14 +253,14 @@ class CalendarSyncNotifier extends StateNotifier<CalendarSyncState> {
 /// Provider for the calendar connection notifier.
 final calendarConnectionNotifierProvider =
     StateNotifierProvider<CalendarConnectionNotifier, AsyncValue<bool>>((ref) {
-  final calendarService = ref.watch(calendarServiceProvider);
-  return CalendarConnectionNotifier(calendarService, ref);
-});
+      final calendarService = ref.watch(calendarServiceProvider);
+      return CalendarConnectionNotifier(calendarService, ref);
+    });
 
 /// Provider for the calendar sync notifier.
 final calendarSyncNotifierProvider =
     StateNotifierProvider<CalendarSyncNotifier, CalendarSyncState>((ref) {
-  final calendarService = ref.watch(calendarServiceProvider);
-  final syncService = ref.watch(syncServiceProvider);
-  return CalendarSyncNotifier(calendarService, syncService, ref);
-});
+      final calendarService = ref.watch(calendarServiceProvider);
+      final syncService = ref.watch(syncServiceProvider);
+      return CalendarSyncNotifier(calendarService, syncService, ref);
+    });

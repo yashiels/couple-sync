@@ -1,7 +1,12 @@
 /** @type {import('jest').Config} */
+const includeRulesTests = process.env.JEST_INCLUDE_RULES === '1';
+
 module.exports = {
   testEnvironment: 'node',
   testMatch: ['**/src/__tests__/**/*.test.ts'],
+  testPathIgnorePatterns: includeRulesTests
+    ? ['/node_modules/']
+    : ['/node_modules/', '/src/__tests__/rules/'],
   collectCoverageFrom: ['src/**/*.ts', '!src/**/__tests__/**'],
   transform: {
     '^.+\\.ts$': [

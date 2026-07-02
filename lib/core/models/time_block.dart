@@ -119,8 +119,9 @@ class TimeBlock {
       startUtc: startUtc ?? this.startUtc,
       endUtc: endUtc ?? this.endUtc,
       timezone: timezone ?? this.timezone,
-      recurrenceRule:
-          clearRecurrenceRule ? null : (recurrenceRule ?? this.recurrenceRule),
+      recurrenceRule: clearRecurrenceRule
+          ? null
+          : (recurrenceRule ?? this.recurrenceRule),
       source: source ?? this.source,
       visibility: visibility ?? this.visibility,
       createdAt: createdAt ?? this.createdAt,
@@ -164,19 +165,19 @@ class TimeBlock {
 
   @override
   int get hashCode => Object.hash(
-        id,
-        userId,
-        title,
-        type,
-        category,
-        startUtc,
-        endUtc,
-        timezone,
-        recurrenceRule,
-        source,
-        visibility,
-        createdAt,
-      );
+    id,
+    userId,
+    title,
+    type,
+    category,
+    startUtc,
+    endUtc,
+    timezone,
+    recurrenceRule,
+    source,
+    visibility,
+    createdAt,
+  );
 
   @override
   String toString() =>

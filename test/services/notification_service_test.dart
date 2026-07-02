@@ -43,32 +43,40 @@ void main() {
   group('NotificationService', () {
     group('initialize', () {
       setUp(() {
-        when(mockMessaging.requestPermission(
-          alert: anyNamed('alert'),
-          badge: anyNamed('badge'),
-          sound: anyNamed('sound'),
-        )).thenAnswer((_) async => mockSettings);
-        when(mockMessaging.onTokenRefresh)
-            .thenAnswer((_) => const Stream.empty());
+        when(
+          mockMessaging.requestPermission(
+            alert: anyNamed('alert'),
+            badge: anyNamed('badge'),
+            sound: anyNamed('sound'),
+          ),
+        ).thenAnswer((_) async => mockSettings);
+        when(
+          mockMessaging.onTokenRefresh,
+        ).thenAnswer((_) => const Stream.empty());
       });
 
-      test('requests FCM permission with alert, badge, and sound enabled',
-          () async {
-        when(mockMessaging.getToken()).thenAnswer((_) async => null);
-        final service = createService();
+      test(
+        'requests FCM permission with alert, badge, and sound enabled',
+        () async {
+          when(mockMessaging.getToken()).thenAnswer((_) async => null);
+          final service = createService();
 
-        await service.initialize('user-123');
+          await service.initialize('user-123');
 
-        verify(mockMessaging.requestPermission(
-          alert: true,
-          badge: true,
-          sound: true,
-        )).called(1);
-      });
+          verify(
+            mockMessaging.requestPermission(
+              alert: true,
+              badge: true,
+              sound: true,
+            ),
+          ).called(1);
+        },
+      );
 
       test('stores FCM token when token is available', () async {
-        when(mockMessaging.getToken())
-            .thenAnswer((_) async => 'test-fcm-token');
+        when(
+          mockMessaging.getToken(),
+        ).thenAnswer((_) async => 'test-fcm-token');
         final service = createService();
 
         await service.initialize('user-123');
@@ -87,30 +95,30 @@ void main() {
 
       test('forwards foreground messages to handleForegroundMessage', () async {
         when(mockMessaging.getToken()).thenAnswer((_) async => null);
-        when(mockDisplay.show(
-          title: anyNamed('title'),
-          body: anyNamed('body'),
-        )).thenAnswer((_) async {});
+        when(
+          mockDisplay.show(title: anyNamed('title'), body: anyNamed('body')),
+        ).thenAnswer((_) async {});
 
         final messageController = StreamController<RemoteMessage>();
         final service = createService(messageStream: messageController.stream);
 
         await service.initialize('user-123');
 
-        messageController.add(RemoteMessage(
-          notification: const RemoteNotification(
-            title: 'New window!',
-            body: 'You have free time',
+        messageController.add(
+          RemoteMessage(
+            notification: const RemoteNotification(
+              title: 'New window!',
+              body: 'You have free time',
+            ),
           ),
-        ));
+        );
 
         // Allow the stream listener to process
         await Future.microtask(() {});
 
-        verify(mockDisplay.show(
-          title: 'New window!',
-          body: 'You have free time',
-        )).called(1);
+        verify(
+          mockDisplay.show(title: 'New window!', body: 'You have free time'),
+        ).called(1);
 
         await messageController.close();
       });
@@ -129,79 +137,86 @@ void main() {
     group('handleForegroundMessage', () {
       test('shows local notification when not suppressed', () {
         final service = createService();
-        when(mockDisplay.show(
-          title: anyNamed('title'),
-          body: anyNamed('body'),
-        )).thenAnswer((_) async {});
+        when(
+          mockDisplay.show(title: anyNamed('title'), body: anyNamed('body')),
+        ).thenAnswer((_) async {});
 
-        service.handleForegroundMessage(RemoteMessage(
-          notification: const RemoteNotification(
+        service.handleForegroundMessage(
+          RemoteMessage(
+            notification: const RemoteNotification(
+              title: 'New Free Time!',
+              body: 'You have a new overlap window',
+            ),
+          ),
+        );
+
+        verify(
+          mockDisplay.show(
             title: 'New Free Time!',
             body: 'You have a new overlap window',
           ),
-        ));
-
-        verify(mockDisplay.show(
-          title: 'New Free Time!',
-          body: 'You have a new overlap window',
-        )).called(1);
+        ).called(1);
       });
 
       test('does not show notification when display is suppressed', () {
         final service = createService();
         service.setSuppressDisplay(true);
 
-        service.handleForegroundMessage(RemoteMessage(
-          notification: const RemoteNotification(
-            title: 'New Free Time!',
-            body: 'You have a new overlap window',
+        service.handleForegroundMessage(
+          RemoteMessage(
+            notification: const RemoteNotification(
+              title: 'New Free Time!',
+              body: 'You have a new overlap window',
+            ),
           ),
-        ));
+        );
 
-        verifyNever(mockDisplay.show(
-          title: anyNamed('title'),
-          body: anyNamed('body'),
-        ));
+        verifyNever(
+          mockDisplay.show(title: anyNamed('title'), body: anyNamed('body')),
+        );
       });
 
       test('uses fallback title when notification title is null', () {
         final service = createService();
-        when(mockDisplay.show(
-          title: anyNamed('title'),
-          body: anyNamed('body'),
-        )).thenAnswer((_) async {});
+        when(
+          mockDisplay.show(title: anyNamed('title'), body: anyNamed('body')),
+        ).thenAnswer((_) async {});
 
-        service.handleForegroundMessage(RemoteMessage(
-          notification: const RemoteNotification(
-            title: null,
-            body: 'Some body',
+        service.handleForegroundMessage(
+          RemoteMessage(
+            notification: const RemoteNotification(
+              title: null,
+              body: 'Some body',
+            ),
           ),
-        ));
+        );
 
-        verify(mockDisplay.show(
-          title: 'New free time found!',
-          body: 'Some body',
-        )).called(1);
+        verify(
+          mockDisplay.show(title: 'New free time found!', body: 'Some body'),
+        ).called(1);
       });
 
       test('uses fallback body when notification body is null', () {
         final service = createService();
-        when(mockDisplay.show(
-          title: anyNamed('title'),
-          body: anyNamed('body'),
-        )).thenAnswer((_) async {});
+        when(
+          mockDisplay.show(title: anyNamed('title'), body: anyNamed('body')),
+        ).thenAnswer((_) async {});
 
-        service.handleForegroundMessage(RemoteMessage(
-          notification: const RemoteNotification(
-            title: 'New window!',
-            body: null,
+        service.handleForegroundMessage(
+          RemoteMessage(
+            notification: const RemoteNotification(
+              title: 'New window!',
+              body: null,
+            ),
           ),
-        ));
+        );
 
-        verify(mockDisplay.show(
-          title: 'New window!',
-          body: 'Check your overlap windows.',
-        )).called(1);
+        verify(
+          mockDisplay.show(
+            title: 'New window!',
+            body: 'Check your overlap windows.',
+          ),
+        ).called(1);
       });
 
       test('skips display when message has no notification payload', () {
@@ -209,10 +224,9 @@ void main() {
 
         service.handleForegroundMessage(RemoteMessage());
 
-        verifyNever(mockDisplay.show(
-          title: anyNamed('title'),
-          body: anyNamed('body'),
-        ));
+        verifyNever(
+          mockDisplay.show(title: anyNamed('title'), body: anyNamed('body')),
+        );
       });
     });
 

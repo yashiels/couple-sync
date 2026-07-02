@@ -23,41 +23,41 @@ class BlockFormScreen extends ConsumerStatefulWidget {
 class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
-  
+
   TimeBlockType _type = TimeBlockType.busy;
   TimeBlockCategory _category = TimeBlockCategory.other;
   TimeBlockVisibility _visibility = TimeBlockVisibility.bothPartners;
-  
+
   late DateTime _startDate;
   late TimeOfDay _startTime;
   late DateTime _endDate;
   late TimeOfDay _endTime;
-  
+
   String _timezone = 'UTC';
   String? _recurrenceRule;
-  
+
   bool _isLoading = false;
   bool _isDeleting = false;
   String? _error;
-  
+
   TimeBlock? _existingBlock;
 
   @override
   void initState() {
     super.initState();
-    
+
     // Initialize dates
     final now = DateTime.now();
     _startDate = widget.args?.initialDate ?? now;
     _startTime = TimeOfDay.fromDateTime(_startDate);
     _endDate = _startDate.add(const Duration(hours: 1));
     _endTime = TimeOfDay.fromDateTime(_endDate);
-    
+
     // Load existing block if editing
     if (widget.args?.blockId != null) {
       _loadBlock();
     }
-    
+
     // Set timezone from user profile
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final profile = ref.read(authStateProvider).profile;
@@ -79,7 +79,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
   Future<void> _loadBlock() async {
     final blockId = widget.args?.blockId;
     if (blockId == null) return;
-    
+
     final profile = ref.read(authStateProvider).profile;
     if (profile?.coupleId == null) {
       setState(() {
@@ -87,7 +87,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
       });
       return;
     }
-    
+
     setState(() {
       _isLoading = true;
     });
@@ -155,33 +155,33 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
   /// Save the block (create or update)
   Future<void> _saveBlock() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     if (!_isEndTimeValid) {
       setState(() {
         _error = 'End time must be after start time';
       });
       return;
     }
-    
+
     final authState = ref.read(authStateProvider);
     final uid = authState.uid;
     final profile = authState.profile;
-    
+
     if (uid == null || profile?.coupleId == null) {
       setState(() {
         _error = 'Not authenticated or not in a couple';
       });
       return;
     }
-    
+
     setState(() {
       _isLoading = true;
       _error = null;
     });
-    
+
     try {
       final syncService = ref.read(syncServiceProvider);
-      
+
       final block = TimeBlock(
         userId: uid,
         title: _titleController.text.trim(),
@@ -195,7 +195,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
         visibility: _visibility,
         createdAt: _existingBlock?.createdAt ?? DateTime.now().toUtc(),
       );
-      
+
       if (_existingBlock != null) {
         // Update existing block
         await syncService.updateBlock(
@@ -207,7 +207,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
         // Create new block
         await syncService.createBlock(profile!.coupleId!, block);
       }
-      
+
       if (mounted) {
         Navigator.of(context).pop(true); // Return true to indicate success
       }
@@ -222,12 +222,14 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
   /// Delete the block with confirmation
   Future<void> _deleteBlock() async {
     if (_existingBlock == null) return;
-    
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Block'),
-        content: const Text('Are you sure you want to delete this time block? This action cannot be undone.'),
+        content: const Text(
+          'Are you sure you want to delete this time block? This action cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -241,24 +243,21 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
         ],
       ),
     );
-    
+
     if (confirmed != true) return;
-    
+
     final profile = ref.read(authStateProvider).profile;
     if (profile?.coupleId == null || widget.args?.blockId == null) return;
-    
+
     setState(() {
       _isDeleting = true;
       _error = null;
     });
-    
+
     try {
       final syncService = ref.read(syncServiceProvider);
-      await syncService.deleteBlock(
-        profile!.coupleId!,
-        widget.args!.blockId!,
-      );
-      
+      await syncService.deleteBlock(profile!.coupleId!, widget.args!.blockId!);
+
       if (mounted) {
         Navigator.of(context).pop(true);
       }
@@ -273,7 +272,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.args?.blockId != null;
-    
+
     return Scaffold(
       appBar: AppBar(
         title: Text(isEditing ? 'Edit Block' : 'New Block'),
@@ -367,7 +366,8 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                       }).toList(),
                       onChanged: (value) {
                         setState(() {
-                          _visibility = value ?? TimeBlockVisibility.bothPartners;
+                          _visibility =
+                              value ?? TimeBlockVisibility.bothPartners;
                         });
                       },
                     ),
@@ -384,15 +384,17 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                         Expanded(
                           child: OutlinedButton.icon(
                             icon: const Icon(Icons.calendar_today),
-                            label: Text(
-                              formatDateYMd(_startDate),
-                            ),
+                            label: Text(formatDateYMd(_startDate)),
                             onPressed: () async {
                               final date = await showDatePicker(
                                 context: context,
                                 initialDate: _startDate,
-                                firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                                firstDate: DateTime.now().subtract(
+                                  const Duration(days: 365),
+                                ),
+                                lastDate: DateTime.now().add(
+                                  const Duration(days: 365),
+                                ),
                               );
                               if (date != null) {
                                 setState(() {
@@ -406,9 +408,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                         Expanded(
                           child: OutlinedButton.icon(
                             icon: const Icon(Icons.access_time),
-                            label: Text(
-                              _startTime.format(context),
-                            ),
+                            label: Text(_startTime.format(context)),
                             onPressed: () async {
                               final time = await showTimePicker(
                                 context: context,
@@ -427,25 +427,24 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                     const SizedBox(height: 16),
 
                     // End date/time
-                    Text(
-                      'End',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
+                    Text('End', style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
                     Row(
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
                             icon: const Icon(Icons.calendar_today),
-                            label: Text(
-                              formatDateYMd(_endDate),
-                            ),
+                            label: Text(formatDateYMd(_endDate)),
                             onPressed: () async {
                               final date = await showDatePicker(
                                 context: context,
                                 initialDate: _endDate,
-                                firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                                firstDate: DateTime.now().subtract(
+                                  const Duration(days: 365),
+                                ),
+                                lastDate: DateTime.now().add(
+                                  const Duration(days: 365),
+                                ),
                               );
                               if (date != null) {
                                 setState(() {
@@ -459,9 +458,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                         Expanded(
                           child: OutlinedButton.icon(
                             icon: const Icon(Icons.access_time),
-                            label: Text(
-                              _endTime.format(context),
-                            ),
+                            label: Text(_endTime.format(context)),
                             onPressed: () async {
                               final time = await showTimePicker(
                                 context: context,
@@ -477,7 +474,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                         ),
                       ],
                     ),
-                    
+
                     // End time validation error
                     if (!_isEndTimeValid)
                       Padding(
@@ -543,7 +540,9 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _isLoading || _isDeleting ? null : _saveBlock,
+                        onPressed: _isLoading || _isDeleting
+                            ? null
+                            : _saveBlock,
                         child: _isLoading
                             ? const SizedBox(
                                 height: 20,

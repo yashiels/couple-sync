@@ -81,9 +81,7 @@ class _MyAppState extends ConsumerState<MyApp> {
 
     // Consume any pending FCM route once auth settles as authenticated.
     ref.listen<AuthState>(authStateProvider, (prev, next) {
-      if (_pendingFcmRoute != null &&
-          next.isAuthenticated &&
-          !next.isLoading) {
+      if (_pendingFcmRoute != null && next.isAuthenticated && !next.isLoading) {
         final route = _pendingFcmRoute!;
         _pendingFcmRoute = null;
         router.go(route);

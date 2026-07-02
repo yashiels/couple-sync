@@ -72,8 +72,9 @@ void main() {
       expect(find.text('Partner'), findsNothing);
     });
 
-    testWidgets('displays "Partner" when isCurrentUser is false',
-        (tester) async {
+    testWidgets('displays "Partner" when isCurrentUser is false', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _buildSubject(block: _makeBlock(), isCurrentUser: false),
       );
@@ -84,9 +85,7 @@ void main() {
 
     testWidgets('displays Manual badge for manual source', (tester) async {
       await tester.pumpWidget(
-        _buildSubject(
-          block: _makeBlock(source: TimeBlockSource.manual),
-        ),
+        _buildSubject(block: _makeBlock(source: TimeBlockSource.manual)),
       );
 
       expect(find.text('Manual'), findsOneWidget);
@@ -95,9 +94,7 @@ void main() {
 
     testWidgets('displays Google badge for google source', (tester) async {
       await tester.pumpWidget(
-        _buildSubject(
-          block: _makeBlock(source: TimeBlockSource.google),
-        ),
+        _buildSubject(block: _makeBlock(source: TimeBlockSource.google)),
       );
 
       expect(find.text('Google'), findsOneWidget);
@@ -113,10 +110,7 @@ void main() {
     testWidgets('calls onTap when tapped', (tester) async {
       var tapped = false;
       await tester.pumpWidget(
-        _buildSubject(
-          block: _makeBlock(),
-          onTap: () => tapped = true,
-        ),
+        _buildSubject(block: _makeBlock(), onTap: () => tapped = true),
       );
 
       await tester.tap(find.byType(InkWell));

@@ -8,20 +8,14 @@ class BlocksScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Time Blocks'),
-      ),
+      appBar: AppBar(title: const Text('Time Blocks')),
       body: const Center(
         child: Padding(
           padding: EdgeInsets.all(24.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.view_list,
-                size: 64,
-                color: Colors.grey,
-              ),
+              Icon(Icons.view_list, size: 64, color: Colors.grey),
               SizedBox(height: 24),
               Text(
                 'Block Management',

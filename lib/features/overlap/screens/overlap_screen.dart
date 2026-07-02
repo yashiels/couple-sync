@@ -33,8 +33,9 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
 
     // Apply filters
     if (_minDurationMinutes != null) {
-      result =
-          result.where((w) => w.durationMinutes >= _minDurationMinutes!).toList();
+      result = result
+          .where((w) => w.durationMinutes >= _minDurationMinutes!)
+          .toList();
     }
 
     if (_minScore != null) {
@@ -165,9 +166,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
                 const SizedBox(height: 24),
                 FilledButton.icon(
                   onPressed: () {
-                    final id = ref
-                        .read(currentUserProfileProvider)
-                        ?.coupleId;
+                    final id = ref.read(currentUserProfileProvider)?.coupleId;
                     if (id != null) {
                       ref.invalidate(overlapControllerProvider(id));
                     }
@@ -198,37 +197,39 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
           body: allWindows.isEmpty
               ? _buildNoOverlapsState(theme)
               : windows.isEmpty
-                  ? _buildEmptyState(theme)
-                  : Column(
-                      children: [
-                        // Filter summary bar
-                        _buildFilterSummary(theme),
+              ? _buildEmptyState(theme)
+              : Column(
+                  children: [
+                    // Filter summary bar
+                    _buildFilterSummary(theme),
 
-                        // Hint when the 10-window cap is active
-                        if (windows.length == 10)
-                          _buildCapHint(theme),
+                    // Hint when the 10-window cap is active
+                    if (windows.length == 10) _buildCapHint(theme),
 
-                        // Windows list
-                        Expanded(
-                          child: ListView.builder(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: windows.length,
-                            itemBuilder: (context, index) {
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: WindowCardWidget(
-                                  window: windows[index],
-                                  userTimezone: userTimezone,
-                                  partnerTimezone: partnerTimezone,
-                                  onTap: () => _showWindowDetails(
-                                      windows[index], userTimezone, partnerTimezone),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
+                    // Windows list
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: windows.length,
+                        itemBuilder: (context, index) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: WindowCardWidget(
+                              window: windows[index],
+                              userTimezone: userTimezone,
+                              partnerTimezone: partnerTimezone,
+                              onTap: () => _showWindowDetails(
+                                windows[index],
+                                userTimezone,
+                                partnerTimezone,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
+                  ],
+                ),
         );
       },
     );
@@ -348,9 +349,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
         border: Border(
-          bottom: BorderSide(
-            color: theme.colorScheme.outlineVariant,
-          ),
+          bottom: BorderSide(color: theme.colorScheme.outlineVariant),
         ),
       ),
       child: Row(
@@ -377,8 +376,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
                   FilterChip(
                     label: Text('Min score ${_minScore!.round()}'),
                     selected: true,
-                    onSelected: (_) =>
-                        setState(() => _minScore = null),
+                    onSelected: (_) => setState(() => _minScore = null),
                   ),
               ],
             ),
@@ -436,10 +434,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
                 const SizedBox(height: 24),
 
                 // Sort By
-                Text(
-                  'Sort By',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
+                Text('Sort By', style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -462,7 +457,9 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
               FilledButton(
                 onPressed: () {
                   Navigator.of(context).pop();
-                  setState(() {}); // refresh filter summary + list with new filters
+                  setState(
+                    () {},
+                  ); // refresh filter summary + list with new filters
                 },
                 child: const Text('Apply'),
               ),
@@ -474,7 +471,10 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
   }
 
   Widget _buildDurationChoice(
-      int? minutes, String label, StateSetter setDialogState) {
+    int? minutes,
+    String label,
+    StateSetter setDialogState,
+  ) {
     final isSelected = _minDurationMinutes == minutes;
     return ChoiceChip(
       label: Text(label),
@@ -486,7 +486,10 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
   }
 
   Widget _buildScoreChoice(
-      double? score, String label, StateSetter setDialogState) {
+    double? score,
+    String label,
+    StateSetter setDialogState,
+  ) {
     final isSelected = _minScore == score;
     return ChoiceChip(
       label: Text(label),
@@ -498,7 +501,10 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
   }
 
   Widget _buildSortChoice(
-      String sortBy, String label, StateSetter setDialogState) {
+    String sortBy,
+    String label,
+    StateSetter setDialogState,
+  ) {
     final isSelected = _sortBy == sortBy;
     return ChoiceChip(
       label: Text(label),
@@ -512,8 +518,11 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
     );
   }
 
-  void _showWindowDetails(OverlapWindow window, String userTimezone,
-      String partnerTimezone) {
+  void _showWindowDetails(
+    OverlapWindow window,
+    String userTimezone,
+    String partnerTimezone,
+  ) {
     showDialog(
       context: context,
       builder: (context) => WindowDetailDialog(

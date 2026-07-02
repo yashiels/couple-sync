@@ -21,8 +21,9 @@ final partnerProfileProvider = FutureProvider<UserModel?>((ref) {
   final couple = ref.watch(coupleProvider).valueOrNull;
   final myUid = ref.watch(currentUserIdProvider);
   if (couple == null || myUid == null) return null;
-  final partnerId =
-      couple.userAUid == myUid ? couple.userBUid : couple.userAUid;
+  final partnerId = couple.userAUid == myUid
+      ? couple.userBUid
+      : couple.userAUid;
   return ref.watch(syncServiceProvider).getUserByUid(partnerId);
 });
 
@@ -32,10 +33,9 @@ final userBlocksProvider = StreamProvider<List<TimeBlock>>((ref) {
   final profile = ref.watch(currentUserProfileProvider);
   final myUid = ref.watch(currentUserIdProvider);
   if (profile?.coupleId == null || myUid == null) return Stream.value([]);
-  return ref.watch(syncServiceProvider).watchBlocks(
-        profile!.coupleId!,
-        userId: myUid,
-      );
+  return ref
+      .watch(syncServiceProvider)
+      .watchBlocks(profile!.coupleId!, userId: myUid);
 });
 
 /// Real-time stream of the partner's time blocks.
@@ -47,12 +47,12 @@ final partnerBlocksProvider = StreamProvider<List<TimeBlock>>((ref) {
   if (couple == null || myUid == null || profile?.coupleId == null) {
     return Stream.value([]);
   }
-  final partnerId =
-      couple.userAUid == myUid ? couple.userBUid : couple.userAUid;
-  return ref.watch(syncServiceProvider).watchBlocks(
-        profile!.coupleId!,
-        userId: partnerId,
-      );
+  final partnerId = couple.userAUid == myUid
+      ? couple.userBUid
+      : couple.userAUid;
+  return ref
+      .watch(syncServiceProvider)
+      .watchBlocks(profile!.coupleId!, userId: partnerId);
 });
 
 /// Real-time stream of overlap computation results.

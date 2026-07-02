@@ -17,9 +17,9 @@ class AuthService {
     FirebaseAuth? auth,
     required GoogleSignIn googleSignIn,
     required SyncService syncService,
-  })  : _auth = auth ?? FirebaseAuth.instance,
-        _googleSignIn = googleSignIn,
-        _syncService = syncService;
+  }) : _auth = auth ?? FirebaseAuth.instance,
+       _googleSignIn = googleSignIn,
+       _syncService = syncService;
 
   /// Stream of authentication state changes from Firebase.
   Stream<User?> get authStateChanges => _auth.authStateChanges();
@@ -58,8 +58,9 @@ class AuthService {
       );
 
       // Sign in to Firebase with the Google credential
-      final UserCredential userCredential =
-          await _auth.signInWithCredential(credential);
+      final UserCredential userCredential = await _auth.signInWithCredential(
+        credential,
+      );
 
       final user = userCredential.user;
       if (user == null) {
@@ -111,11 +112,11 @@ class AuthService {
       // Request Apple credential
       final AuthorizationCredentialAppleID appleCredential =
           await SignInWithApple.getAppleIDCredential(
-        scopes: [
-          AppleIDAuthorizationScopes.email,
-          AppleIDAuthorizationScopes.fullName,
-        ],
-      );
+            scopes: [
+              AppleIDAuthorizationScopes.email,
+              AppleIDAuthorizationScopes.fullName,
+            ],
+          );
 
       // Create an OAuthCredential from the Apple credential
       final OAuthCredential credential = OAuthProvider('apple.com').credential(
@@ -124,8 +125,9 @@ class AuthService {
       );
 
       // Sign in to Firebase with the Apple credential
-      final UserCredential userCredential =
-          await _auth.signInWithCredential(credential);
+      final UserCredential userCredential = await _auth.signInWithCredential(
+        credential,
+      );
 
       final user = userCredential.user;
       if (user == null) {
@@ -142,9 +144,10 @@ class AuthService {
         final familyName = appleCredential.familyName;
 
         if (givenName != null || familyName != null) {
-          final displayName = [givenName, familyName]
-              .where((n) => n != null && n.isNotEmpty)
-              .join(' ');
+          final displayName = [
+            givenName,
+            familyName,
+          ].where((n) => n != null && n.isNotEmpty).join(' ');
 
           if (displayName.isNotEmpty) {
             await user.updateDisplayName(displayName);
@@ -251,7 +254,8 @@ class AuthService {
     } catch (e) {
       throw AuthException(
         code: 'unknown-error',
-        message: 'An unexpected error occurred during sign out. Please try again.',
+        message:
+            'An unexpected error occurred during sign out. Please try again.',
       );
     }
   }
@@ -263,14 +267,16 @@ class AuthService {
   /// authenticated; the profile sync is retried on the next sign-in.
   Future<void> _createOrUpdateUserDocument(User user) async {
     try {
-      await _syncService.upsertUser(UserModel(
-        email: user.email ?? '',
-        displayName: user.displayName ?? '',
-        photoUrl: user.photoURL,
-        timezone: '', // preserved on the backend for existing users
-        fcmTokens: const [],
-        createdAt: DateTime.now().toUtc(),
-      ));
+      await _syncService.upsertUser(
+        UserModel(
+          email: user.email ?? '',
+          displayName: user.displayName ?? '',
+          photoUrl: user.photoURL,
+          timezone: '', // preserved on the backend for existing users
+          fcmTokens: const [],
+          createdAt: DateTime.now().toUtc(),
+        ),
+      );
     } catch (_) {
       // Swallow — the user is still authenticated; profile sync retries later.
     }
@@ -319,10 +325,7 @@ class AuthException implements Exception {
   final String code;
   final String message;
 
-  const AuthException({
-    required this.code,
-    required this.message,
-  });
+  const AuthException({required this.code, required this.message});
 
   @override
   String toString() => 'AuthException($code): $message';

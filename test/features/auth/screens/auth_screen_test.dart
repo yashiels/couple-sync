@@ -12,12 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
-@GenerateMocks([
-  FirebaseAuth,
-  AuthService,
-  SyncService,
-  User,
-])
+@GenerateMocks([FirebaseAuth, AuthService, SyncService, User])
 import 'auth_screen_test.mocks.dart';
 
 /// Creates an AuthStateNotifier with injectable mocks. V7 constructor:
@@ -54,9 +49,7 @@ Future<void> _pumpAuthScreen(
         authStateProvider.overrideWith((_) => notifier),
         syncServiceProvider.overrideWithValue(syncService),
       ],
-      child: const MaterialApp(
-        home: AuthScreen(),
-      ),
+      child: const MaterialApp(home: AuthScreen()),
     ),
   );
   // Let post-frame callbacks (clearError) execute
@@ -87,7 +80,11 @@ void main() {
         syncService: mockSyncService,
       );
 
-      await _pumpAuthScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpAuthScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       expect(find.text('Couple Sync'), findsOneWidget);
       expect(
@@ -103,7 +100,11 @@ void main() {
         syncService: mockSyncService,
       );
 
-      await _pumpAuthScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpAuthScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       expect(find.byIcon(Icons.favorite), findsOneWidget);
     });
@@ -115,7 +116,11 @@ void main() {
         syncService: mockSyncService,
       );
 
-      await _pumpAuthScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpAuthScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       expect(find.text('Continue with Google'), findsOneWidget);
       expect(find.text('Continue with Apple'), findsOneWidget);
@@ -128,7 +133,11 @@ void main() {
         syncService: mockSyncService,
       );
 
-      await _pumpAuthScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpAuthScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       expect(
         find.text(
@@ -146,7 +155,11 @@ void main() {
         syncService: mockSyncService,
       );
 
-      await _pumpAuthScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpAuthScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       expect(find.byIcon(Icons.apple), findsOneWidget);
     });
@@ -158,17 +171,21 @@ void main() {
         syncService: mockSyncService,
       );
 
-      await _pumpAuthScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpAuthScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       expect(find.byIcon(Icons.error_outline), findsNothing);
     });
   });
 
   group('AuthScreen sign-in behavior', () {
-    testWidgets('tapping Google button calls signInWithGoogle',
-        (tester) async {
-      when(mockAuthService.signInWithGoogle())
-          .thenAnswer((_) async => MockUser());
+    testWidgets('tapping Google button calls signInWithGoogle', (tester) async {
+      when(
+        mockAuthService.signInWithGoogle(),
+      ).thenAnswer((_) async => MockUser());
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -176,7 +193,11 @@ void main() {
         syncService: mockSyncService,
       );
 
-      await _pumpAuthScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpAuthScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       await tester.tap(find.text('Continue with Google'));
       await tester.pump();
@@ -185,8 +206,9 @@ void main() {
     });
 
     testWidgets('tapping Apple button calls signInWithApple', (tester) async {
-      when(mockAuthService.signInWithApple())
-          .thenAnswer((_) async => MockUser());
+      when(
+        mockAuthService.signInWithApple(),
+      ).thenAnswer((_) async => MockUser());
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -194,7 +216,11 @@ void main() {
         syncService: mockSyncService,
       );
 
-      await _pumpAuthScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpAuthScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       await tester.tap(find.text('Continue with Apple'));
       await tester.pump();
@@ -202,10 +228,12 @@ void main() {
       verify(mockAuthService.signInWithApple()).called(1);
     });
 
-    testWidgets('shows error message when Google sign-in fails',
-        (tester) async {
-      when(mockAuthService.signInWithGoogle())
-          .thenThrow(AuthException(code: 'test', message: 'Google sign-in failed'));
+    testWidgets('shows error message when Google sign-in fails', (
+      tester,
+    ) async {
+      when(mockAuthService.signInWithGoogle()).thenThrow(
+        AuthException(code: 'test', message: 'Google sign-in failed'),
+      );
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -213,7 +241,11 @@ void main() {
         syncService: mockSyncService,
       );
 
-      await _pumpAuthScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpAuthScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       await tester.tap(find.text('Continue with Google'));
       await tester.pump();
@@ -222,10 +254,10 @@ void main() {
       expect(find.byIcon(Icons.error_outline), findsOneWidget);
     });
 
-    testWidgets('shows error message when Apple sign-in fails',
-        (tester) async {
-      when(mockAuthService.signInWithApple())
-          .thenThrow(AuthException(code: 'test', message: 'Apple sign-in failed'));
+    testWidgets('shows error message when Apple sign-in fails', (tester) async {
+      when(
+        mockAuthService.signInWithApple(),
+      ).thenThrow(AuthException(code: 'test', message: 'Apple sign-in failed'));
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -233,7 +265,11 @@ void main() {
         syncService: mockSyncService,
       );
 
-      await _pumpAuthScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpAuthScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       await tester.tap(find.text('Continue with Apple'));
       await tester.pump();
@@ -242,8 +278,9 @@ void main() {
     });
 
     testWidgets('dismiss button clears error message', (tester) async {
-      when(mockAuthService.signInWithGoogle())
-          .thenThrow(AuthException(code: 'test', message: 'Sign-in error'));
+      when(
+        mockAuthService.signInWithGoogle(),
+      ).thenThrow(AuthException(code: 'test', message: 'Sign-in error'));
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -251,7 +288,11 @@ void main() {
         syncService: mockSyncService,
       );
 
-      await _pumpAuthScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpAuthScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       // Trigger error
       await tester.tap(find.text('Continue with Google'));
@@ -265,11 +306,13 @@ void main() {
       expect(find.text('Sign-in error'), findsNothing);
     });
 
-    testWidgets('shows loading indicator during Google sign-in',
-        (tester) async {
+    testWidgets('shows loading indicator during Google sign-in', (
+      tester,
+    ) async {
       final completer = Completer<User>();
-      when(mockAuthService.signInWithGoogle())
-          .thenAnswer((_) => completer.future);
+      when(
+        mockAuthService.signInWithGoogle(),
+      ).thenAnswer((_) => completer.future);
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -277,7 +320,11 @@ void main() {
         syncService: mockSyncService,
       );
 
-      await _pumpAuthScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpAuthScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       await tester.tap(find.text('Continue with Google'));
       await tester.pump();
@@ -291,11 +338,11 @@ void main() {
       await tester.pump();
     });
 
-    testWidgets('shows loading indicator during Apple sign-in',
-        (tester) async {
+    testWidgets('shows loading indicator during Apple sign-in', (tester) async {
       final completer = Completer<User>();
-      when(mockAuthService.signInWithApple())
-          .thenAnswer((_) => completer.future);
+      when(
+        mockAuthService.signInWithApple(),
+      ).thenAnswer((_) => completer.future);
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -303,7 +350,11 @@ void main() {
         syncService: mockSyncService,
       );
 
-      await _pumpAuthScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpAuthScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       await tester.tap(find.text('Continue with Apple'));
       await tester.pump();
@@ -317,12 +368,13 @@ void main() {
       await tester.pump();
     });
 
-    testWidgets(
-        'prevents double-tap on Google button while loading',
-        (tester) async {
+    testWidgets('prevents double-tap on Google button while loading', (
+      tester,
+    ) async {
       final completer = Completer<User>();
-      when(mockAuthService.signInWithGoogle())
-          .thenAnswer((_) => completer.future);
+      when(
+        mockAuthService.signInWithGoogle(),
+      ).thenAnswer((_) => completer.future);
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -330,7 +382,11 @@ void main() {
         syncService: mockSyncService,
       );
 
-      await _pumpAuthScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpAuthScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       // First tap
       await tester.tap(find.text('Continue with Google'));
@@ -350,12 +406,13 @@ void main() {
       await tester.pump();
     });
 
-    testWidgets(
-        'prevents tapping Apple button while Google is loading',
-        (tester) async {
+    testWidgets('prevents tapping Apple button while Google is loading', (
+      tester,
+    ) async {
       final completer = Completer<User>();
-      when(mockAuthService.signInWithGoogle())
-          .thenAnswer((_) => completer.future);
+      when(
+        mockAuthService.signInWithGoogle(),
+      ).thenAnswer((_) => completer.future);
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -363,7 +420,11 @@ void main() {
         syncService: mockSyncService,
       );
 
-      await _pumpAuthScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpAuthScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       // Tap Google first
       await tester.tap(find.text('Continue with Google'));

@@ -45,11 +45,7 @@ class _EnterCodeTabState extends ConsumerState<EnterCodeTab> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.vpn_key_outlined,
-            size: 64,
-            color: Colors.grey,
-          ),
+          const Icon(Icons.vpn_key_outlined, size: 64, color: Colors.grey),
           const SizedBox(height: 24),
           Text(
             'Enter Partner\'s Code',
@@ -141,7 +137,9 @@ class _EnterCodeTabState extends ConsumerState<EnterCodeTab> {
                 Flexible(
                   child: Text(
                     _error!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -201,15 +199,13 @@ class _EnterCodeTabState extends ConsumerState<EnterCodeTab> {
         case 'http-409':
           // Expired / own code / already paired — backend returns 409 with a
           // message; surface a generic but accurate hint.
-          errorMessage = (e.originalError?.toString() ?? '')
-                  .contains('expired')
+          errorMessage = (e.originalError?.toString() ?? '').contains('expired')
               ? 'This invite code has expired'
               : (e.originalError?.toString() ?? '').contains('own code')
-                  ? 'You cannot redeem your own code'
-                  : (e.originalError?.toString() ?? '')
-                          .contains('already paired')
-                      ? 'You are already paired with a partner'
-                      : 'This invite code is no longer valid';
+              ? 'You cannot redeem your own code'
+              : (e.originalError?.toString() ?? '').contains('already paired')
+              ? 'You are already paired with a partner'
+              : 'This invite code is no longer valid';
           break;
         case 'http-401':
           errorMessage = 'You do not have permission to redeem this code';

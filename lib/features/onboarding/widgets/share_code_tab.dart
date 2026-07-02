@@ -27,11 +27,7 @@ class _ShareCodeTabState extends ConsumerState<ShareCodeTab> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.people_outline,
-            size: 64,
-            color: Colors.grey,
-          ),
+          const Icon(Icons.people_outline, size: 64, color: Colors.grey),
           const SizedBox(height: 24),
           Text(
             'Share Your Code',
@@ -74,10 +70,7 @@ class _ShareCodeTabState extends ConsumerState<ShareCodeTab> {
           // Display Code
           if (_inviteCode != null) ...[
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 32,
-                vertical: 24,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.primaryContainer,
                 borderRadius: BorderRadius.circular(12),
@@ -170,7 +163,7 @@ class _ShareCodeTabState extends ConsumerState<ShareCodeTab> {
     if (_inviteCode == null) return;
 
     await Clipboard.setData(ClipboardData(text: _inviteCode!));
-    
+
     setState(() {
       _showCopyConfirmation = true;
     });

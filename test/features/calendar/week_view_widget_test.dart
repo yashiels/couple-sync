@@ -116,83 +116,98 @@ void main() {
     });
 
     testWidgets('renders user blocks as BlockEventWidget', (tester) async {
-      final blockStart =
-          _testMonday.add(const Duration(hours: 9)).millisecondsSinceEpoch;
-      final blockEnd =
-          _testMonday.add(const Duration(hours: 10)).millisecondsSinceEpoch;
+      final blockStart = _testMonday
+          .add(const Duration(hours: 9))
+          .millisecondsSinceEpoch;
+      final blockEnd = _testMonday
+          .add(const Duration(hours: 10))
+          .millisecondsSinceEpoch;
 
-      await tester.pumpWidget(_buildSubject(
-        initialWeek: _testMonday,
-        userBlocks: [_makeBlock(startUtc: blockStart, endUtc: blockEnd)],
-      ));
+      await tester.pumpWidget(
+        _buildSubject(
+          initialWeek: _testMonday,
+          userBlocks: [_makeBlock(startUtc: blockStart, endUtc: blockEnd)],
+        ),
+      );
 
       expect(find.byType(BlockEventWidget), findsOneWidget);
       expect(find.text('Work'), findsOneWidget);
     });
 
     testWidgets('renders partner blocks', (tester) async {
-      final blockStart =
-          _testMonday.add(const Duration(hours: 14)).millisecondsSinceEpoch;
-      final blockEnd =
-          _testMonday.add(const Duration(hours: 16)).millisecondsSinceEpoch;
+      final blockStart = _testMonday
+          .add(const Duration(hours: 14))
+          .millisecondsSinceEpoch;
+      final blockEnd = _testMonday
+          .add(const Duration(hours: 16))
+          .millisecondsSinceEpoch;
 
-      await tester.pumpWidget(_buildSubject(
-        initialWeek: _testMonday,
-        partnerBlocks: [
-          _makeBlock(
-            userId: 'partner_1',
-            title: 'Partner Meeting',
-            startUtc: blockStart,
-            endUtc: blockEnd,
-          ),
-        ],
-      ));
+      await tester.pumpWidget(
+        _buildSubject(
+          initialWeek: _testMonday,
+          partnerBlocks: [
+            _makeBlock(
+              userId: 'partner_1',
+              title: 'Partner Meeting',
+              startUtc: blockStart,
+              endUtc: blockEnd,
+            ),
+          ],
+        ),
+      );
 
       expect(find.text('Partner Meeting'), findsOneWidget);
     });
 
     testWidgets('renders overlap windows with heart icon', (tester) async {
-      final overlapStart =
-          _testMonday.add(const Duration(hours: 17)).millisecondsSinceEpoch;
-      final overlapEnd =
-          _testMonday.add(const Duration(hours: 18)).millisecondsSinceEpoch;
+      final overlapStart = _testMonday
+          .add(const Duration(hours: 17))
+          .millisecondsSinceEpoch;
+      final overlapEnd = _testMonday
+          .add(const Duration(hours: 18))
+          .millisecondsSinceEpoch;
 
-      await tester.pumpWidget(_buildSubject(
-        initialWeek: _testMonday,
-        overlapWindows: [
-          _makeOverlap(startUtc: overlapStart, endUtc: overlapEnd),
-        ],
-      ));
+      await tester.pumpWidget(
+        _buildSubject(
+          initialWeek: _testMonday,
+          overlapWindows: [
+            _makeOverlap(startUtc: overlapStart, endUtc: overlapEnd),
+          ],
+        ),
+      );
 
       expect(find.byIcon(Icons.favorite), findsOneWidget);
     });
 
     testWidgets('renders in dark theme without errors', (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        initialWeek: _testMonday,
-        brightness: Brightness.dark,
-      ));
+      await tester.pumpWidget(
+        _buildSubject(initialWeek: _testMonday, brightness: Brightness.dark),
+      );
 
       expect(find.byType(WeekViewWidget), findsOneWidget);
     });
 
     testWidgets('tapping overlap shows detail dialog', (tester) async {
-      final overlapStart =
-          _testMonday.add(const Duration(hours: 10)).millisecondsSinceEpoch;
-      final overlapEnd =
-          _testMonday.add(const Duration(hours: 11)).millisecondsSinceEpoch;
+      final overlapStart = _testMonday
+          .add(const Duration(hours: 10))
+          .millisecondsSinceEpoch;
+      final overlapEnd = _testMonday
+          .add(const Duration(hours: 11))
+          .millisecondsSinceEpoch;
 
-      await tester.pumpWidget(_buildSubject(
-        initialWeek: _testMonday,
-        overlapWindows: [
-          _makeOverlap(
-            startUtc: overlapStart,
-            endUtc: overlapEnd,
-            durationMinutes: 60,
-            score: 9.0,
-          ),
-        ],
-      ));
+      await tester.pumpWidget(
+        _buildSubject(
+          initialWeek: _testMonday,
+          overlapWindows: [
+            _makeOverlap(
+              startUtc: overlapStart,
+              endUtc: overlapEnd,
+              durationMinutes: 60,
+              score: 9.0,
+            ),
+          ],
+        ),
+      );
 
       // Scroll to make the overlap visible before tapping
       await tester.ensureVisible(find.byIcon(Icons.favorite));
@@ -207,15 +222,19 @@ void main() {
     });
 
     testWidgets('tapping block shows block detail dialog', (tester) async {
-      final blockStart =
-          _testMonday.add(const Duration(hours: 9)).millisecondsSinceEpoch;
-      final blockEnd =
-          _testMonday.add(const Duration(hours: 10)).millisecondsSinceEpoch;
+      final blockStart = _testMonday
+          .add(const Duration(hours: 9))
+          .millisecondsSinceEpoch;
+      final blockEnd = _testMonday
+          .add(const Duration(hours: 10))
+          .millisecondsSinceEpoch;
 
-      await tester.pumpWidget(_buildSubject(
-        initialWeek: _testMonday,
-        userBlocks: [_makeBlock(startUtc: blockStart, endUtc: blockEnd)],
-      ));
+      await tester.pumpWidget(
+        _buildSubject(
+          initialWeek: _testMonday,
+          userBlocks: [_makeBlock(startUtc: blockStart, endUtc: blockEnd)],
+        ),
+      );
 
       await tester.ensureVisible(find.byType(BlockEventWidget));
       await tester.pumpAndSettle();
@@ -239,95 +258,118 @@ void main() {
       expect(find.text(noon), findsOneWidget);
     });
 
-    testWidgets('does not render blocks outside of visible week',
-        (tester) async {
+    testWidgets('does not render blocks outside of visible week', (
+      tester,
+    ) async {
       // Block on a different week entirely
       final otherWeek = _testMonday.subtract(const Duration(days: 14));
-      final blockStart =
-          otherWeek.add(const Duration(hours: 9)).millisecondsSinceEpoch;
-      final blockEnd =
-          otherWeek.add(const Duration(hours: 10)).millisecondsSinceEpoch;
+      final blockStart = otherWeek
+          .add(const Duration(hours: 9))
+          .millisecondsSinceEpoch;
+      final blockEnd = otherWeek
+          .add(const Duration(hours: 10))
+          .millisecondsSinceEpoch;
 
-      await tester.pumpWidget(_buildSubject(
-        initialWeek: _testMonday,
-        userBlocks: [
-          _makeBlock(title: 'Old Block', startUtc: blockStart, endUtc: blockEnd)
-        ],
-      ));
+      await tester.pumpWidget(
+        _buildSubject(
+          initialWeek: _testMonday,
+          userBlocks: [
+            _makeBlock(
+              title: 'Old Block',
+              startUtc: blockStart,
+              endUtc: blockEnd,
+            ),
+          ],
+        ),
+      );
 
       expect(find.text('Old Block'), findsNothing);
     });
 
     testWidgets(
-        'cross-midnight block renders without throwing and has positive height',
-        (tester) async {
-      // Block starts 23:00 UTC Monday and ends 01:00 UTC Tuesday.
-      // startUtc → 23:00, endUtc → 01:00 next day.
-      // In the widget: startMinutes=1380, endMinutes=60.
-      // Since endMinutes < startMinutes, effectiveEnd clips to 1440,
-      // giving duration=60 min → height=60px (clamped to ≥20px).
-      final startUtc =
-          DateTime.utc(2024, 6, 10, 23, 0).millisecondsSinceEpoch;
-      final endUtc =
-          DateTime.utc(2024, 6, 11, 1, 0).millisecondsSinceEpoch;
+      'cross-midnight block renders without throwing and has positive height',
+      (tester) async {
+        // Block starts 23:00 UTC Monday and ends 01:00 UTC Tuesday.
+        // startUtc → 23:00, endUtc → 01:00 next day.
+        // In the widget: startMinutes=1380, endMinutes=60.
+        // Since endMinutes < startMinutes, effectiveEnd clips to 1440,
+        // giving duration=60 min → height=60px (clamped to ≥20px).
+        final startUtc = DateTime.utc(
+          2024,
+          6,
+          10,
+          23,
+          0,
+        ).millisecondsSinceEpoch;
+        final endUtc = DateTime.utc(2024, 6, 11, 1, 0).millisecondsSinceEpoch;
 
-      await tester.pumpWidget(_buildSubject(
-        initialWeek: _testMonday,
-        userBlocks: [
-          _makeBlock(
-            title: 'Late Night',
-            startUtc: startUtc,
-            endUtc: endUtc,
+        await tester.pumpWidget(
+          _buildSubject(
+            initialWeek: _testMonday,
+            userBlocks: [
+              _makeBlock(
+                title: 'Late Night',
+                startUtc: startUtc,
+                endUtc: endUtc,
+              ),
+            ],
           ),
-        ],
-      ));
+        );
 
-      // Widget must render without any exception
-      expect(find.byType(WeekViewWidget), findsOneWidget);
+        // Widget must render without any exception
+        expect(find.byType(WeekViewWidget), findsOneWidget);
 
-      // Cross-midnight block appears in both the start day and end day columns
-      expect(find.byType(BlockEventWidget), findsAtLeastNWidgets(1));
+        // Cross-midnight block appears in both the start day and end day columns
+        expect(find.byType(BlockEventWidget), findsAtLeastNWidgets(1));
 
-      // Measure the rendered height of the first block widget and verify it is positive
-      final renderBox = tester.renderObject<RenderBox>(
-        find.byType(BlockEventWidget).first,
-      );
-      expect(renderBox.size.height, greaterThan(0.0));
-    });
+        // Measure the rendered height of the first block widget and verify it is positive
+        final renderBox = tester.renderObject<RenderBox>(
+          find.byType(BlockEventWidget).first,
+        );
+        expect(renderBox.size.height, greaterThan(0.0));
+      },
+    );
 
     testWidgets(
-        'cross-midnight overlap window renders without throwing and has positive height',
-        (tester) async {
-      // Overlap starts 23:00 UTC Monday and ends 01:00 UTC Tuesday.
-      final startUtc =
-          DateTime.utc(2024, 6, 10, 23, 0).millisecondsSinceEpoch;
-      final endUtc =
-          DateTime.utc(2024, 6, 11, 1, 0).millisecondsSinceEpoch;
+      'cross-midnight overlap window renders without throwing and has positive height',
+      (tester) async {
+        // Overlap starts 23:00 UTC Monday and ends 01:00 UTC Tuesday.
+        final startUtc = DateTime.utc(
+          2024,
+          6,
+          10,
+          23,
+          0,
+        ).millisecondsSinceEpoch;
+        final endUtc = DateTime.utc(2024, 6, 11, 1, 0).millisecondsSinceEpoch;
 
-      await tester.pumpWidget(_buildSubject(
-        initialWeek: _testMonday,
-        overlapWindows: [
-          _makeOverlap(
-            startUtc: startUtc,
-            endUtc: endUtc,
-            durationMinutes: 120,
+        await tester.pumpWidget(
+          _buildSubject(
+            initialWeek: _testMonday,
+            overlapWindows: [
+              _makeOverlap(
+                startUtc: startUtc,
+                endUtc: endUtc,
+                durationMinutes: 120,
+              ),
+            ],
           ),
-        ],
-      ));
+        );
 
-      // Widget must render without any exception
-      expect(find.byType(WeekViewWidget), findsOneWidget);
+        // Widget must render without any exception
+        expect(find.byType(WeekViewWidget), findsOneWidget);
 
-      // Cross-midnight overlap appears in both the start day and end day columns
-      expect(find.byIcon(Icons.favorite), findsAtLeastNWidgets(1));
+        // Cross-midnight overlap appears in both the start day and end day columns
+        expect(find.byIcon(Icons.favorite), findsAtLeastNWidgets(1));
 
-      // Verify the overlap container has positive height
-      final overlapFinder = find.ancestor(
-        of: find.byIcon(Icons.favorite),
-        matching: find.byType(Container),
-      );
-      final renderBox = tester.renderObject<RenderBox>(overlapFinder.first);
-      expect(renderBox.size.height, greaterThan(0.0));
-    });
+        // Verify the overlap container has positive height
+        final overlapFinder = find.ancestor(
+          of: find.byIcon(Icons.favorite),
+          matching: find.byType(Container),
+        );
+        final renderBox = tester.renderObject<RenderBox>(overlapFinder.first);
+        expect(renderBox.size.height, greaterThan(0.0));
+      },
+    );
   });
 }

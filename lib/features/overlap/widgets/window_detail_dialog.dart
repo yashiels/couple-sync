@@ -31,8 +31,10 @@ class WindowDetailDialog extends StatelessWidget {
     final userEnd = tz.TZDateTime.from(window.endDateTime, userLocation);
 
     final partnerLocation = tz.getLocation(partnerTimezone);
-    final partnerStart =
-        tz.TZDateTime.from(window.startDateTime, partnerLocation);
+    final partnerStart = tz.TZDateTime.from(
+      window.startDateTime,
+      partnerLocation,
+    );
     final partnerEnd = tz.TZDateTime.from(window.endDateTime, partnerLocation);
 
     return AlertDialog(
@@ -137,10 +139,7 @@ class WindowDetailDialog extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                label,
-                style: theme.textTheme.bodySmall,
-              ),
+              Text(label, style: theme.textTheme.bodySmall),
               const SizedBox(height: 4),
               LinearProgressIndicator(
                 value: (score / 60).clamp(0.0, 1.0),

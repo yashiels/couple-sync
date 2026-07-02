@@ -11,14 +11,8 @@ void main() {
     // PairingScreen reads authStateProvider.uid in initState for the Firestore listener.
     // Override with a state that has no uid so the listener is skipped.
     return ProviderScope(
-      overrides: [
-        authStateProvider.overrideWith(
-          (ref) => _TestAuthNotifier(),
-        ),
-      ],
-      child: const MaterialApp(
-        home: PairingScreen(),
-      ),
+      overrides: [authStateProvider.overrideWith((ref) => _TestAuthNotifier())],
+      child: const MaterialApp(home: PairingScreen()),
     );
   }
 
@@ -45,8 +39,9 @@ void main() {
       expect(find.byType(ShareCodeTab), findsOneWidget);
     });
 
-    testWidgets('shows EnterCodeTab when Enter Code tab is tapped',
-        (tester) async {
+    testWidgets('shows EnterCodeTab when Enter Code tab is tapped', (
+      tester,
+    ) async {
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
 
@@ -84,11 +79,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Swipe left to go to Enter Code tab
-      await tester.fling(
-        find.byType(TabBarView),
-        const Offset(-300, 0),
-        1000,
-      );
+      await tester.fling(find.byType(TabBarView), const Offset(-300, 0), 1000);
       await tester.pumpAndSettle();
 
       expect(find.byType(EnterCodeTab), findsOneWidget);

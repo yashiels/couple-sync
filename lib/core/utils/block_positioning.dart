@@ -7,7 +7,8 @@ int localDayOffsetMinutes(int startUtc, String timezone) {
   final loc = getLocation(timezone);
   final t = TZDateTime.fromMillisecondsSinceEpoch(loc, startUtc);
   final midnight = TZDateTime(loc, t.year, t.month, t.day);
-  return ((t.millisecondsSinceEpoch - midnight.millisecondsSinceEpoch) ~/ 60000);
+  return ((t.millisecondsSinceEpoch - midnight.millisecondsSinceEpoch) ~/
+      60000);
 }
 
 /// Duration in minutes (clamped to a single local day for the grid).

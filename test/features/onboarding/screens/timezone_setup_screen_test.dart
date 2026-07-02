@@ -11,12 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
-@GenerateMocks([
-  FirebaseAuth,
-  AuthService,
-  SyncService,
-  User,
-])
+@GenerateMocks([FirebaseAuth, AuthService, SyncService, User])
 import 'timezone_setup_screen_test.mocks.dart';
 
 UserModel _testProfile({
@@ -61,11 +56,9 @@ _TestAuthStateNotifier _createNotifier({
     authService: authService,
     fetchProfile: (uid) => syncService.getUser(uid),
   );
-  notifier.setTestState(AuthState(
-    firebaseUser: user,
-    userProfile: profile,
-    isLoading: false,
-  ));
+  notifier.setTestState(
+    AuthState(firebaseUser: user, userProfile: profile, isLoading: false),
+  );
   return notifier;
 }
 
@@ -80,9 +73,7 @@ Future<void> _pumpScreen(
         authStateProvider.overrideWith((_) => notifier),
         syncServiceProvider.overrideWithValue(syncService),
       ],
-      child: const MaterialApp(
-        home: TimezoneSetupScreen(),
-      ),
+      child: const MaterialApp(home: TimezoneSetupScreen()),
     ),
   );
   // Allow _initializeTimezone to run
@@ -118,7 +109,11 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       expect(find.text('Set Your Timezone'), findsOneWidget);
     });
@@ -132,7 +127,11 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       final appBar = tester.widget<AppBar>(find.byType(AppBar));
       expect(appBar.automaticallyImplyLeading, isFalse);
@@ -147,7 +146,11 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       expect(find.text('We detected your timezone'), findsOneWidget);
     });
@@ -161,7 +164,11 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       expect(find.text('Search timezones...'), findsOneWidget);
       expect(find.byIcon(Icons.search), findsOneWidget);
@@ -176,12 +183,13 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpScreen(tester, notifier: notifier, syncService: mockSyncService);
-
-      expect(
-        find.text('Or search for a different timezone:'),
-        findsOneWidget,
+      await _pumpScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
       );
+
+      expect(find.text('Or search for a different timezone:'), findsOneWidget);
     });
 
     testWidgets('shows Continue button', (tester) async {
@@ -193,7 +201,11 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       expect(find.text('Continue'), findsOneWidget);
     });
@@ -214,9 +226,7 @@ void main() {
             authStateProvider.overrideWith((_) => notifier),
             syncServiceProvider.overrideWithValue(mockSyncService),
           ],
-          child: const MaterialApp(
-            home: TimezoneSetupScreen(),
-          ),
+          child: const MaterialApp(home: TimezoneSetupScreen()),
         ),
       );
       await tester.pump();
@@ -235,10 +245,13 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
-      await tester.enterText(
-          find.byType(TextField).first, 'New York');
+      await tester.enterText(find.byType(TextField).first, 'New York');
       await tester.pumpAndSettle();
 
       // Clear button should appear when there is text
@@ -254,10 +267,13 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
-      await tester.enterText(
-          find.byType(TextField).first, 'London');
+      await tester.enterText(find.byType(TextField).first, 'London');
       await tester.pumpAndSettle();
 
       await tester.tap(find.byIcon(Icons.clear));
@@ -276,7 +292,11 @@ void main() {
         profile: _testProfile(),
       );
 
-      await _pumpScreen(tester, notifier: notifier, syncService: mockSyncService);
+      await _pumpScreen(
+        tester,
+        notifier: notifier,
+        syncService: mockSyncService,
+      );
 
       expect(find.byType(Scaffold), findsOneWidget);
     });

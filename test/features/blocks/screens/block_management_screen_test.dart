@@ -90,9 +90,8 @@ Future<void> _pumpScreen(
       ),
       GoRoute(
         path: AppRoutes.blockForm,
-        builder: (context, state) => const Scaffold(
-          body: Center(child: Text('Block Form')),
-        ),
+        builder: (context, state) =>
+            const Scaffold(body: Center(child: Text('Block Form'))),
       ),
     ],
   );
@@ -112,13 +111,9 @@ Future<void> _pumpScreen(
         if (blocksStream != null)
           userBlocksProvider.overrideWith((ref) => blocksStream)
         else
-          userBlocksProvider.overrideWith(
-            (ref) => Stream.value(blocks ?? []),
-          ),
+          userBlocksProvider.overrideWith((ref) => Stream.value(blocks ?? [])),
       ],
-      child: MaterialApp.router(
-        routerConfig: router,
-      ),
+      child: MaterialApp.router(routerConfig: router),
     ),
   );
   // Let initState complete
@@ -127,8 +122,9 @@ Future<void> _pumpScreen(
 
 void main() {
   group('BlockManagementScreen rendering', () {
-    testWidgets('displays AppBar with title "Block Management"',
-        (tester) async {
+    testWidgets('displays AppBar with title "Block Management"', (
+      tester,
+    ) async {
       await _pumpScreen(tester, blocks: []);
       expect(find.text('Block Management'), findsOneWidget);
     });
@@ -147,8 +143,9 @@ void main() {
   });
 
   group('BlockManagementScreen loading state', () {
-    testWidgets('shows CircularProgressIndicator while loading',
-        (tester) async {
+    testWidgets('shows CircularProgressIndicator while loading', (
+      tester,
+    ) async {
       // Use a stream that never emits to keep loading state
       final controller = StreamController<List<TimeBlock>>();
 
@@ -161,9 +158,8 @@ void main() {
           ),
           GoRoute(
             path: AppRoutes.blockForm,
-            builder: (context, state) => const Scaffold(
-              body: Center(child: Text('Block Form')),
-            ),
+            builder: (context, state) =>
+                const Scaffold(body: Center(child: Text('Block Form'))),
           ),
         ],
       );
@@ -172,17 +168,17 @@ void main() {
         ProviderScope(
           overrides: [
             authStateProvider.overrideWith((_) {
-              return _SimpleAuthStateNotifier(AuthState(
-                firebaseUser: _FakeUser('user-123'),
-                userProfile: _testProfile(),
-                isLoading: false,
-              ));
+              return _SimpleAuthStateNotifier(
+                AuthState(
+                  firebaseUser: _FakeUser('user-123'),
+                  userProfile: _testProfile(),
+                  isLoading: false,
+                ),
+              );
             }),
             userBlocksProvider.overrideWith((ref) => controller.stream),
           ],
-          child: MaterialApp.router(
-            routerConfig: router,
-          ),
+          child: MaterialApp.router(routerConfig: router),
         ),
       );
       // Only pump once -- don't settle, so loading state is visible
@@ -201,8 +197,10 @@ void main() {
 
       expect(find.byIcon(Icons.event_busy), findsOneWidget);
       expect(find.textContaining('No blocks yet'), findsOneWidget);
-      expect(find.textContaining('Tap + to create your first block'),
-          findsOneWidget);
+      expect(
+        find.textContaining('Tap + to create your first block'),
+        findsOneWidget,
+      );
     });
   });
 
@@ -217,9 +215,8 @@ void main() {
           ),
           GoRoute(
             path: AppRoutes.blockForm,
-            builder: (context, state) => const Scaffold(
-              body: Center(child: Text('Block Form')),
-            ),
+            builder: (context, state) =>
+                const Scaffold(body: Center(child: Text('Block Form'))),
           ),
         ],
       );
@@ -228,21 +225,20 @@ void main() {
         ProviderScope(
           overrides: [
             authStateProvider.overrideWith((_) {
-              return _SimpleAuthStateNotifier(AuthState(
-                firebaseUser: _FakeUser('user-123'),
-                userProfile: _testProfile(),
-                isLoading: false,
-              ));
+              return _SimpleAuthStateNotifier(
+                AuthState(
+                  firebaseUser: _FakeUser('user-123'),
+                  userProfile: _testProfile(),
+                  isLoading: false,
+                ),
+              );
             }),
             userBlocksProvider.overrideWith(
-              (ref) => Stream<List<TimeBlock>>.error(
-                Exception('Network error'),
-              ),
+              (ref) =>
+                  Stream<List<TimeBlock>>.error(Exception('Network error')),
             ),
           ],
-          child: MaterialApp.router(
-            routerConfig: router,
-          ),
+          child: MaterialApp.router(routerConfig: router),
         ),
       );
       await tester.pumpAndSettle();
@@ -261,9 +257,8 @@ void main() {
           ),
           GoRoute(
             path: AppRoutes.blockForm,
-            builder: (context, state) => const Scaffold(
-              body: Center(child: Text('Block Form')),
-            ),
+            builder: (context, state) =>
+                const Scaffold(body: Center(child: Text('Block Form'))),
           ),
         ],
       );
@@ -272,21 +267,20 @@ void main() {
         ProviderScope(
           overrides: [
             authStateProvider.overrideWith((_) {
-              return _SimpleAuthStateNotifier(AuthState(
-                firebaseUser: _FakeUser('user-123'),
-                userProfile: _testProfile(),
-                isLoading: false,
-              ));
+              return _SimpleAuthStateNotifier(
+                AuthState(
+                  firebaseUser: _FakeUser('user-123'),
+                  userProfile: _testProfile(),
+                  isLoading: false,
+                ),
+              );
             }),
             userBlocksProvider.overrideWith(
-              (ref) => Stream<List<TimeBlock>>.error(
-                Exception('Network error'),
-              ),
+              (ref) =>
+                  Stream<List<TimeBlock>>.error(Exception('Network error')),
             ),
           ],
-          child: MaterialApp.router(
-            routerConfig: router,
-          ),
+          child: MaterialApp.router(routerConfig: router),
         ),
       );
       await tester.pumpAndSettle();
@@ -339,8 +333,9 @@ void main() {
       expect(earlierPos.dy, lessThan(laterPos.dy));
     });
 
-    testWidgets('shows owner label "You" for current user blocks',
-        (tester) async {
+    testWidgets('shows owner label "You" for current user blocks', (
+      tester,
+    ) async {
       await _pumpScreen(
         tester,
         blocks: [_makeBlock(title: 'My Block', userId: 'user-123')],
@@ -349,8 +344,9 @@ void main() {
       expect(find.text('You'), findsOneWidget);
     });
 
-    testWidgets('shows owner label "Partner" for partner blocks',
-        (tester) async {
+    testWidgets('shows owner label "Partner" for partner blocks', (
+      tester,
+    ) async {
       await _pumpScreen(
         tester,
         blocks: [_makeBlock(title: 'Partner Block', userId: 'partner-456')],
@@ -388,8 +384,9 @@ void main() {
       expect(find.text('Close'), findsOneWidget);
     });
 
-    testWidgets('google-sourced block dialog has no Edit button',
-        (tester) async {
+    testWidgets('google-sourced block dialog has no Edit button', (
+      tester,
+    ) async {
       await _pumpScreen(
         tester,
         blocks: [
@@ -420,8 +417,7 @@ void main() {
       expect(find.text('Block Form'), findsOneWidget);
     });
 
-    testWidgets('recurring block dialog shows recurrence info',
-        (tester) async {
+    testWidgets('recurring block dialog shows recurrence info', (tester) async {
       await _pumpScreen(
         tester,
         blocks: [
@@ -493,9 +489,13 @@ void main() {
       // Source filter chips: All, Manual, Google
       expect(find.widgetWithText(FilterChip, 'All'), findsAtLeastNWidgets(1));
       expect(
-          find.widgetWithText(FilterChip, 'Manual'), findsAtLeastNWidgets(1));
+        find.widgetWithText(FilterChip, 'Manual'),
+        findsAtLeastNWidgets(1),
+      );
       expect(
-          find.widgetWithText(FilterChip, 'Google'), findsAtLeastNWidgets(1));
+        find.widgetWithText(FilterChip, 'Google'),
+        findsAtLeastNWidgets(1),
+      );
     });
 
     testWidgets('filter sheet shows category filter chips', (tester) async {
@@ -592,8 +592,9 @@ void main() {
   });
 
   group('BlockManagementScreen filter indicator', () {
-    testWidgets('shows filter indicator when filters are active',
-        (tester) async {
+    testWidgets('shows filter indicator when filters are active', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -663,28 +664,30 @@ void main() {
       expect(find.textContaining('Filters active'), findsNothing);
     });
 
-    testWidgets('shows "No blocks match your filters" when filter yields empty',
-        (tester) async {
-      tester.view.physicalSize = const Size(800, 1200);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+    testWidgets(
+      'shows "No blocks match your filters" when filter yields empty',
+      (tester) async {
+        tester.view.physicalSize = const Size(800, 1200);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
 
-      final blocks = [
-        _makeBlock(title: 'Only Manual', source: TimeBlockSource.manual),
-      ];
+        final blocks = [
+          _makeBlock(title: 'Only Manual', source: TimeBlockSource.manual),
+        ];
 
-      await _pumpScreen(tester, blocks: blocks);
+        await _pumpScreen(tester, blocks: blocks);
 
-      // Apply Google filter (no google blocks exist)
-      await tester.tap(find.byIcon(Icons.filter_list));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilterChip, 'Google'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Apply Filters'));
-      await tester.pumpAndSettle();
+        // Apply Google filter (no google blocks exist)
+        await tester.tap(find.byIcon(Icons.filter_list));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(FilterChip, 'Google'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Apply Filters'));
+        await tester.pumpAndSettle();
 
-      expect(find.text('No blocks match your filters'), findsOneWidget);
-    });
+        expect(find.text('No blocks match your filters'), findsOneWidget);
+      },
+    );
   });
 }

@@ -6,7 +6,8 @@
     "build": "tsc",
     "watch": "tsc --watch",
     "lint": "eslint --ext .js,.ts .",
-    "test": "jest --forceExit --runInBand"
+    "test": "jest --forceExit --runInBand",
+    "test:emulator": "JEST_INCLUDE_RULES=1 jest --forceExit --runInBand --testPathPattern=rules"
   },
   "engines": {
     "node": "22"

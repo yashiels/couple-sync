@@ -12,8 +12,10 @@ class AppTheme {
 
   /// Custom text theme following Material Design 3 guidelines
   static TextTheme _buildTextTheme({required bool isDark}) {
-    final Color textColor = isDark ? AppColors.onSurfaceDark : AppColors.onSurfaceLight;
-    
+    final Color textColor = isDark
+        ? AppColors.onSurfaceDark
+        : AppColors.onSurfaceLight;
+
     return TextTheme(
       // Headline styles - Large display text
       headlineLarge: TextStyle(
@@ -34,7 +36,7 @@ class AppTheme {
         letterSpacing: 0,
         color: textColor,
       ),
-      
+
       // Title styles - Section headers and app bar titles
       titleLarge: TextStyle(
         fontSize: 22,
@@ -54,7 +56,7 @@ class AppTheme {
         letterSpacing: 0.1,
         color: textColor,
       ),
-      
+
       // Body styles - Main content text
       bodyLarge: TextStyle(
         fontSize: 16,
@@ -74,7 +76,7 @@ class AppTheme {
         letterSpacing: 0.4,
         color: textColor,
       ),
-      
+
       // Label styles - Buttons and form labels
       labelLarge: TextStyle(
         fontSize: 14,
@@ -94,7 +96,7 @@ class AppTheme {
         letterSpacing: 0.5,
         color: textColor,
       ),
-      
+
       // Caption - Deprecated in M3, removed
       // Maps to bodySmall in M3
     );
@@ -137,9 +139,7 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: AppColors.surfaceLight,
         elevation: 1,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -147,9 +147,7 @@ class AppTheme {
           foregroundColor: AppColors.onPrimaryLight,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
@@ -217,9 +215,7 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: AppColors.surfaceDark,
         elevation: 1,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -227,9 +223,7 @@ class AppTheme {
           foregroundColor: AppColors.onPrimaryDark,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
@@ -294,7 +288,9 @@ class AppTheme {
 
   /// Get category color based on theme brightness
   static Color getCategoryColor(
-      TimeBlockCategory category, Brightness brightness) {
+    TimeBlockCategory category,
+    Brightness brightness,
+  ) {
     return brightness == Brightness.dark
         ? getCategoryColorDark(category)
         : getCategoryColorLight(category);

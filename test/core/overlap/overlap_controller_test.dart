@@ -13,8 +13,10 @@ void main() {
     // 2024-01-01T23:59:59Z -> 2024-01-01T23:00:00Z
     const base = 1704067200000;
     const hourBeforeMidnight = base + 23 * 60 * 60 * 1000;
-    expect(floorToHour(base + 23 * 60 * 60 * 1000 + 59 * 1000),
-        hourBeforeMidnight);
+    expect(
+      floorToHour(base + 23 * 60 * 60 * 1000 + 59 * 1000),
+      hourBeforeMidnight,
+    );
   });
 
   test('computeOverlapInputHash is deterministic for identical inputs', () {

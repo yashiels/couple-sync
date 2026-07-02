@@ -20,19 +20,19 @@ class BlockEventWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
+
     // Get category color
     final categoryColor = _getCategoryColor(block.category, isDark);
-    
+
     // Apply opacity/alpha for visual distinction between user and partner
-    final displayColor = isCurrentUser 
+    final displayColor = isCurrentUser
         ? categoryColor
         : categoryColor.withValues(alpha: 0.6);
-    
+
     // Format time range (convert to local for display)
     final startTime = _formatTime(block.startDateTime.toLocal());
     final endTime = _formatTime(block.endDateTime.toLocal());
-    
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -42,7 +42,7 @@ class BlockEventWidget extends StatelessWidget {
           color: displayColor,
           borderRadius: BorderRadius.circular(4),
           border: Border.all(
-            color: isCurrentUser 
+            color: isCurrentUser
                 ? categoryColor
                 : categoryColor.withValues(alpha: 0.8),
             width: 1,
@@ -86,23 +86,41 @@ class BlockEventWidget extends StatelessWidget {
   Color _getCategoryColor(TimeBlockCategory category, bool isDark) {
     switch (category) {
       case TimeBlockCategory.work:
-        return isDark ? AppColors.categoryWorkDark : AppColors.categoryWorkLight;
+        return isDark
+            ? AppColors.categoryWorkDark
+            : AppColors.categoryWorkLight;
       case TimeBlockCategory.study:
-        return isDark ? AppColors.categoryStudyDark : AppColors.categoryStudyLight;
+        return isDark
+            ? AppColors.categoryStudyDark
+            : AppColors.categoryStudyLight;
       case TimeBlockCategory.commute:
-        return isDark ? AppColors.categoryCommuteDark : AppColors.categoryCommuteLight;
+        return isDark
+            ? AppColors.categoryCommuteDark
+            : AppColors.categoryCommuteLight;
       case TimeBlockCategory.exercise:
-        return isDark ? AppColors.categoryExerciseDark : AppColors.categoryExerciseLight;
+        return isDark
+            ? AppColors.categoryExerciseDark
+            : AppColors.categoryExerciseLight;
       case TimeBlockCategory.social:
-        return isDark ? AppColors.categorySocialDark : AppColors.categorySocialLight;
+        return isDark
+            ? AppColors.categorySocialDark
+            : AppColors.categorySocialLight;
       case TimeBlockCategory.meals:
-        return isDark ? AppColors.categoryMealsDark : AppColors.categoryMealsLight;
+        return isDark
+            ? AppColors.categoryMealsDark
+            : AppColors.categoryMealsLight;
       case TimeBlockCategory.sleep:
-        return isDark ? AppColors.categorySleepDark : AppColors.categorySleepLight;
+        return isDark
+            ? AppColors.categorySleepDark
+            : AppColors.categorySleepLight;
       case TimeBlockCategory.personal:
-        return isDark ? AppColors.categoryPersonalDark : AppColors.categoryPersonalLight;
+        return isDark
+            ? AppColors.categoryPersonalDark
+            : AppColors.categoryPersonalLight;
       case TimeBlockCategory.other:
-        return isDark ? AppColors.categoryOtherDark : AppColors.categoryOtherLight;
+        return isDark
+            ? AppColors.categoryOtherDark
+            : AppColors.categoryOtherLight;
     }
   }
 
@@ -137,11 +155,11 @@ class BlockDetailDialog extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final categoryColor = _getCategoryColor(block.category, isDark);
-    
+
     final startTime = _formatTime(block.startDateTime.toLocal());
     final endTime = _formatTime(block.endDateTime.toLocal());
     final date = _formatDate(block.startDateTime.toLocal());
-    
+
     return AlertDialog(
       title: Row(
         children: [
@@ -155,10 +173,7 @@ class BlockDetailDialog extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              block.title,
-              style: const TextStyle(fontSize: 18),
-            ),
+            child: Text(block.title, style: const TextStyle(fontSize: 18)),
           ),
         ],
       ),
@@ -173,12 +188,7 @@ class BlockDetailDialog extends StatelessWidget {
             isCurrentUser ? 'You' : 'Partner',
           ),
           const SizedBox(height: 12),
-          _buildDetailRow(
-            context,
-            Icons.calendar_today_outlined,
-            'Date',
-            date,
-          ),
+          _buildDetailRow(context, Icons.calendar_today_outlined, 'Date', date),
           const SizedBox(height: 12),
           _buildDetailRow(
             context,
@@ -205,7 +215,9 @@ class BlockDetailDialog extends StatelessWidget {
             context,
             Icons.source_outlined,
             'Source',
-            block.source == TimeBlockSource.google ? 'Google Calendar' : 'Manual',
+            block.source == TimeBlockSource.google
+                ? 'Google Calendar'
+                : 'Manual',
           ),
         ],
       ),
@@ -218,7 +230,12 @@ class BlockDetailDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildDetailRow(BuildContext context, IconData icon, String label, String value) {
+  Widget _buildDetailRow(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+  ) {
     return Row(
       children: [
         Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
@@ -251,23 +268,41 @@ class BlockDetailDialog extends StatelessWidget {
   Color _getCategoryColor(TimeBlockCategory category, bool isDark) {
     switch (category) {
       case TimeBlockCategory.work:
-        return isDark ? AppColors.categoryWorkDark : AppColors.categoryWorkLight;
+        return isDark
+            ? AppColors.categoryWorkDark
+            : AppColors.categoryWorkLight;
       case TimeBlockCategory.study:
-        return isDark ? AppColors.categoryStudyDark : AppColors.categoryStudyLight;
+        return isDark
+            ? AppColors.categoryStudyDark
+            : AppColors.categoryStudyLight;
       case TimeBlockCategory.commute:
-        return isDark ? AppColors.categoryCommuteDark : AppColors.categoryCommuteLight;
+        return isDark
+            ? AppColors.categoryCommuteDark
+            : AppColors.categoryCommuteLight;
       case TimeBlockCategory.exercise:
-        return isDark ? AppColors.categoryExerciseDark : AppColors.categoryExerciseLight;
+        return isDark
+            ? AppColors.categoryExerciseDark
+            : AppColors.categoryExerciseLight;
       case TimeBlockCategory.social:
-        return isDark ? AppColors.categorySocialDark : AppColors.categorySocialLight;
+        return isDark
+            ? AppColors.categorySocialDark
+            : AppColors.categorySocialLight;
       case TimeBlockCategory.meals:
-        return isDark ? AppColors.categoryMealsDark : AppColors.categoryMealsLight;
+        return isDark
+            ? AppColors.categoryMealsDark
+            : AppColors.categoryMealsLight;
       case TimeBlockCategory.sleep:
-        return isDark ? AppColors.categorySleepDark : AppColors.categorySleepLight;
+        return isDark
+            ? AppColors.categorySleepDark
+            : AppColors.categorySleepLight;
       case TimeBlockCategory.personal:
-        return isDark ? AppColors.categoryPersonalDark : AppColors.categoryPersonalLight;
+        return isDark
+            ? AppColors.categoryPersonalDark
+            : AppColors.categoryPersonalLight;
       case TimeBlockCategory.other:
-        return isDark ? AppColors.categoryOtherDark : AppColors.categoryOtherLight;
+        return isDark
+            ? AppColors.categoryOtherDark
+            : AppColors.categoryOtherLight;
     }
   }
 
@@ -278,8 +313,20 @@ class BlockDetailDialog extends StatelessWidget {
   }
 
   String _formatDate(DateTime dateTime) {
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return '${dateTime.day} ${months[dateTime.month - 1]} ${dateTime.year}';
   }
 

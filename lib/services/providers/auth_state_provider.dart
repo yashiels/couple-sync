@@ -13,11 +13,7 @@ class AuthState {
   final UserModel? userProfile;
   final bool isLoading;
 
-  const AuthState({
-    this.firebaseUser,
-    this.userProfile,
-    this.isLoading = true,
-  });
+  const AuthState({this.firebaseUser, this.userProfile, this.isLoading = true});
 
   /// Whether the user is authenticated (has Firebase user)
   bool get isAuthenticated => firebaseUser != null;
@@ -42,14 +38,17 @@ class AuthState {
     bool clearUserProfile = false,
   }) {
     return AuthState(
-      firebaseUser: clearFirebaseUser ? null : (firebaseUser ?? this.firebaseUser),
+      firebaseUser: clearFirebaseUser
+          ? null
+          : (firebaseUser ?? this.firebaseUser),
       userProfile: clearUserProfile ? null : (userProfile ?? this.userProfile),
       isLoading: isLoading ?? this.isLoading,
     );
   }
 
   @override
-  String toString() => 'AuthState(isAuthenticated: $isAuthenticated, '
+  String toString() =>
+      'AuthState(isAuthenticated: $isAuthenticated, '
       'hasTimezone: $hasTimezone, hasCouple: $hasCouple, isLoading: $isLoading)';
 }
 
@@ -69,11 +68,11 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
     required AuthService authService,
     required Future<UserModel?> Function(String uid) fetchProfile,
     Duration profileRetryDelay = const Duration(milliseconds: 1500),
-  })  : _auth = auth ?? FirebaseAuth.instance,
-        _authService = authService,
-        _fetchProfile = fetchProfile,
-        _profileRetryDelay = profileRetryDelay,
-        super(const AuthState()) {
+  }) : _auth = auth ?? FirebaseAuth.instance,
+       _authService = authService,
+       _fetchProfile = fetchProfile,
+       _profileRetryDelay = profileRetryDelay,
+       super(const AuthState()) {
     _init();
   }
 
@@ -91,10 +90,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       }
 
       // User signed in - update Firebase user and fetch profile
-      state = state.copyWith(
-        firebaseUser: user,
-        isLoading: true,
-      );
+      state = state.copyWith(firebaseUser: user, isLoading: true);
 
       await _fetchUserProfile(user.uid);
     });
@@ -109,27 +105,18 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       final profile = await _fetchProfile(uid);
 
       if (profile != null) {
-        state = state.copyWith(
-          userProfile: profile,
-          isLoading: false,
-        );
+        state = state.copyWith(userProfile: profile, isLoading: false);
       } else if (!isRetry) {
         // Profile may still be creating — retry once after a short delay.
         await Future.delayed(_profileRetryDelay);
         return _fetchUserProfile(uid, isRetry: true);
       } else {
         // No profile after retry - user needs onboarding.
-        state = state.copyWith(
-          userProfile: null,
-          isLoading: false,
-        );
+        state = state.copyWith(userProfile: null, isLoading: false);
       }
     } catch (e) {
       // Error fetching profile - keep authenticated but no profile.
-      state = state.copyWith(
-        userProfile: null,
-        isLoading: false,
-      );
+      state = state.copyWith(userProfile: null, isLoading: false);
     }
   }
 
@@ -229,7 +216,9 @@ final authServiceProvider = Provider<AuthService>((ref) {
 
 /// Provider for authentication state.
 /// Use this in guards and UI to check auth status, timezone, and couple pairing.
-final authStateProvider = StateNotifierProvider<AuthStateNotifier, AuthState>((ref) {
+final authStateProvider = StateNotifierProvider<AuthStateNotifier, AuthState>((
+  ref,
+) {
   final sync = ref.watch(syncServiceProvider);
   return AuthStateNotifier(
     authService: ref.watch(authServiceProvider),

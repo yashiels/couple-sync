@@ -71,8 +71,9 @@ void main() {
       expect(find.byIcon(Icons.event_busy), findsOneWidget);
     });
 
-    testWidgets('does not display "Next Free Window" header when null',
-        (tester) async {
+    testWidgets('does not display "Next Free Window" header when null', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildSubject(window: null));
       expect(find.text('Next Free Window'), findsNothing);
     });
@@ -103,15 +104,17 @@ void main() {
       expect(find.text('Tap to see all windows'), findsOneWidget);
     });
 
-    testWidgets('displays person and favorite icons for timezones',
-        (tester) async {
+    testWidgets('displays person and favorite icons for timezones', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildSubject(window: _makeFutureWindow()));
       expect(find.byIcon(Icons.person), findsOneWidget);
       expect(find.byIcon(Icons.favorite), findsOneWidget);
     });
 
-    testWidgets('displays schedule and star icons for info chips',
-        (tester) async {
+    testWidgets('displays schedule and star icons for info chips', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildSubject(window: _makeFutureWindow()));
       expect(find.byIcon(Icons.schedule), findsOneWidget);
       expect(find.byIcon(Icons.star), findsOneWidget);
@@ -130,8 +133,9 @@ void main() {
       expect(find.text('Now'), findsOneWidget);
     });
 
-    testWidgets('shows day-based countdown for far future windows',
-        (tester) async {
+    testWidgets('shows day-based countdown for far future windows', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _buildSubject(window: _makeFutureWindow(daysFromNow: 3)),
       );

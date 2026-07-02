@@ -81,14 +81,8 @@ class InviteModel {
           deepLinkUrl == other.deepLinkUrl;
 
   @override
-  int get hashCode => Object.hash(
-        code,
-        createdByUid,
-        coupleId,
-        expiresAt,
-        status,
-        deepLinkUrl,
-      );
+  int get hashCode =>
+      Object.hash(code, createdByUid, coupleId, expiresAt, status, deepLinkUrl);
 
   @override
   String toString() =>

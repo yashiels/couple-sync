@@ -15,7 +15,8 @@ class BlockManagementScreen extends ConsumerStatefulWidget {
   const BlockManagementScreen({super.key});
 
   @override
-  ConsumerState<BlockManagementScreen> createState() => _BlockManagementScreenState();
+  ConsumerState<BlockManagementScreen> createState() =>
+      _BlockManagementScreenState();
 }
 
 class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
@@ -45,10 +46,7 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
 
   /// Navigate to block form (edit or new)
   void _navigateToBlockForm({String? blockId}) {
-    context.go(
-      AppRoutes.blockForm,
-      extra: BlockFormArgs(blockId: blockId),
-    );
+    context.go(AppRoutes.blockForm, extra: BlockFormArgs(blockId: blockId));
   }
 
   /// Handle block tap - navigate based on source
@@ -72,7 +70,10 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildDetailRow('Source', block.source == TimeBlockSource.manual ? 'Manual' : 'Google'),
+            _buildDetailRow(
+              'Source',
+              block.source == TimeBlockSource.manual ? 'Manual' : 'Google',
+            ),
             const SizedBox(height: 8),
             _buildDetailRow('Category', block.category.label),
             const SizedBox(height: 8),
@@ -116,9 +117,7 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
             style: const TextStyle(fontWeight: FontWeight.w500),
           ),
         ),
-        Expanded(
-          child: Text(value),
-        ),
+        Expanded(child: Text(value)),
       ],
     );
   }
@@ -130,7 +129,9 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
     final startStr = '${_formatDate(start)} ${formatTimeHm(start)}';
     final endStr = formatTimeHm(end);
 
-    if (start.year == end.year && start.month == end.month && start.day == end.day) {
+    if (start.year == end.year &&
+        start.month == end.month &&
+        start.day == end.day) {
       return '$startStr - $endStr';
     } else {
       return '$startStr - ${_formatDate(end)} $endStr';
@@ -159,10 +160,7 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
               const SizedBox(height: 16),
 
               // Source filter
-              Text(
-                'Source',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              Text('Source', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -178,14 +176,18 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
                     label: 'Manual',
                     selected: _sourceFilter == TimeBlockSource.manual,
                     onSelected: (selected) {
-                      setModalState(() => _sourceFilter = TimeBlockSource.manual);
+                      setModalState(
+                        () => _sourceFilter = TimeBlockSource.manual,
+                      );
                     },
                   ),
                   _buildFilterChip(
                     label: 'Google',
                     selected: _sourceFilter == TimeBlockSource.google,
                     onSelected: (selected) {
-                      setModalState(() => _sourceFilter = TimeBlockSource.google);
+                      setModalState(
+                        () => _sourceFilter = TimeBlockSource.google,
+                      );
                     },
                   ),
                 ],
@@ -193,10 +195,7 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
               const SizedBox(height: 24),
 
               // Category filter
-              Text(
-                'Category',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              Text('Category', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -209,13 +208,15 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
                       setModalState(() => _categoryFilter = null);
                     },
                   ),
-                  ...TimeBlockCategory.values.map((category) => _buildFilterChip(
-                    label: category.label,
-                    selected: _categoryFilter == category,
-                    onSelected: (selected) {
-                      setModalState(() => _categoryFilter = category);
-                    },
-                  )),
+                  ...TimeBlockCategory.values.map(
+                    (category) => _buildFilterChip(
+                      label: category.label,
+                      selected: _categoryFilter == category,
+                      onSelected: (selected) {
+                        setModalState(() => _categoryFilter = category);
+                      },
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 24),
@@ -279,8 +280,11 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.error_outline, size: 64,
-                  color: theme.colorScheme.onSurfaceVariant),
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
               const SizedBox(height: 16),
               Text(
                 'Failed to load blocks: $error',
@@ -314,13 +318,16 @@ class _BlockManagementScreenState extends ConsumerState<BlockManagementScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.event_busy, size: 64,
-                color: theme.colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.event_busy,
+              size: 64,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(height: 16),
             Text(
               blocks.isEmpty
-                ? 'No blocks yet\nTap + to create your first block'
-                : 'No blocks match your filters',
+                  ? 'No blocks yet\nTap + to create your first block'
+                  : 'No blocks match your filters',
               style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),

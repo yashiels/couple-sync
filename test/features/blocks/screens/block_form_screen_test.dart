@@ -14,12 +14,7 @@ import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 
-@GenerateMocks([
-  FirebaseAuth,
-  SyncService,
-  AuthService,
-  User,
-])
+@GenerateMocks([FirebaseAuth, SyncService, AuthService, User])
 import 'block_form_screen_test.mocks.dart';
 
 /// Creates a UserModel for testing.
@@ -65,11 +60,9 @@ _TestAuthStateNotifier _createNotifier({
     authService: authService,
     fetchProfile: (_) async => null,
   );
-  notifier.setTestState(AuthState(
-    firebaseUser: user,
-    userProfile: profile,
-    isLoading: false,
-  ));
+  notifier.setTestState(
+    AuthState(firebaseUser: user, userProfile: profile, isLoading: false),
+  );
   return notifier;
 }
 
@@ -86,9 +79,7 @@ Future<void> _pumpBlockFormScreen(
         authStateProvider.overrideWith((_) => notifier),
         syncServiceProvider.overrideWithValue(syncService),
       ],
-      child: MaterialApp(
-        home: BlockFormScreen(args: args),
-      ),
+      child: MaterialApp(home: BlockFormScreen(args: args)),
     ),
   );
   // Let post-frame callbacks (timezone setting) execute
@@ -170,8 +161,9 @@ void main() {
       expect(find.text('Busy'), findsOneWidget);
     });
 
-    testWidgets('displays Category dropdown with default Other',
-        (tester) async {
+    testWidgets('displays Category dropdown with default Other', (
+      tester,
+    ) async {
       final notifier = _createNotifier(
         auth: mockAuth,
         authService: mockAuthService,
@@ -189,8 +181,9 @@ void main() {
       expect(find.text('Other'), findsOneWidget);
     });
 
-    testWidgets('displays Visibility dropdown with default Both Partners',
-        (tester) async {
+    testWidgets('displays Visibility dropdown with default Both Partners', (
+      tester,
+    ) async {
       final notifier = _createNotifier(
         auth: mockAuth,
         authService: mockAuthService,
@@ -282,8 +275,7 @@ void main() {
       expect(find.text('Does not repeat'), findsOneWidget);
     });
 
-    testWidgets('displays "Create Block" button for new block',
-        (tester) async {
+    testWidgets('displays "Create Block" button for new block', (tester) async {
       final notifier = _createNotifier(
         auth: mockAuth,
         authService: mockAuthService,
@@ -319,12 +311,12 @@ void main() {
   });
 
   group('BlockFormScreen rendering (edit mode)', () {
-    testWidgets('displays "Edit Block" title when blockId provided',
-        (tester) async {
+    testWidgets('displays "Edit Block" title when blockId provided', (
+      tester,
+    ) async {
       // SyncService returns null (block not found) — AppBar title depends on
       // args.blockId, not on the loaded block.
-      when(mockSyncService.getBlock(any, any))
-          .thenAnswer((_) async => null);
+      when(mockSyncService.getBlock(any, any)).thenAnswer((_) async => null);
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -345,8 +337,7 @@ void main() {
     });
 
     testWidgets('shows delete button in edit mode', (tester) async {
-      when(mockSyncService.getBlock(any, any))
-          .thenAnswer((_) async => null);
+      when(mockSyncService.getBlock(any, any)).thenAnswer((_) async => null);
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -367,8 +358,7 @@ void main() {
     });
 
     testWidgets('displays "Update Block" button in edit mode', (tester) async {
-      when(mockSyncService.getBlock(any, any))
-          .thenAnswer((_) async => null);
+      when(mockSyncService.getBlock(any, any)).thenAnswer((_) async => null);
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -390,8 +380,9 @@ void main() {
   });
 
   group('BlockFormScreen form validation', () {
-    testWidgets('shows error when title is empty and save tapped',
-        (tester) async {
+    testWidgets('shows error when title is empty and save tapped', (
+      tester,
+    ) async {
       final notifier = _createNotifier(
         auth: mockAuth,
         authService: mockAuthService,
@@ -415,8 +406,9 @@ void main() {
     });
 
     testWidgets('no validation error when title is provided', (tester) async {
-      when(mockSyncService.createBlock(any, any))
-          .thenAnswer((_) async => 'new-block-id');
+      when(
+        mockSyncService.createBlock(any, any),
+      ).thenAnswer((_) async => 'new-block-id');
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -472,10 +464,12 @@ void main() {
   });
 
   group('BlockFormScreen save behavior', () {
-    testWidgets('calls createBlock on syncService when saving new block',
-        (tester) async {
-      when(mockSyncService.createBlock(any, any))
-          .thenAnswer((_) async => 'new-block-id');
+    testWidgets('calls createBlock on syncService when saving new block', (
+      tester,
+    ) async {
+      when(
+        mockSyncService.createBlock(any, any),
+      ).thenAnswer((_) async => 'new-block-id');
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -527,15 +521,13 @@ void main() {
       await tester.tap(find.text('Create Block'));
       await tester.pump();
 
-      expect(
-        find.text('Not authenticated or not in a couple'),
-        findsOneWidget,
-      );
+      expect(find.text('Not authenticated or not in a couple'), findsOneWidget);
     });
 
     testWidgets('shows error when createBlock throws', (tester) async {
-      when(mockSyncService.createBlock(any, any))
-          .thenThrow(Exception('Sync error'));
+      when(
+        mockSyncService.createBlock(any, any),
+      ).thenThrow(Exception('Sync error'));
 
       final notifier = _createNotifier(
         auth: mockAuth,

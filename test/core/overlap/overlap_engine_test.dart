@@ -76,37 +76,46 @@ void main() {
   group('intersectIntervals', () {
     test('no overlap returns empty', () {
       expect(
-        intersectIntervals([
-          [1, 5]
-        ], [
-          [6, 10]
-        ]),
+        intersectIntervals(
+          [
+            [1, 5],
+          ],
+          [
+            [6, 10],
+          ],
+        ),
         isEmpty,
       );
     });
     test('partial overlap', () {
       expect(
-        intersectIntervals([
-          [1, 10]
-        ], [
-          [5, 15]
-        ]),
+        intersectIntervals(
+          [
+            [1, 10],
+          ],
+          [
+            [5, 15],
+          ],
+        ),
         [
-          [5, 10]
+          [5, 10],
         ],
       );
     });
     test('multiple walking', () {
       expect(
-        intersectIntervals([
-          [1, 4],
-          [8, 12]
-        ], [
-          [2, 10]
-        ]),
+        intersectIntervals(
+          [
+            [1, 4],
+            [8, 12],
+          ],
+          [
+            [2, 10],
+          ],
+        ),
         [
           [2, 4],
-          [8, 10]
+          [8, 10],
         ],
       );
     });
@@ -116,7 +125,7 @@ void main() {
     test('non-recurring, inside window', () {
       final b = _block(startUtc: _t0 + _h, endUtc: _t0 + 2 * _h);
       expect(expandBlock(b, _t0, _t0 + _d), [
-        [_t0 + _h, _t0 + 2 * _h]
+        [_t0 + _h, _t0 + 2 * _h],
       ]);
     });
     test('non-recurring, outside window -> empty', () {
@@ -124,7 +133,11 @@ void main() {
       expect(expandBlock(b, _t0, _t0 + _d), isEmpty);
     });
     test('FREQ=DAILY expands across window', () {
-      final b = _block(startUtc: _t0 + 9 * _h, endUtc: _t0 + 10 * _h, rrule: 'FREQ=DAILY');
+      final b = _block(
+        startUtc: _t0 + 9 * _h,
+        endUtc: _t0 + 10 * _h,
+        rrule: 'FREQ=DAILY',
+      );
       final out = expandBlock(b, _t0, _t0 + 3 * _d);
       // One occurrence per day for 3 days.
       expect(out.length, 3);
@@ -204,27 +217,28 @@ void main() {
       );
       expect(expandBlock(b, _t0, _t0 + _d).length, 1);
     });
-    test('recurring occurrence starting before window is kept and clamped (lookback)', () {
-      // dtstart 1h before windowStart; end 1h into the window (duration 2h).
-      // The first occurrence extends into the window -> must be kept and clamped
-      // to windowStart. Mirrors the TS `between(windowStart - duration, ...)` lookback.
-      final b = _block(
-        startUtc: _t0 - _h,
-        endUtc: _t0 + _h,
-        rrule: 'FREQ=DAILY;COUNT=1',
-      );
-      final out = expandBlock(b, _t0, _t0 + _d);
-      expect(out.length, 1);
-      expect(out[0], [_t0, _t0 + _h]);
-    });
+    test(
+      'recurring occurrence starting before window is kept and clamped (lookback)',
+      () {
+        // dtstart 1h before windowStart; end 1h into the window (duration 2h).
+        // The first occurrence extends into the window -> must be kept and clamped
+        // to windowStart. Mirrors the TS `between(windowStart - duration, ...)` lookback.
+        final b = _block(
+          startUtc: _t0 - _h,
+          endUtc: _t0 + _h,
+          rrule: 'FREQ=DAILY;COUNT=1',
+        );
+        final out = expandBlock(b, _t0, _t0 + _d);
+        expect(out.length, 1);
+        expect(out[0], [_t0, _t0 + _h]);
+      },
+    );
   });
 
   group('computeFreeIntervals', () {
     test('busy splits the free window', () {
       // window 0..100, busy 20..40 -> free [[0,20],[40,100]]
-      final blocks = [
-        _block(startUtc: 20, endUtc: 40),
-      ];
+      final blocks = [_block(startUtc: 20, endUtc: 40)];
       expect(computeFreeIntervals(blocks, 0, 100), [
         [0, 20],
         [40, 100],
@@ -259,14 +273,8 @@ void main() {
       }
       // First clip starts at 07:00 local and ends at 23:00 local (16h).
       expect(out[0][1] - out[0][0], 16 * _h);
-      expect(
-        TZDateTime.fromMillisecondsSinceEpoch(loc, out[0][0]).hour,
-        7,
-      );
-      expect(
-        TZDateTime.fromMillisecondsSinceEpoch(loc, out[0][1]).hour,
-        23,
-      );
+      expect(TZDateTime.fromMillisecondsSinceEpoch(loc, out[0][0]).hour, 7);
+      expect(TZDateTime.fromMillisecondsSinceEpoch(loc, out[0][1]).hour, 23);
     });
 
     test('spring-forward 2024-03-10 boundary does not shift by an hour', () {
@@ -302,7 +310,7 @@ void main() {
       // Late-night interval spanning past the end of the 25h day.
       final end = start + 26 * _h;
       final out = clipToDayBoundaries([
-        [start, end]
+        [start, end],
       ], ny);
       expect(out, isNotEmpty);
       // First segment is the full fall-back day: 25h = 1500 minutes.
@@ -332,16 +340,34 @@ void main() {
 
   group('computeOverlap', () {
     test('two empty partners -> whole waking window', () {
-      final out = computeOverlap([], [], 'UTC', 'UTC', _t0, _Prefs(false), _Prefs(false));
+      final out = computeOverlap(
+        [],
+        [],
+        'UTC',
+        'UTC',
+        _t0,
+        _Prefs(false),
+        _Prefs(false),
+      );
       expect(out, isNotEmpty);
       for (final w in out) {
         expect(w.durationMinutes, greaterThanOrEqualTo(30));
       }
     });
     test('non-overlapping busy -> no window', () {
-      final a = [_block(startUtc: _t0, endUtc: _t0 + 12 * _h)]; // busy all morning
+      final a = [
+        _block(startUtc: _t0, endUtc: _t0 + 12 * _h),
+      ]; // busy all morning
       final b = [_block(startUtc: _t0 + 12 * _h, endUtc: _t0 + 24 * _h)];
-      final out = computeOverlap(a, b, 'UTC', 'UTC', _t0, _Prefs(false), _Prefs(false));
+      final out = computeOverlap(
+        a,
+        b,
+        'UTC',
+        'UTC',
+        _t0,
+        _Prefs(false),
+        _Prefs(false),
+      );
       // The exact windows depend on waking-hours clip; just assert it's bounded.
       for (final w in out) {
         expect(w.endUtc, greaterThan(w.startUtc));
@@ -354,12 +380,22 @@ void main() {
       // kMaxWindows=20 cap fires.
       final a = <TimeBlock>[];
       for (int i = 0; i < 14; i++) {
-        a.add(_block(
-          startUtc: _t0 + i * _d + 12 * _h,
-          endUtc: _t0 + i * _d + 13 * _h,
-        ));
+        a.add(
+          _block(
+            startUtc: _t0 + i * _d + 12 * _h,
+            endUtc: _t0 + i * _d + 13 * _h,
+          ),
+        );
       }
-      final out = computeOverlap(a, [], 'UTC', 'UTC', _t0, _Prefs(false), _Prefs(false));
+      final out = computeOverlap(
+        a,
+        [],
+        'UTC',
+        'UTC',
+        _t0,
+        _Prefs(false),
+        _Prefs(false),
+      );
       expect(out.length, 20);
     });
   });

@@ -3,10 +3,7 @@ class UnpairHistoryEntry {
   final DateTime at;
   final String reason;
 
-  const UnpairHistoryEntry({
-    required this.at,
-    required this.reason,
-  });
+  const UnpairHistoryEntry({required this.at, required this.reason});
 
   factory UnpairHistoryEntry.fromJson(Map<String, dynamic> json) {
     return UnpairHistoryEntry(
@@ -16,20 +13,11 @@ class UnpairHistoryEntry {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'at': at.millisecondsSinceEpoch,
-      'reason': reason,
-    };
+    return {'at': at.millisecondsSinceEpoch, 'reason': reason};
   }
 
-  UnpairHistoryEntry copyWith({
-    DateTime? at,
-    String? reason,
-  }) {
-    return UnpairHistoryEntry(
-      at: at ?? this.at,
-      reason: reason ?? this.reason,
-    );
+  UnpairHistoryEntry copyWith({DateTime? at, String? reason}) {
+    return UnpairHistoryEntry(at: at ?? this.at, reason: reason ?? this.reason);
   }
 
   @override
@@ -77,8 +65,11 @@ class CoupleModel {
         orElse: () => CoupleStatus.inactive,
       ),
       pairedAt: _parseDateTime(json['pairedAt']),
-      unpairHistory: (json['unpairHistory'] as List<dynamic>?)
-              ?.map((e) => UnpairHistoryEntry.fromJson(e as Map<String, dynamic>))
+      unpairHistory:
+          (json['unpairHistory'] as List<dynamic>?)
+              ?.map(
+                (e) => UnpairHistoryEntry.fromJson(e as Map<String, dynamic>),
+              )
               .toList() ??
           [],
       createdAt: _parseDateTime(json['createdAt']),
@@ -138,13 +129,13 @@ class CoupleModel {
 
   @override
   int get hashCode => Object.hash(
-        userAUid,
-        userBUid,
-        status,
-        pairedAt,
-        Object.hashAll(unpairHistory),
-        createdAt,
-      );
+    userAUid,
+    userBUid,
+    status,
+    pairedAt,
+    Object.hashAll(unpairHistory),
+    createdAt,
+  );
 
   @override
   String toString() =>

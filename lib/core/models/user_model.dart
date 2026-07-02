@@ -27,7 +27,8 @@ class UserModel {
       photoUrl: json['photoUrl'] as String?,
       timezone: json['timezone'] as String,
       coupleId: json['coupleId'] as String?,
-      fcmTokens: (json['fcmTokens'] as List<dynamic>?)
+      fcmTokens:
+          (json['fcmTokens'] as List<dynamic>?)
               ?.map((e) => e as String)
               .toList() ??
           [],
@@ -69,8 +70,7 @@ class UserModel {
       coupleId: clearCoupleId ? null : (coupleId ?? this.coupleId),
       fcmTokens: fcmTokens ?? List.from(this.fcmTokens),
       createdAt: createdAt ?? this.createdAt,
-      showLateNightWindows:
-          showLateNightWindows ?? this.showLateNightWindows,
+      showLateNightWindows: showLateNightWindows ?? this.showLateNightWindows,
     );
   }
 
@@ -90,15 +90,15 @@ class UserModel {
 
   @override
   int get hashCode => Object.hash(
-        email,
-        displayName,
-        photoUrl,
-        timezone,
-        coupleId,
-        Object.hashAll(fcmTokens),
-        createdAt,
-        showLateNightWindows,
-      );
+    email,
+    displayName,
+    photoUrl,
+    timezone,
+    coupleId,
+    Object.hashAll(fcmTokens),
+    createdAt,
+    showLateNightWindows,
+  );
 
   @override
   String toString() =>

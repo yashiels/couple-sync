@@ -96,10 +96,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  'No partner yet',
-                  style: theme.textTheme.titleLarge,
-                ),
+                Text('No partner yet', style: theme.textTheme.titleLarge),
                 const SizedBox(height: 8),
                 Text(
                   'Pair with your partner to start finding mutual free time.',
@@ -155,7 +152,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               data: (overlapResult) {
                 final nextWindow = overlapResult?.nextWindow;
-                final upcomingWindows = overlapResult?.windowsByTime
+                final upcomingWindows =
+                    overlapResult?.windowsByTime
                         .where((w) => w != nextWindow)
                         .take(5)
                         .toList() ??
@@ -222,7 +220,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildErrorState(
-      ThemeData theme, String message, VoidCallback onRetry) {
+    ThemeData theme,
+    String message,
+    VoidCallback onRetry,
+  ) {
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       child: SizedBox(
@@ -237,10 +238,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 color: theme.colorScheme.error,
               ),
               const SizedBox(height: 12),
-              Text(
-                message,
-                style: theme.textTheme.bodyLarge,
-              ),
+              Text(message, style: theme.textTheme.bodyLarge),
               const SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: onRetry,

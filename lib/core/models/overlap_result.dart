@@ -73,13 +73,8 @@ class OverlapWindow {
           reasonableBoth == other.reasonableBoth;
 
   @override
-  int get hashCode => Object.hash(
-        startUtc,
-        endUtc,
-        durationMinutes,
-        score,
-        reasonableBoth,
-      );
+  int get hashCode =>
+      Object.hash(startUtc, endUtc, durationMinutes, score, reasonableBoth);
 
   @override
   String toString() =>
@@ -102,7 +97,8 @@ class OverlapResult {
 
   factory OverlapResult.fromJson(Map<String, dynamic> json) {
     return OverlapResult(
-      windows: (json['windows'] as List<dynamic>?)
+      windows:
+          (json['windows'] as List<dynamic>?)
               ?.map((e) => OverlapWindow.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
@@ -164,12 +160,8 @@ class OverlapResult {
           computedBy == other.computedBy;
 
   @override
-  int get hashCode => Object.hash(
-        Object.hashAll(windows),
-        computedAt,
-        inputHash,
-        computedBy,
-      );
+  int get hashCode =>
+      Object.hash(Object.hashAll(windows), computedAt, inputHash, computedBy);
 
   @override
   String toString() =>

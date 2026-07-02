@@ -11,12 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
-@GenerateMocks([
-  FirebaseAuth,
-  SyncService,
-  AuthService,
-  User,
-])
+@GenerateMocks([FirebaseAuth, SyncService, AuthService, User])
 import 'share_code_tab_test.mocks.dart';
 
 UserModel _testProfile({
@@ -57,11 +52,9 @@ _TestAuthStateNotifier _createNotifier({
     authService: authService,
     fetchProfile: (_) async => null,
   );
-  notifier.setTestState(AuthState(
-    firebaseUser: user,
-    userProfile: profile,
-    isLoading: false,
-  ));
+  notifier.setTestState(
+    AuthState(firebaseUser: user, userProfile: profile, isLoading: false),
+  );
   return notifier;
 }
 
@@ -76,9 +69,7 @@ Future<void> _pumpWidget(
         authStateProvider.overrideWith((_) => notifier),
         syncServiceProvider.overrideWithValue(syncService),
       ],
-      child: const MaterialApp(
-        home: Scaffold(body: ShareCodeTab()),
-      ),
+      child: const MaterialApp(home: Scaffold(body: ShareCodeTab())),
     ),
   );
   await tester.pump();
@@ -193,8 +184,7 @@ void main() {
     });
 
     testWidgets('shows code after successful generation', (tester) async {
-      when(mockSyncService.createInvite(any))
-          .thenAnswer((_) async => 'ABC123');
+      when(mockSyncService.createInvite(any)).thenAnswer((_) async => 'ABC123');
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -218,10 +208,10 @@ void main() {
       expect(find.text('Share Code'), findsOneWidget);
     });
 
-    testWidgets('hides Generate Code button after code is generated',
-        (tester) async {
-      when(mockSyncService.createInvite(any))
-          .thenAnswer((_) async => 'ABC123');
+    testWidgets('hides Generate Code button after code is generated', (
+      tester,
+    ) async {
+      when(mockSyncService.createInvite(any)).thenAnswer((_) async => 'ABC123');
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -243,8 +233,9 @@ void main() {
     });
 
     testWidgets('shows error when code generation fails', (tester) async {
-      when(mockSyncService.createInvite(any))
-          .thenThrow(Exception('Network error'));
+      when(
+        mockSyncService.createInvite(any),
+      ).thenThrow(Exception('Network error'));
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -291,8 +282,7 @@ void main() {
     });
 
     testWidgets('createInvite is called with the user uid', (tester) async {
-      when(mockSyncService.createInvite(any))
-          .thenAnswer((_) async => 'ABC123');
+      when(mockSyncService.createInvite(any)).thenAnswer((_) async => 'ABC123');
 
       final notifier = _createNotifier(
         auth: mockAuth,
@@ -314,8 +304,7 @@ void main() {
     });
 
     testWidgets('shows copy and share icons after generation', (tester) async {
-      when(mockSyncService.createInvite(any))
-          .thenAnswer((_) async => 'ABC123');
+      when(mockSyncService.createInvite(any)).thenAnswer((_) async => 'ABC123');
 
       final notifier = _createNotifier(
         auth: mockAuth,

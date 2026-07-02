@@ -34,7 +34,11 @@ class _PairingScreenState extends ConsumerState<PairingScreen>
     super.initState();
     // Start on "Enter Code" tab (index 1) when arriving via a deep link.
     final startIndex = (widget.initialCode?.isNotEmpty == true) ? 1 : 0;
-    _tabController = TabController(length: 2, vsync: this, initialIndex: startIndex);
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: startIndex,
+    );
     _pollForPairing();
   }
 

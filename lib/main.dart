@@ -70,8 +70,10 @@ void main() async {
   // Firestore/Cloud Functions emulators are gone (V7 dropped them); data
   // now flows through SyncService → self-host backend. Point the backend
   // at a local tunnel via --dart-define=SYNC_BASE_URL=... instead.
-  const useEmulator =
-      bool.fromEnvironment('USE_FIREBASE_EMULATOR', defaultValue: false);
+  const useEmulator = bool.fromEnvironment(
+    'USE_FIREBASE_EMULATOR',
+    defaultValue: false,
+  );
   if (useEmulator) {
     await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
   }
@@ -88,11 +90,7 @@ void main() async {
   // Must be called after Firebase.initializeApp().
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  runApp(
-    const ProviderScope(
-      child: MyApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 /// Handles initialization errors by showing a user-friendly error screen.
@@ -121,18 +119,11 @@ class ErrorApp extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(
-                  Icons.error_outline,
-                  size: 64,
-                  color: Colors.red,
-                ),
+                const Icon(Icons.error_outline, size: 64, color: Colors.red),
                 const SizedBox(height: 24),
                 const Text(
                   'Unable to Start App',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),

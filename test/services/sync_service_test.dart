@@ -47,7 +47,8 @@ class _FakeBlockCache implements BlockCache {
 /// A controllable fake [WsConnection]. Tests push messages via [inject] and
 /// simulate drops via [simulateDrop].
 class _FakeWsConnection implements WsConnection {
-  final StreamController<String> _incoming = StreamController<String>.broadcast();
+  final StreamController<String> _incoming =
+      StreamController<String>.broadcast();
   final List<String> sent = [];
   bool _closed = false;
 
@@ -119,8 +120,11 @@ TimeBlock _block({
 }
 
 http.Response _jsonResponse(int status, Map<String, dynamic> body) {
-  return http.Response(jsonEncode(body), status,
-      headers: {'content-type': 'application/json'});
+  return http.Response(
+    jsonEncode(body),
+    status,
+    headers: {'content-type': 'application/json'},
+  );
 }
 
 void main() {
@@ -197,15 +201,18 @@ void main() {
     tearDown(() => service.dispose());
 
     test('upsertUser POSTs to /auth/verify with Bearer token', () async {
-      await service.upsertUser(UserModel(
-        email: 'a@b.com',
-        displayName: 'A',
-        timezone: 'UTC',
-        fcmTokens: const [],
-        createdAt: DateTime.fromMillisecondsSinceEpoch(1000, isUtc: true),
-      ));
+      await service.upsertUser(
+        UserModel(
+          email: 'a@b.com',
+          displayName: 'A',
+          timezone: 'UTC',
+          fcmTokens: const [],
+          createdAt: DateTime.fromMillisecondsSinceEpoch(1000, isUtc: true),
+        ),
+      );
       final req = requests.singleWhere(
-          (r) => r.url.path.endsWith('/auth/verify'));
+        (r) => r.url.path.endsWith('/auth/verify'),
+      );
       expect(req.method, 'POST');
       expect(req.headers['authorization'], 'Bearer test-token');
       expect(jsonDecode(req.body)['email'], 'a@b.com');
@@ -214,7 +221,8 @@ void main() {
     test('registerFcmToken POSTs the token to /auth/fcm-token', () async {
       await service.registerFcmToken('fcm-xyz');
       final req = requests.singleWhere(
-          (r) => r.url.path.endsWith('/auth/fcm-token'));
+        (r) => r.url.path.endsWith('/auth/fcm-token'),
+      );
       expect(jsonDecode(req.body)['token'], 'fcm-xyz');
     });
 
@@ -223,13 +231,18 @@ void main() {
       expect(id, 'new-block-id');
     });
 
-    test('atomicReplaceGoogleSourcedBlocks returns counts from server', () async {
-      final result = await service.atomicReplaceGoogleSourcedBlocks(
-        'c1', 'u1', [_block(id: 'g1'), _block(id: 'g2')],
-      );
-      expect(result.deletedCount, 3);
-      expect(result.createdCount, 2);
-    });
+    test(
+      'atomicReplaceGoogleSourcedBlocks returns counts from server',
+      () async {
+        final result = await service.atomicReplaceGoogleSourcedBlocks(
+          'c1',
+          'u1',
+          [_block(id: 'g1'), _block(id: 'g2')],
+        );
+        expect(result.deletedCount, 3);
+        expect(result.createdCount, 2);
+      },
+    );
 
     test('createInvite returns the invite code', () async {
       final code = await service.createInvite('u1');
@@ -243,8 +256,7 @@ void main() {
 
     test('unpair calls POST /couples/:id/unpair', () async {
       await service.unpair('c1');
-      final req = requests.singleWhere(
-          (r) => r.url.path.contains('/unpair'));
+      final req = requests.singleWhere((r) => r.url.path.contains('/unpair'));
       expect(req.method, 'POST');
     });
 
@@ -307,14 +319,16 @@ void main() {
       expect(emitted.first.single.id, 'cached');
 
       // Server pushes a new block.
-      socket.inject(jsonEncode({
-        't': 'block:set',
-        'block': {
-          ..._block(id: 'new', userId: 'u1').toJson(),
-          'id': 'new',
-          'createdAt': 1000,
-        },
-      }));
+      socket.inject(
+        jsonEncode({
+          't': 'block:set',
+          'block': {
+            ..._block(id: 'new', userId: 'u1').toJson(),
+            'id': 'new',
+            'createdAt': 1000,
+          },
+        }),
+      );
       await Future<void>.delayed(Duration.zero);
 
       expect(emitted.last.length, 2);
@@ -349,50 +363,53 @@ void main() {
   });
 
   group('SyncService WS — publishOverlap', () {
-    test('encodes the overlap message with windows, inputHash, computedBy',
-        () async {
-      final wsFactory = _FakeWsFactory();
-      final service = SyncService(
-        baseUrl: 'https://api.test',
-        wsUrl: 'wss://api.test/sync',
-        tokenProvider: () async => 'tok',
-        httpClient: MockClient((_) async => http.Response('{}', 200)),
-        wsConnect: wsFactory.asFactory(),
-        cache: _FakeBlockCache(),
-        backoffFor: (_) => Duration.zero,
-      );
-      addTearDown(service.dispose);
+    test(
+      'encodes the overlap message with windows, inputHash, computedBy',
+      () async {
+        final wsFactory = _FakeWsFactory();
+        final service = SyncService(
+          baseUrl: 'https://api.test',
+          wsUrl: 'wss://api.test/sync',
+          tokenProvider: () async => 'tok',
+          httpClient: MockClient((_) async => http.Response('{}', 200)),
+          wsConnect: wsFactory.asFactory(),
+          cache: _FakeBlockCache(),
+          backoffFor: (_) => Duration.zero,
+        );
+        addTearDown(service.dispose);
 
-      // Open the session by watching overlap (which opens the WS).
-      service.watchOverlap('c1');
-      final socket = await wsFactory.onCreate.first;
-      await Future<void>.delayed(Duration.zero);
+        // Open the session by watching overlap (which opens the WS).
+        service.watchOverlap('c1');
+        final socket = await wsFactory.onCreate.first;
+        await Future<void>.delayed(Duration.zero);
 
-      final result = OverlapResult(
-        windows: [
-          OverlapWindow(
+        final result = OverlapResult(
+          windows: [
+            OverlapWindow(
               startUtc: 100,
               endUtc: 200,
               durationMinutes: 1,
               score: 0.5,
-              reasonableBoth: true),
-        ],
-        computedAt: DateTime.fromMillisecondsSinceEpoch(1000, isUtc: true),
-        inputHash: 'abc123',
-        computedBy: 'u1',
-      );
-      await service.publishOverlap('c1', result);
+              reasonableBoth: true,
+            ),
+          ],
+          computedAt: DateTime.fromMillisecondsSinceEpoch(1000, isUtc: true),
+          inputHash: 'abc123',
+          computedBy: 'u1',
+        );
+        await service.publishOverlap('c1', result);
 
-      // Find the overlap message among sent frames.
-      final overlapFrame = socket.sent
-          .map((s) => jsonDecode(s) as Map<String, dynamic>)
-          .firstWhere((m) => m['t'] == 'overlap');
-      expect(overlapFrame['t'], 'overlap');
-      expect(overlapFrame['inputHash'], 'abc123');
-      expect(overlapFrame['computedBy'], 'u1');
-      final windows = overlapFrame['windows'] as List<dynamic>;
-      expect(windows.length, 1);
-      expect(windows.single['startUtc'], 100);
-    });
+        // Find the overlap message among sent frames.
+        final overlapFrame = socket.sent
+            .map((s) => jsonDecode(s) as Map<String, dynamic>)
+            .firstWhere((m) => m['t'] == 'overlap');
+        expect(overlapFrame['t'], 'overlap');
+        expect(overlapFrame['inputHash'], 'abc123');
+        expect(overlapFrame['computedBy'], 'u1');
+        final windows = overlapFrame['windows'] as List<dynamic>;
+        expect(windows.length, 1);
+        expect(windows.single['startUtc'], 100);
+      },
+    );
   });
 }

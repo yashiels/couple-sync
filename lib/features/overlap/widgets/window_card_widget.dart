@@ -94,10 +94,7 @@ class WindowCardWidget extends StatelessWidget {
     final color = _getScoreColor(window.score);
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(16),
@@ -106,11 +103,7 @@ class WindowCardWidget extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.star,
-            size: 16,
-            color: color,
-          ),
+          Icon(Icons.star, size: 16, color: color),
           const SizedBox(width: 4),
           Text(
             '$scoreDisplay',
@@ -137,7 +130,10 @@ class WindowCardWidget extends StatelessWidget {
 
     // Convert UTC timestamps to partner's timezone using TZDateTime
     final partnerLocation = tz.getLocation(partnerTimezone);
-    final partnerStart = tz.TZDateTime.from(window.startDateTime, partnerLocation);
+    final partnerStart = tz.TZDateTime.from(
+      window.startDateTime,
+      partnerLocation,
+    );
     final partnerEnd = tz.TZDateTime.from(window.endDateTime, partnerLocation);
 
     return Column(
@@ -146,11 +142,7 @@ class WindowCardWidget extends StatelessWidget {
         // User's time
         Row(
           children: [
-            Icon(
-              Icons.person,
-              size: 16,
-              color: theme.colorScheme.primary,
-            ),
+            Icon(Icons.person, size: 16, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
             Text(
               '${timeFormat.format(userStart)} - ${timeFormat.format(userEnd)}',
@@ -171,11 +163,7 @@ class WindowCardWidget extends StatelessWidget {
         // Partner's time
         Row(
           children: [
-            Icon(
-              Icons.favorite,
-              size: 16,
-              color: theme.colorScheme.secondary,
-            ),
+            Icon(Icons.favorite, size: 16, color: theme.colorScheme.secondary),
             const SizedBox(width: 8),
             Text(
               '${timeFormat.format(partnerStart)} - ${timeFormat.format(partnerEnd)}',
@@ -207,17 +195,11 @@ class WindowCardWidget extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          icon,
-          size: 16,
-          color: chipColor,
-        ),
+        Icon(icon, size: 16, color: chipColor),
         const SizedBox(width: 4),
         Text(
           label,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: chipColor,
-          ),
+          style: theme.textTheme.bodySmall?.copyWith(color: chipColor),
         ),
       ],
     );

@@ -90,11 +90,13 @@ void main() {
 
         expect(
           () => authService.signInWithGoogle(),
-          throwsA(isA<AuthException>().having(
-            (e) => e.code,
-            'code',
-            'sign-in-cancelled',
-          )),
+          throwsA(
+            isA<AuthException>().having(
+              (e) => e.code,
+              'code',
+              'sign-in-cancelled',
+            ),
+          ),
         );
       });
 
@@ -104,14 +106,17 @@ void main() {
         final mockUserCredential = MockUserCredential();
         final mockUser = MockUser();
 
-        when(mockGoogleSignIn.signIn())
-            .thenAnswer((_) async => mockGoogleAccount);
-        when(mockGoogleAccount.authentication)
-            .thenAnswer((_) async => mockGoogleAuth);
+        when(
+          mockGoogleSignIn.signIn(),
+        ).thenAnswer((_) async => mockGoogleAccount);
+        when(
+          mockGoogleAccount.authentication,
+        ).thenAnswer((_) async => mockGoogleAuth);
         when(mockGoogleAuth.accessToken).thenReturn('access-token');
         when(mockGoogleAuth.idToken).thenReturn('id-token');
-        when(mockAuth.signInWithCredential(any))
-            .thenAnswer((_) async => mockUserCredential);
+        when(
+          mockAuth.signInWithCredential(any),
+        ).thenAnswer((_) async => mockUserCredential);
         when(mockUserCredential.user).thenReturn(mockUser);
 
         stubUser(mockUser);
@@ -123,55 +128,67 @@ void main() {
         verify(mockSyncService.upsertUser(any)).called(1);
       });
 
-      test('throws AuthException when signInWithCredential returns null user',
-          () async {
-        final mockGoogleAccount = MockGoogleSignInAccount();
-        final mockGoogleAuth = MockGoogleSignInAuthentication();
-        final mockUserCredential = MockUserCredential();
+      test(
+        'throws AuthException when signInWithCredential returns null user',
+        () async {
+          final mockGoogleAccount = MockGoogleSignInAccount();
+          final mockGoogleAuth = MockGoogleSignInAuthentication();
+          final mockUserCredential = MockUserCredential();
 
-        when(mockGoogleSignIn.signIn())
-            .thenAnswer((_) async => mockGoogleAccount);
-        when(mockGoogleAccount.authentication)
-            .thenAnswer((_) async => mockGoogleAuth);
-        when(mockGoogleAuth.accessToken).thenReturn('access-token');
-        when(mockGoogleAuth.idToken).thenReturn('id-token');
-        when(mockAuth.signInWithCredential(any))
-            .thenAnswer((_) async => mockUserCredential);
-        when(mockUserCredential.user).thenReturn(null);
+          when(
+            mockGoogleSignIn.signIn(),
+          ).thenAnswer((_) async => mockGoogleAccount);
+          when(
+            mockGoogleAccount.authentication,
+          ).thenAnswer((_) async => mockGoogleAuth);
+          when(mockGoogleAuth.accessToken).thenReturn('access-token');
+          when(mockGoogleAuth.idToken).thenReturn('id-token');
+          when(
+            mockAuth.signInWithCredential(any),
+          ).thenAnswer((_) async => mockUserCredential);
+          when(mockUserCredential.user).thenReturn(null);
 
-        expect(
-          () => authService.signInWithGoogle(),
-          throwsA(isA<AuthException>().having(
-            (e) => e.code,
-            'code',
-            'sign-in-failed',
-          )),
-        );
-      });
+          expect(
+            () => authService.signInWithGoogle(),
+            throwsA(
+              isA<AuthException>().having(
+                (e) => e.code,
+                'code',
+                'sign-in-failed',
+              ),
+            ),
+          );
+        },
+      );
 
       test('wraps FirebaseAuthException as AuthException', () async {
         final mockGoogleAccount = MockGoogleSignInAccount();
         final mockGoogleAuth = MockGoogleSignInAuthentication();
 
-        when(mockGoogleSignIn.signIn())
-            .thenAnswer((_) async => mockGoogleAccount);
-        when(mockGoogleAccount.authentication)
-            .thenAnswer((_) async => mockGoogleAuth);
+        when(
+          mockGoogleSignIn.signIn(),
+        ).thenAnswer((_) async => mockGoogleAccount);
+        when(
+          mockGoogleAccount.authentication,
+        ).thenAnswer((_) async => mockGoogleAuth);
         when(mockGoogleAuth.accessToken).thenReturn('access-token');
         when(mockGoogleAuth.idToken).thenReturn('id-token');
-        when(mockAuth.signInWithCredential(any))
-            .thenThrow(FirebaseAuthException(
-          code: 'network-request-failed',
-          message: 'Network error',
-        ));
+        when(mockAuth.signInWithCredential(any)).thenThrow(
+          FirebaseAuthException(
+            code: 'network-request-failed',
+            message: 'Network error',
+          ),
+        );
 
         expect(
           () => authService.signInWithGoogle(),
-          throwsA(isA<AuthException>().having(
-            (e) => e.message,
-            'message',
-            'Network error. Please check your connection and try again.',
-          )),
+          throwsA(
+            isA<AuthException>().having(
+              (e) => e.message,
+              'message',
+              'Network error. Please check your connection and try again.',
+            ),
+          ),
         );
       });
 
@@ -180,11 +197,9 @@ void main() {
 
         expect(
           () => authService.signInWithGoogle(),
-          throwsA(isA<AuthException>().having(
-            (e) => e.code,
-            'code',
-            'unknown-error',
-          )),
+          throwsA(
+            isA<AuthException>().having((e) => e.code, 'code', 'unknown-error'),
+          ),
         );
       });
     });
@@ -202,18 +217,22 @@ void main() {
 
       test('wraps FirebaseAuthException as AuthException', () async {
         when(mockGoogleSignIn.signOut()).thenAnswer((_) async => null);
-        when(mockAuth.signOut()).thenThrow(FirebaseAuthException(
-          code: 'too-many-requests',
-          message: 'Rate limited',
-        ));
+        when(mockAuth.signOut()).thenThrow(
+          FirebaseAuthException(
+            code: 'too-many-requests',
+            message: 'Rate limited',
+          ),
+        );
 
         expect(
           () => authService.signOut(),
-          throwsA(isA<AuthException>().having(
-            (e) => e.message,
-            'message',
-            'Too many attempts. Please try again later.',
-          )),
+          throwsA(
+            isA<AuthException>().having(
+              (e) => e.message,
+              'message',
+              'Too many attempts. Please try again later.',
+            ),
+          ),
         );
       });
 
@@ -222,11 +241,9 @@ void main() {
 
         expect(
           () => authService.signOut(),
-          throwsA(isA<AuthException>().having(
-            (e) => e.code,
-            'code',
-            'unknown-error',
-          )),
+          throwsA(
+            isA<AuthException>().having((e) => e.code, 'code', 'unknown-error'),
+          ),
         );
       });
     });
@@ -255,7 +272,7 @@ void main() {
         'invalid-credential': 'Invalid credentials. Please try again.',
         'account-exists-with-different-credential':
             'An account already exists with a different sign-in method. '
-                'Please use the original sign-in method.',
+            'Please use the original sign-in method.',
         'some-other-code': 'Sign in failed. Please try again.',
       };
 
@@ -264,25 +281,27 @@ void main() {
           final mockGoogleAccount = MockGoogleSignInAccount();
           final mockGoogleAuth = MockGoogleSignInAuthentication();
 
-          when(mockGoogleSignIn.signIn())
-              .thenAnswer((_) async => mockGoogleAccount);
-          when(mockGoogleAccount.authentication)
-              .thenAnswer((_) async => mockGoogleAuth);
+          when(
+            mockGoogleSignIn.signIn(),
+          ).thenAnswer((_) async => mockGoogleAccount);
+          when(
+            mockGoogleAccount.authentication,
+          ).thenAnswer((_) async => mockGoogleAuth);
           when(mockGoogleAuth.accessToken).thenReturn('access-token');
           when(mockGoogleAuth.idToken).thenReturn('id-token');
-          when(mockAuth.signInWithCredential(any))
-              .thenThrow(FirebaseAuthException(
-            code: entry.key,
-            message: 'original',
-          ));
+          when(mockAuth.signInWithCredential(any)).thenThrow(
+            FirebaseAuthException(code: entry.key, message: 'original'),
+          );
 
           expect(
             () => authService.signInWithGoogle(),
-            throwsA(isA<AuthException>().having(
-              (e) => e.message,
-              'message',
-              entry.value,
-            )),
+            throwsA(
+              isA<AuthException>().having(
+                (e) => e.message,
+                'message',
+                entry.value,
+              ),
+            ),
           );
         });
       }

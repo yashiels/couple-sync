@@ -40,17 +40,17 @@ class CalendarService {
   /// Closed in [dispose] to prevent timer leaks.
   late final StreamController<bool> _connectionStateController =
       StreamController<bool>.broadcast(
-    // Emit the current connection state whenever a new listener subscribes
-    // so that callers using `.first` always receive a value without needing
-    // a prior call to [notifyConnectionStateChanged].
-    onListen: () => notifyConnectionStateChanged(),
-  );
+        // Emit the current connection state whenever a new listener subscribes
+        // so that callers using `.first` always receive a value without needing
+        // a prior call to [notifyConnectionStateChanged].
+        onListen: () => notifyConnectionStateChanged(),
+      );
 
   CalendarService({
     required GoogleSignIn googleSignIn,
     FlutterSecureStorage? secureStorage,
-  })  : _googleSignIn = googleSignIn,
-        _secureStorage = secureStorage ?? const FlutterSecureStorage();
+  }) : _googleSignIn = googleSignIn,
+       _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
   /// Stream of calendar connection state changes.
   ///
@@ -116,10 +116,7 @@ class CalendarService {
       }
 
       // Store tokens securely
-      await _secureStorage.write(
-        key: _accessTokenKey,
-        value: accessToken,
-      );
+      await _secureStorage.write(key: _accessTokenKey, value: accessToken);
 
       // Store token expiry (Google access tokens typically expire in 1 hour)
       final expiryTime = DateTime.now().add(const Duration(hours: 1));
@@ -139,7 +136,8 @@ class CalendarService {
     } catch (e) {
       throw CalendarException(
         code: 'connection-failed',
-        message: 'Failed to connect to Google Calendar: ${_getUserFriendlyError(e)}',
+        message:
+            'Failed to connect to Google Calendar: ${_getUserFriendlyError(e)}',
       );
     }
   }
@@ -201,8 +199,8 @@ class CalendarService {
     try {
       // For google_sign_in, we need to re-authenticate silently
       // Try to sign in silently with the existing account
-      final GoogleSignInAccount? googleUser =
-          await _googleSignIn.signInSilently();
+      final GoogleSignInAccount? googleUser = await _googleSignIn
+          .signInSilently();
 
       if (googleUser == null) {
         // Silent sign-in failed — the user needs to re-authenticate
@@ -223,10 +221,7 @@ class CalendarService {
       }
 
       // Store the new token
-      await _secureStorage.write(
-        key: _accessTokenKey,
-        value: accessToken,
-      );
+      await _secureStorage.write(key: _accessTokenKey, value: accessToken);
 
       final expiryTime = DateTime.now().add(const Duration(hours: 1));
       await _secureStorage.write(
@@ -247,7 +242,8 @@ class CalendarService {
   /// swallowed and falls back to `['primary']` so a degraded list call can
   /// never block the core freebusy sync.
   Future<List<String>> _resolveCalendarIds(
-      calendar.CalendarApi calendarApi) async {
+    calendar.CalendarApi calendarApi,
+  ) async {
     try {
       final listResponse = await calendarApi.calendarList.list();
       final items = listResponse.items;
@@ -312,8 +308,9 @@ class CalendarService {
       );
 
       // Execute freebusy query with exponential backoff on 429/503.
-      final response =
-          await withBackoff(() => calendarApi.freebusy.query(request));
+      final response = await withBackoff(
+        () => calendarApi.freebusy.query(request),
+      );
 
       // Extract busy intervals from response across ALL queried calendars
       // (not just 'primary'), so secondary calendars contribute too.
@@ -328,10 +325,7 @@ class CalendarService {
             final start = period.start;
             final end = period.end;
             if (start != null && end != null) {
-              busyIntervals.add((
-                start: start,
-                end: end,
-              ));
+              busyIntervals.add((start: start, end: end));
             }
           }
         }
@@ -343,7 +337,8 @@ class CalendarService {
     } catch (e) {
       throw CalendarException(
         code: 'freebusy-failed',
-        message: 'Failed to fetch calendar availability: ${_getUserFriendlyError(e)}',
+        message:
+            'Failed to fetch calendar availability: ${_getUserFriendlyError(e)}',
       );
     } finally {
       rawClient.close();
@@ -412,7 +407,7 @@ class CalendarService {
   /// Converts error to user-friendly message.
   String _getUserFriendlyError(dynamic error) {
     final errorString = error.toString().toLowerCase();
-    
+
     if (errorString.contains('network') || errorString.contains('connection')) {
       return 'Network error. Please check your connection and try again.';
     }
@@ -422,7 +417,7 @@ class CalendarService {
     if (errorString.contains('permission') || errorString.contains('denied')) {
       return 'Permission denied. Please allow calendar access to continue.';
     }
-    
+
     return 'An unexpected error occurred. Please try again.';
   }
 }
@@ -436,7 +431,8 @@ class _AuthenticatedClient extends http.BaseClient {
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    request.headers['Authorization'] = '${_accessToken.type} ${_accessToken.data}';
+    request.headers['Authorization'] =
+        '${_accessToken.type} ${_accessToken.data}';
     return _client.send(request);
   }
 
@@ -451,10 +447,7 @@ class CalendarException implements Exception {
   final String code;
   final String message;
 
-  const CalendarException({
-    required this.code,
-    required this.message,
-  });
+  const CalendarException({required this.code, required this.message});
 
   @override
   String toString() => 'CalendarException($code): $message';
@@ -477,7 +470,8 @@ Future<T> withBackoff<T>(
       return await operation();
     } catch (e) {
       final s = e.toString().toLowerCase();
-      final retriable = s.contains('429') ||
+      final retriable =
+          s.contains('429') ||
           s.contains('503') ||
           s.contains('rate') ||
           s.contains('unavailable');

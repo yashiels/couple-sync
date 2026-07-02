@@ -39,8 +39,11 @@ class _WeekViewScreenState extends ConsumerState<WeekViewScreen> {
   /// Get the start of the week (Monday) for a given date
   DateTime _getWeekStart(DateTime date) {
     final weekday = date.weekday;
-    return DateTime(date.year, date.month, date.day)
-        .subtract(Duration(days: weekday - 1));
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+    ).subtract(Duration(days: weekday - 1));
   }
 
   @override
@@ -54,9 +57,7 @@ class _WeekViewScreenState extends ConsumerState<WeekViewScreen> {
     if (currentUserId == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Calendar')),
-        body: const Center(
-          child: Text('Not authenticated. Please sign in.'),
-        ),
+        body: const Center(child: Text('Not authenticated. Please sign in.')),
       );
     }
 
@@ -143,15 +144,15 @@ class _WeekViewScreenState extends ConsumerState<WeekViewScreen> {
             Text(
               'No blocks yet',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
               'Tap + to create your first time block',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -175,8 +176,11 @@ class _WeekViewScreenState extends ConsumerState<WeekViewScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.error_outline, size: 64,
-              color: theme.colorScheme.onSurfaceVariant),
+          Icon(
+            Icons.error_outline,
+            size: 64,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
           const SizedBox(height: 16),
           Text(
             message,
@@ -194,10 +198,7 @@ class _WeekViewScreenState extends ConsumerState<WeekViewScreen> {
             ),
           ],
           const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: onRetry,
-            child: const Text('Retry'),
-          ),
+          ElevatedButton(onPressed: onRetry, child: const Text('Retry')),
         ],
       ),
     );
@@ -220,8 +221,9 @@ class _WeekViewScreenState extends ConsumerState<WeekViewScreen> {
 
   /// Navigate to block form to add new block
   void _addNewBlock() {
-    context.push(AppRoutes.blockForm, extra: BlockFormArgs(
-      initialDate: DateTime.now(),
-    ));
+    context.push(
+      AppRoutes.blockForm,
+      extra: BlockFormArgs(initialDate: DateTime.now()),
+    );
   }
 }
