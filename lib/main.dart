@@ -1,13 +1,12 @@
 import 'dart:ui';
 
-import 'package:cloud_functions/cloud_functions.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
@@ -64,17 +63,23 @@ void main() async {
     );
   }
 
-  // ponytail: point Firebase clients at the local emulators when the
+  // ponytail: point Firebase Auth at the local emulator when the
   // USE_FIREBASE_EMULATOR dart-define is set. Opt-in via --dart-define so
   // prod/release builds are untouched. iOS sim uses 'localhost' (Android
   // would need 10.0.2.2, but we're targeting iOS sim for the demo).
+  // Firestore/Cloud Functions emulators are gone (V7 dropped them); data
+  // now flows through SyncService → self-host backend. Point the backend
+  // at a local tunnel via --dart-define=SYNC_BASE_URL=... instead.
   const useEmulator =
       bool.fromEnvironment('USE_FIREBASE_EMULATOR', defaultValue: false);
   if (useEmulator) {
     await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
-    FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
-    FirebaseFunctions.instance.useFunctionsEmulator('localhost', 5001);
   }
+
+  // Hive is the offline block cache backing SyncService. Must be initialised
+  // before any SyncService is constructed (the provider is first read once
+  // the app starts running).
+  await Hive.initFlutter();
 
   // Initialize timezone database before any TZDateTime operations
   await TimezoneHelper.initialize();

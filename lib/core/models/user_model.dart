@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 /// User document model for users/{uid}
 class UserModel {
   final String email;
@@ -33,9 +31,7 @@ class UserModel {
               ?.map((e) => e as String)
               .toList() ??
           [],
-      createdAt: json['createdAt'] is Timestamp
-          ? (json['createdAt'] as Timestamp).toDate()
-          : DateTime.now(),
+      createdAt: _parseDateTime(json['createdAt']),
       showLateNightWindows: json['showLateNightWindows'] as bool? ?? false,
     );
   }
@@ -48,7 +44,7 @@ class UserModel {
       'timezone': timezone,
       'coupleId': coupleId,
       'fcmTokens': fcmTokens,
-      'createdAt': Timestamp.fromDate(createdAt),
+      'createdAt': createdAt.millisecondsSinceEpoch,
       'showLateNightWindows': showLateNightWindows,
     };
   }
@@ -115,4 +111,19 @@ class UserModel {
     }
     return true;
   }
+}
+
+/// Parse a DateTime from int ms since epoch, an ISO-8601 string, or a DateTime.
+/// Firestore Timestamps are no longer used (V7 dropped cloud_firestore); the
+/// backend stores all timestamps as bigint ms.
+DateTime _parseDateTime(dynamic value) {
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value, isUtc: true);
+  }
+  if (value is DateTime) return value.toUtc();
+  if (value is String) {
+    final parsed = DateTime.tryParse(value);
+    if (parsed != null) return parsed.toUtc();
+  }
+  return DateTime.now().toUtc();
 }

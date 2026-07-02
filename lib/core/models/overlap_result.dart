@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 /// Overlap window representing a mutual free time period
 class OverlapWindow {
   final int startUtc; // Milliseconds since epoch (UTC)
@@ -108,14 +106,7 @@ class OverlapResult {
               ?.map((e) => OverlapWindow.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
-      computedAt: json['computedAt'] is Timestamp
-          ? (json['computedAt'] as Timestamp).toDate()
-          : json['computedAt'] is int
-              ? DateTime.fromMillisecondsSinceEpoch(
-                  json['computedAt'] as int,
-                  isUtc: true,
-                )
-              : DateTime.now().toUtc(),
+      computedAt: _parseDateTime(json['computedAt']),
       inputHash: json['inputHash'] as String? ?? '',
       computedBy: json['computedBy'] as String?,
     );
@@ -191,4 +182,17 @@ class OverlapResult {
     }
     return true;
   }
+}
+
+/// Parse a DateTime from int ms since epoch, an ISO-8601 string, or a DateTime.
+DateTime _parseDateTime(dynamic value) {
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value, isUtc: true);
+  }
+  if (value is DateTime) return value.toUtc();
+  if (value is String) {
+    final parsed = DateTime.tryParse(value);
+    if (parsed != null) return parsed.toUtc();
+  }
+  return DateTime.now().toUtc();
 }

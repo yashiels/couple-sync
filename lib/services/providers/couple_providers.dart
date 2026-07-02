@@ -5,14 +5,14 @@ import '../../core/models/overlap_result.dart';
 import '../../core/models/time_block.dart';
 import '../../core/models/user_model.dart';
 import 'auth_state_provider.dart';
-import 'firestore_provider.dart';
+import 'sync_provider.dart';
 
 /// Fetches the current user's couple document.
 /// Returns null if the user has no coupleId set on their profile.
 final coupleProvider = FutureProvider<CoupleModel?>((ref) {
   final profile = ref.watch(currentUserProfileProvider);
   if (profile?.coupleId == null) return null;
-  return ref.watch(firestoreServiceProvider).getCouple(profile!.coupleId!);
+  return ref.watch(syncServiceProvider).getCouple(profile!.coupleId!);
 });
 
 /// Fetches the partner's user profile.
@@ -23,7 +23,7 @@ final partnerProfileProvider = FutureProvider<UserModel?>((ref) {
   if (couple == null || myUid == null) return null;
   final partnerId =
       couple.userAUid == myUid ? couple.userBUid : couple.userAUid;
-  return ref.watch(firestoreServiceProvider).getUser(partnerId);
+  return ref.watch(syncServiceProvider).getUserByUid(partnerId);
 });
 
 /// Real-time stream of the current user's time blocks.
@@ -32,7 +32,7 @@ final userBlocksProvider = StreamProvider<List<TimeBlock>>((ref) {
   final profile = ref.watch(currentUserProfileProvider);
   final myUid = ref.watch(currentUserIdProvider);
   if (profile?.coupleId == null || myUid == null) return Stream.value([]);
-  return ref.watch(firestoreServiceProvider).watchBlocks(
+  return ref.watch(syncServiceProvider).watchBlocks(
         profile!.coupleId!,
         userId: myUid,
       );
@@ -49,7 +49,7 @@ final partnerBlocksProvider = StreamProvider<List<TimeBlock>>((ref) {
   }
   final partnerId =
       couple.userAUid == myUid ? couple.userBUid : couple.userAUid;
-  return ref.watch(firestoreServiceProvider).watchBlocks(
+  return ref.watch(syncServiceProvider).watchBlocks(
         profile!.coupleId!,
         userId: partnerId,
       );
@@ -60,5 +60,5 @@ final partnerBlocksProvider = StreamProvider<List<TimeBlock>>((ref) {
 final overlapWindowsProvider = StreamProvider<OverlapResult?>((ref) {
   final profile = ref.watch(currentUserProfileProvider);
   if (profile?.coupleId == null) return Stream.value(null);
-  return ref.watch(firestoreServiceProvider).watchOverlap(profile!.coupleId!);
+  return ref.watch(syncServiceProvider).watchOverlap(profile!.coupleId!);
 });

@@ -2,7 +2,8 @@ import 'package:couple_sync/core/models/user_model.dart';
 import 'package:couple_sync/features/onboarding/screens/timezone_setup_screen.dart';
 import 'package:couple_sync/services/auth_service.dart';
 import 'package:couple_sync/services/providers/auth_state_provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:couple_sync/services/providers/sync_provider.dart';
+import 'package:couple_sync/services/sync_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,16 +13,9 @@ import 'package:mockito/mockito.dart';
 
 @GenerateMocks([
   FirebaseAuth,
-  FirebaseFirestore,
   AuthService,
+  SyncService,
   User,
-], customMocks: [
-  MockSpec<CollectionReference<Map<String, dynamic>>>(
-    as: #MockCollectionReferenceMap,
-  ),
-  MockSpec<DocumentReference<Map<String, dynamic>>>(
-    as: #MockDocumentReferenceMap,
-  ),
 ])
 import 'timezone_setup_screen_test.mocks.dart';
 
@@ -39,12 +33,15 @@ UserModel _testProfile({
   );
 }
 
+/// AuthStateNotifier subclass that exposes `state` for test setup. Mirrors the
+/// V7 constructor signature: `(auth, authService, fetchProfile)` — `firestore`
+/// was removed when the data layer moved to [SyncService].
 class _TestAuthStateNotifier extends AuthStateNotifier {
   _TestAuthStateNotifier({
     required super.auth,
-    required super.firestore,
     required super.authService,
-  });
+    required super.fetchProfile,
+  }) : super(profileRetryDelay: Duration.zero);
 
   void setTestState(AuthState newState) {
     // ignore: invalid_use_of_protected_member
@@ -54,15 +51,15 @@ class _TestAuthStateNotifier extends AuthStateNotifier {
 
 _TestAuthStateNotifier _createNotifier({
   required MockFirebaseAuth auth,
-  required MockFirebaseFirestore firestore,
   required MockAuthService authService,
+  required MockSyncService syncService,
   User? user,
   UserModel? profile,
 }) {
   final notifier = _TestAuthStateNotifier(
     auth: auth,
-    firestore: firestore,
     authService: authService,
+    fetchProfile: (uid) => syncService.getUser(uid),
   );
   notifier.setTestState(AuthState(
     firebaseUser: user,
@@ -75,11 +72,13 @@ _TestAuthStateNotifier _createNotifier({
 Future<void> _pumpScreen(
   WidgetTester tester, {
   required AuthStateNotifier notifier,
+  required MockSyncService syncService,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         authStateProvider.overrideWith((_) => notifier),
+        syncServiceProvider.overrideWithValue(syncService),
       ],
       child: const MaterialApp(
         home: TimezoneSetupScreen(),
@@ -92,37 +91,34 @@ Future<void> _pumpScreen(
 
 void main() {
   late MockFirebaseAuth mockAuth;
-  late MockFirebaseFirestore mockFirestore;
   late MockAuthService mockAuthService;
+  late MockSyncService mockSyncService;
   late MockUser mockUser;
-  late MockCollectionReferenceMap mockCollection;
-  late MockDocumentReferenceMap mockDocRef;
 
   setUp(() {
     mockAuth = MockFirebaseAuth();
-    mockFirestore = MockFirebaseFirestore();
     mockAuthService = MockAuthService();
+    mockSyncService = MockSyncService();
     mockUser = MockUser();
-    mockCollection = MockCollectionReferenceMap();
-    mockDocRef = MockDocumentReferenceMap();
 
     when(mockAuth.authStateChanges()).thenAnswer((_) => const Stream.empty());
-    when(mockFirestore.collection('users')).thenReturn(mockCollection);
-    when(mockCollection.doc(any)).thenReturn(mockDocRef);
     when(mockUser.uid).thenReturn('test-uid');
+    // fetchProfile fallback — never called in these tests since authStateChanges
+    // is empty and state is set directly, but stubbed to avoid MissingStubError.
+    when(mockSyncService.getUser(any)).thenAnswer((_) async => null);
   });
 
   group('TimezoneSetupScreen', () {
     testWidgets('renders AppBar with title', (tester) async {
       final notifier = _createNotifier(
         auth: mockAuth,
-        firestore: mockFirestore,
         authService: mockAuthService,
+        syncService: mockSyncService,
         user: mockUser,
         profile: _testProfile(),
       );
 
-      await _pumpScreen(tester, notifier: notifier);
+      await _pumpScreen(tester, notifier: notifier, syncService: mockSyncService);
 
       expect(find.text('Set Your Timezone'), findsOneWidget);
     });
@@ -130,13 +126,13 @@ void main() {
     testWidgets('does not show back button in AppBar', (tester) async {
       final notifier = _createNotifier(
         auth: mockAuth,
-        firestore: mockFirestore,
         authService: mockAuthService,
+        syncService: mockSyncService,
         user: mockUser,
         profile: _testProfile(),
       );
 
-      await _pumpScreen(tester, notifier: notifier);
+      await _pumpScreen(tester, notifier: notifier, syncService: mockSyncService);
 
       final appBar = tester.widget<AppBar>(find.byType(AppBar));
       expect(appBar.automaticallyImplyLeading, isFalse);
@@ -145,13 +141,13 @@ void main() {
     testWidgets('shows detected timezone text after loading', (tester) async {
       final notifier = _createNotifier(
         auth: mockAuth,
-        firestore: mockFirestore,
         authService: mockAuthService,
+        syncService: mockSyncService,
         user: mockUser,
         profile: _testProfile(),
       );
 
-      await _pumpScreen(tester, notifier: notifier);
+      await _pumpScreen(tester, notifier: notifier, syncService: mockSyncService);
 
       expect(find.text('We detected your timezone'), findsOneWidget);
     });
@@ -159,13 +155,13 @@ void main() {
     testWidgets('shows search field', (tester) async {
       final notifier = _createNotifier(
         auth: mockAuth,
-        firestore: mockFirestore,
         authService: mockAuthService,
+        syncService: mockSyncService,
         user: mockUser,
         profile: _testProfile(),
       );
 
-      await _pumpScreen(tester, notifier: notifier);
+      await _pumpScreen(tester, notifier: notifier, syncService: mockSyncService);
 
       expect(find.text('Search timezones...'), findsOneWidget);
       expect(find.byIcon(Icons.search), findsOneWidget);
@@ -174,13 +170,13 @@ void main() {
     testWidgets('shows search helper text', (tester) async {
       final notifier = _createNotifier(
         auth: mockAuth,
-        firestore: mockFirestore,
         authService: mockAuthService,
+        syncService: mockSyncService,
         user: mockUser,
         profile: _testProfile(),
       );
 
-      await _pumpScreen(tester, notifier: notifier);
+      await _pumpScreen(tester, notifier: notifier, syncService: mockSyncService);
 
       expect(
         find.text('Or search for a different timezone:'),
@@ -191,13 +187,13 @@ void main() {
     testWidgets('shows Continue button', (tester) async {
       final notifier = _createNotifier(
         auth: mockAuth,
-        firestore: mockFirestore,
         authService: mockAuthService,
+        syncService: mockSyncService,
         user: mockUser,
         profile: _testProfile(),
       );
 
-      await _pumpScreen(tester, notifier: notifier);
+      await _pumpScreen(tester, notifier: notifier, syncService: mockSyncService);
 
       expect(find.text('Continue'), findsOneWidget);
     });
@@ -205,8 +201,8 @@ void main() {
     testWidgets('shows loading indicator initially', (tester) async {
       final notifier = _createNotifier(
         auth: mockAuth,
-        firestore: mockFirestore,
         authService: mockAuthService,
+        syncService: mockSyncService,
         user: mockUser,
         profile: _testProfile(),
       );
@@ -216,6 +212,7 @@ void main() {
         ProviderScope(
           overrides: [
             authStateProvider.overrideWith((_) => notifier),
+            syncServiceProvider.overrideWithValue(mockSyncService),
           ],
           child: const MaterialApp(
             home: TimezoneSetupScreen(),
@@ -232,13 +229,13 @@ void main() {
     testWidgets('search field accepts input', (tester) async {
       final notifier = _createNotifier(
         auth: mockAuth,
-        firestore: mockFirestore,
         authService: mockAuthService,
+        syncService: mockSyncService,
         user: mockUser,
         profile: _testProfile(),
       );
 
-      await _pumpScreen(tester, notifier: notifier);
+      await _pumpScreen(tester, notifier: notifier, syncService: mockSyncService);
 
       await tester.enterText(
           find.byType(TextField).first, 'New York');
@@ -251,13 +248,13 @@ void main() {
     testWidgets('clear button clears search input', (tester) async {
       final notifier = _createNotifier(
         auth: mockAuth,
-        firestore: mockFirestore,
         authService: mockAuthService,
+        syncService: mockSyncService,
         user: mockUser,
         profile: _testProfile(),
       );
 
-      await _pumpScreen(tester, notifier: notifier);
+      await _pumpScreen(tester, notifier: notifier, syncService: mockSyncService);
 
       await tester.enterText(
           find.byType(TextField).first, 'London');
@@ -273,13 +270,13 @@ void main() {
     testWidgets('has a Scaffold', (tester) async {
       final notifier = _createNotifier(
         auth: mockAuth,
-        firestore: mockFirestore,
         authService: mockAuthService,
+        syncService: mockSyncService,
         user: mockUser,
         profile: _testProfile(),
       );
 
-      await _pumpScreen(tester, notifier: notifier);
+      await _pumpScreen(tester, notifier: notifier, syncService: mockSyncService);
 
       expect(find.byType(Scaffold), findsOneWidget);
     });

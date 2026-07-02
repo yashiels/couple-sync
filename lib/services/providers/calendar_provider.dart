@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../calendar_service.dart';
-import '../firestore_service.dart';
+import '../sync_service.dart';
 import 'auth_state_provider.dart';
-import 'firestore_provider.dart';
+import 'sync_provider.dart';
 
 /// Provider for the CalendarService singleton.
 /// Injects the shared [GoogleSignIn] instance from [googleSignInProvider] so
@@ -106,10 +106,10 @@ class CalendarConnectionNotifier extends StateNotifier<AsyncValue<bool>> {
 /// Notifier for managing calendar sync operations.
 class CalendarSyncNotifier extends StateNotifier<CalendarSyncState> {
   final CalendarService _calendarService;
-  final FirestoreService _firestoreService;
+  final SyncService _syncService;
   final Ref _ref;
 
-  CalendarSyncNotifier(this._calendarService, this._firestoreService, this._ref)
+  CalendarSyncNotifier(this._calendarService, this._syncService, this._ref)
       : super(const CalendarSyncState()) {
     _loadLastSyncTime();
   }
@@ -179,7 +179,7 @@ class CalendarSyncNotifier extends StateNotifier<CalendarSyncState> {
       //    in a single WriteBatch commit — eliminates the data-loss window that
       //    existed when delete and write were two separate operations.
       final (:deletedCount, :createdCount) =
-          await _firestoreService.atomicReplaceGoogleSourcedBlocks(
+          await _syncService.atomicReplaceGoogleSourcedBlocks(
         coupleId,
         userId,
         newBlocks,
@@ -263,6 +263,6 @@ final calendarConnectionNotifierProvider =
 final calendarSyncNotifierProvider =
     StateNotifierProvider<CalendarSyncNotifier, CalendarSyncState>((ref) {
   final calendarService = ref.watch(calendarServiceProvider);
-  final firestoreService = ref.watch(firestoreServiceProvider);
-  return CalendarSyncNotifier(calendarService, firestoreService, ref);
+  final syncService = ref.watch(syncServiceProvider);
+  return CalendarSyncNotifier(calendarService, syncService, ref);
 });

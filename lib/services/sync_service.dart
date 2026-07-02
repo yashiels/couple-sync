@@ -154,21 +154,17 @@ class HiveBlockCache implements BlockCache {
 }
 
 // ---------------------------------------------------------------------------
-// JSON helpers (models use Firestore Timestamp in toJson; the backend expects
-// int ms since epoch. These helpers produce JSON-serialisable maps without
-// touching the model classes.)
+// JSON helpers. The models already serialise timestamps as int ms since epoch
+// (V7 dropped cloud_firestore); these helpers just attach the block id where
+// the backend expects it and ensure `createdAt` is an int.
 // ---------------------------------------------------------------------------
 
 Map<String, dynamic> _blockToJsonWithId(TimeBlock b) => {
       ...b.toJson(),
       'id': b.id,
-      'createdAt': b.createdAt.millisecondsSinceEpoch,
     };
 
-Map<String, dynamic> _blockToJson(TimeBlock b) => {
-      ...b.toJson(),
-      'createdAt': b.createdAt.millisecondsSinceEpoch,
-    };
+Map<String, dynamic> _blockToJson(TimeBlock b) => b.toJson();
 
 // ---------------------------------------------------------------------------
 // Per-couple WS session
@@ -425,6 +421,47 @@ class SyncService {
     _ensureOk(res, 'Failed to register FCM token');
   }
 
+  /// GET /users/:uid — fetch a user by uid (used for the partner's profile;
+  /// the backend authorises via couple-membership check on the Bearer token).
+  /// [getUser] (GET /users/me) resolves the caller from the token instead.
+  Future<UserModel?> getUserByUid(String uid) async {
+    final res = await _get('/users/$uid');
+    if (res.statusCode == 404) return null;
+    final body = _decodeOrThrow(res, 'Failed to get user by uid');
+    return UserModel.fromJson(body as Map<String, dynamic>);
+  }
+
+  /// PATCH /users/:uid — partial update of a user doc (e.g. timezone,
+  /// showLateNightWindows). The backend enforces that the caller may only
+  /// patch their own uid.
+  Future<void> updateUser(String uid, Map<String, dynamic> data) async {
+    final res = await _patch('/users/$uid', data);
+    _ensureOk(res, 'Failed to update user');
+  }
+
+  /// GET /couples/:id — fetch a couple document.
+  Future<CoupleModel?> getCouple(String coupleId) async {
+    final res = await _get('/couples/$coupleId');
+    if (res.statusCode == 404) return null;
+    final body = _decodeOrThrow(res, 'Failed to get couple');
+    return CoupleModel.fromJson(body as Map<String, dynamic>);
+  }
+
+  /// GET /blocks/:id — fetch a single block (used by the block editor).
+  /// Pass the coupleId for context (the backend scopes auth by couple).
+  Future<TimeBlock?> getBlock(String coupleId, String blockId) async {
+    final res = await _get('/blocks/$blockId?coupleId=$coupleId');
+    if (res.statusCode == 404) return null;
+    final body = _decodeOrThrow(res, 'Failed to get block');
+    final id = (body['id'] as String?) ??
+        (body['blockId'] as String?) ??
+        blockId;
+    return TimeBlock.fromJson(
+      Map<String, dynamic>.from(body as Map),
+      id,
+    );
+  }
+
   // ==========================================================================
   // BLOCKS
   // ==========================================================================
@@ -590,6 +627,15 @@ class SyncService {
   Future<http.Response> _put(String path, Map<String, dynamic> body) async {
     final token = await tokenProvider();
     return _httpClient.put(
+      Uri.parse('$baseUrl$path'),
+      headers: _headers(token),
+      body: jsonEncode(body),
+    );
+  }
+
+  Future<http.Response> _patch(String path, Map<String, dynamic> body) async {
+    final token = await tokenProvider();
+    return _httpClient.patch(
       Uri.parse('$baseUrl$path'),
       headers: _headers(token),
       body: jsonEncode(body),

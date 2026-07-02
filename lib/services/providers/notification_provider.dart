@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../notification_service.dart';
 import 'auth_state_provider.dart';
+import 'sync_provider.dart';
 
 /// Provider for the NotificationService singleton.
 ///
@@ -12,7 +13,9 @@ import 'auth_state_provider.dart';
 /// authenticated. If the provider is created before auth resolves, initialize
 /// is a no-op until [authStateProvider] emits an authenticated state.
 final notificationServiceProvider = Provider<NotificationService>((ref) {
-  final service = NotificationService();
+  final service = NotificationService(
+    syncService: ref.watch(syncServiceProvider),
+  );
   ref.onDispose(service.dispose);
 
   // Initialize as soon as a userId is available. Re-runs whenever auth state

@@ -33,12 +33,11 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # Firebase
+  # Firebase (Auth + FCM + App Check stay on free Spark; Firestore/Functions
+  # dropped in V7 — data flows through the self-host backend via SyncService).
   firebase_core: ^3.13.0
   firebase_auth: ^5.5.2
-  cloud_firestore: ^5.6.6
   firebase_messaging: ^15.2.4
-  cloud_functions: ^5.3.4
   firebase_app_check: ^0.3.2+10  # brief specified ^0.4.0 but that requires firebase_core ^4.x; project is on ^3.13.0
 
   # Authentication

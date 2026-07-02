@@ -1,15 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:couple_sync/core/models/models.dart';
 import 'package:couple_sync/core/overlap/overlap_engine.dart';
+import 'package:couple_sync/services/sync_service.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../services/firestore_service.dart';
 import '../../services/providers/auth_state_provider.dart';
-import '../../services/providers/firestore_provider.dart';
+import '../../services/providers/sync_provider.dart';
 
 /// Per-partner inputs needed to compute an overlap. Mirrors the fields used by
 /// [computeOverlap] and [computeOverlapInputHash] for one partner.
@@ -28,8 +27,8 @@ class PartnerInput {
 ///
 /// `inputHash = sha256(blocksA ‖ blocksB ‖ tzA ‖ tzB ‖ prefsA ‖ prefsB ‖
 /// kAlgoVersion ‖ nowBucket).slice(0,16)`. Both devices in the same hour
-/// produce the same hash, so the two-writer race in [FirestoreService
-/// .writeOverlapTransaction] is benign.
+/// produce the same hash, so the two-writer race is benign — the server
+/// dedups on `inputHash` in [SyncService.publishOverlap].
 String computeOverlapInputHash({
   required List<TimeBlock> blocksA,
   required List<TimeBlock> blocksB,
@@ -60,20 +59,20 @@ String computeOverlapInputHash({
 int floorToHour(int ms) => (ms ~/ (60 * 60 * 1000)) * (60 * 60 * 1000);
 
 /// Riverpod controller that recomputes the overlap whenever either partner's
-/// blocks or profile change, then writes the result via a Firestore
-/// transaction. The transaction skips the write if the stored `inputHash`
-/// already matches, so the two-writer race between devices is benign.
+/// blocks change, then publishes the result via [SyncService.publishOverlap]
+/// (a WebSocket `overlap` message). The server dedups on `inputHash` and pushes
+/// FCM to the offline partner, so the two-writer race between devices is
+/// benign.
 ///
-/// The pure helpers ([computeOverlapInputHash], [floorToHour]) are unit-tested
-/// in `test/core/overlap/overlap_controller_test.dart`. The stream wiring here
-/// is integration code covered end-to-end by the A11 smoke test.
+/// Partner profiles (tz + showLateNightWindows) are fetched on demand from the
+/// backend via [SyncService.getUserByUid] when the couple is resolved. The pure
+/// helpers ([computeOverlapInputHash], [floorToHour]) are unit-tested in
+/// `test/core/overlap/overlap_controller_test.dart`.
 class OverlapController
     extends AutoDisposeFamilyAsyncNotifier<OverlapResult, String> {
   Timer? _debounce;
+  Timer? _profilePoll;
   StreamSubscription<List<TimeBlock>>? _blocksSub;
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _userASub;
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _userBSub;
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _coupleSub;
 
   /// Latest blocks + prefs snapshot. Updated by each stream callback; the
   /// debounced compute reads from here so a flurry of events collapses to one
@@ -85,8 +84,8 @@ class OverlapController
   String? _userAUid;
   String? _userBUid;
 
-  /// Last `inputHash` written by this controller. Skips a redundant
-  /// transaction write when the inputs have not changed.
+  /// Last `inputHash` published by this controller. Skips a redundant publish
+  /// when the inputs have not changed.
   String? _lastWrittenHash;
 
   static const Duration _debounceDelay = Duration(milliseconds: 500);
@@ -96,27 +95,30 @@ class OverlapController
     ref.onDispose(() {
       _debounce?.cancel();
       _blocksSub?.cancel();
-      _userASub?.cancel();
-      _userBSub?.cancel();
-      _coupleSub?.cancel();
+      _profilePoll?.cancel();
     });
 
-    final firestore = ref.watch(firestoreServiceProvider);
+    final sync = ref.watch(syncServiceProvider);
     final myUid = ref.watch(currentUserIdProvider);
 
-    // Watch the couple doc to resolve userAUid/userBUid and re-subscribe to
-    // each partner's profile when membership changes.
-    _coupleSub = firestore
-        .getCoupleStream(coupleId)
-        .listen((snap) => _onCoupleDoc(firestore, coupleId, snap, myUid));
+    // Resolve the couple doc to learn userAUid/userBUid, then fetch each
+    // partner's profile. Re-run on a short poll so a freshly-paired partner
+    // is picked up without a full restart.
+    _resolveCoupleAndProfiles(sync, coupleId, myUid);
+    _profilePoll = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _resolveCoupleAndProfiles(sync, coupleId, myUid),
+    );
 
     // Watch all blocks for the couple; partition by userId before computing.
-    _blocksSub = firestore.watchBlocks(coupleId).listen((blocks) {
+    _blocksSub = sync.watchBlocks(coupleId).listen((blocks) {
       final a = _userAUid;
       final b = _userBUid;
-      _blocksA = a == null ? const [] : blocks.where((bl) => bl.userId == a).toList();
-      _blocksB = b == null ? const [] : blocks.where((bl) => bl.userId == b).toList();
-      _scheduleCompute(firestore, coupleId, myUid);
+      _blocksA =
+          a == null ? const [] : blocks.where((bl) => bl.userId == a).toList();
+      _blocksB =
+          b == null ? const [] : blocks.where((bl) => bl.userId == b).toList();
+      _scheduleCompute(sync, coupleId, myUid);
     });
 
     // Initial idle state — real value arrives once streams fire.
@@ -127,67 +129,49 @@ class OverlapController
     ));
   }
 
-  void _onCoupleDoc(
-    FirestoreService firestore,
+  Future<void> _resolveCoupleAndProfiles(
+    SyncService sync,
     String coupleId,
-    DocumentSnapshot<Map<String, dynamic>> snap,
     String? myUid,
-  ) {
-    if (!snap.exists) return;
-    final data = snap.data()!;
-    final userAUid = data['userAUid'] as String?;
-    final userBUid = data['userBUid'] as String?;
-    if (userAUid == _userAUid && userBUid == _userBUid) return;
-    _userAUid = userAUid;
-    _userBUid = userBUid;
+  ) async {
+    try {
+      final couple = await sync.getCouple(coupleId);
+      if (couple == null) return;
+      final userAUid = couple.userAUid;
+      final userBUid = couple.userBUid;
+      if (userAUid == _userAUid && userBUid == _userBUid) return;
+      _userAUid = userAUid;
+      _userBUid = userBUid;
 
-    _userASub?.cancel();
-    _userBSub?.cancel();
-    if (userAUid != null) {
-      _userASub = firestore
-          .getUserStream(userAUid)
-          .listen((s) => _onUserDoc(0, s, myUid, firestore, coupleId));
+      final futureA = sync.getUserByUid(userAUid);
+      final futureB = sync.getUserByUid(userBUid);
+      final results = await Future.wait([futureA, futureB]);
+      if (results[0] != null) {
+        _inputA = PartnerInput(
+          timezone: results[0]!.timezone,
+          showLateNightWindows: results[0]!.showLateNightWindows,
+        );
+      }
+      if (results[1] != null) {
+        _inputB = PartnerInput(
+          timezone: results[1]!.timezone,
+          showLateNightWindows: results[1]!.showLateNightWindows,
+        );
+      }
+      _scheduleCompute(sync, coupleId, myUid);
+    } catch (_) {
+      // Couple/profile fetch failed — the blocks stream will still recompute
+      // from the cache; the next poll will retry.
     }
-    if (userBUid != null) {
-      _userBSub = firestore
-          .getUserStream(userBUid)
-          .listen((s) => _onUserDoc(1, s, myUid, firestore, coupleId));
-    }
-    _scheduleCompute(firestore, coupleId, myUid);
   }
 
-  void _onUserDoc(
-    int slot,
-    DocumentSnapshot<Map<String, dynamic>> snap,
-    String? myUid,
-    FirestoreService firestore,
-    String coupleId,
-  ) {
-    if (!snap.exists) return;
-    final user = UserModel.fromJson(snap.data()!);
-    final input = PartnerInput(
-      timezone: user.timezone,
-      showLateNightWindows: user.showLateNightWindows,
-    );
-    if (slot == 0) {
-      _inputA = input;
-    } else {
-      _inputB = input;
-    }
-    _scheduleCompute(firestore, coupleId, myUid);
-  }
-
-  void _scheduleCompute(
-    FirestoreService firestore,
-    String coupleId,
-    String? myUid,
-  ) {
+  void _scheduleCompute(SyncService sync, String coupleId, String? myUid) {
     _debounce?.cancel();
-    _debounce = Timer(_debounceDelay, () => _compute(firestore, coupleId, myUid));
+    _debounce = Timer(_debounceDelay, () => _compute(sync, coupleId, myUid));
   }
 
   Future<void> _compute(
-    FirestoreService firestore,
+    SyncService sync,
     String coupleId,
     String? myUid,
   ) async {
@@ -220,22 +204,19 @@ class OverlapController
       windows: windows,
       computedAt: DateTime.now().toUtc(),
       inputHash: hash,
+      computedBy: myUid,
     );
     state = AsyncData(result);
 
-    // Skip the transaction if our locally-computed hash matches the last one
-    // we wrote. The transaction itself also re-checks the stored hash, so a
-    // race between the two devices is still safe even if both pass this guard.
+    // Skip the publish if our locally-computed hash matches the last one we
+    // sent. The server also re-checks the stored hash, so a race between the
+    // two devices is still safe even if both pass this guard.
     if (hash == _lastWrittenHash) return;
     try {
-      final wrote = await firestore.writeOverlapTransaction(
-        coupleId,
-        result,
-        myUid,
-      );
-      if (wrote) _lastWrittenHash = hash;
+      await sync.publishOverlap(coupleId, result);
+      _lastWrittenHash = hash;
     } catch (_) {
-      // Swallow write errors; the next debounce will retry. The state has
+      // Swallow publish errors; the next debounce will retry. The state has
       // already been set to the freshly computed value.
     }
   }
@@ -244,10 +225,6 @@ class OverlapController
 /// Family provider: `ref.watch(overlapControllerProvider(coupleId))` returns
 /// `AsyncValue<OverlapResult>` for the given couple. Auto-disposed so the
 /// stream subscriptions are cancelled when no screen is watching.
-///
-/// Note: the callable family class is `AutoDisposeAsyncNotifierProviderFamily`
-/// (the `AutoDisposeFamilyAsyncNotifierProvider` typedef resolves to the
-/// per-arg provider, which is not directly callable with an argument).
 final overlapControllerProvider =
     AutoDisposeAsyncNotifierProviderFamily<OverlapController, OverlapResult,
         String>(

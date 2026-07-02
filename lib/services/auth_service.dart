@@ -1,23 +1,25 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:couple_sync/core/models/user_model.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'sync_service.dart';
 
 /// Service for handling Firebase Authentication with Google and Apple Sign-In.
-/// Manages user creation and profile synchronization with Firestore.
+/// Manages user creation and profile synchronization with the self-host
+/// backend via [SyncService] (POST /auth/verify upserts the users row).
 class AuthService {
   final FirebaseAuth _auth;
-  final FirebaseFirestore _firestore;
   final GoogleSignIn _googleSignIn;
+  final SyncService _syncService;
 
   AuthService({
     FirebaseAuth? auth,
-    FirebaseFirestore? firestore,
     required GoogleSignIn googleSignIn,
+    required SyncService syncService,
   })  : _auth = auth ?? FirebaseAuth.instance,
-        _firestore = firestore ?? FirebaseFirestore.instance,
-        _googleSignIn = googleSignIn;
+        _googleSignIn = googleSignIn,
+        _syncService = syncService;
 
   /// Stream of authentication state changes from Firebase.
   Stream<User?> get authStateChanges => _auth.authStateChanges();
@@ -254,60 +256,23 @@ class AuthService {
     }
   }
 
-  /// Creates or updates the user document in Firestore.
-  /// On first sign-in, creates a new document with email, displayName, and photoUrl.
-  /// On subsequent sign-ins, updates the profile info if changed.
+  /// Upserts the user document on the backend (POST /auth/verify). The
+  /// backend creates the row on first sign-in (defaulting timezone to '') and
+  /// on subsequent sign-ins updates email/displayName/photoUrl while preserving
+  /// timezone/coupleId/fcmTokens. Failures are swallowed so the user is still
+  /// authenticated; the profile sync is retried on the next sign-in.
   Future<void> _createOrUpdateUserDocument(User user) async {
-    final userRef = _firestore.collection('users').doc(user.uid);
-
     try {
-      final docSnapshot = await userRef.get();
-
-      final String? displayName = user.displayName;
-      final String? photoUrl = user.photoURL;
-      final String email = user.email ?? '';
-
-      if (!docSnapshot.exists) {
-        // First sign-in: create new user document
-        await userRef.set({
-          'email': email,
-          'displayName': displayName ?? '',
-          'photoUrl': photoUrl,
-          'timezone': '', // Will be set during onboarding
-          'coupleId': null, // Will be set when paired
-          'fcmTokens': <String>[],
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      } else {
-        // Existing user: update profile info if changed
-        final data = docSnapshot.data() as Map<String, dynamic>;
-
-        final updates = <String, dynamic>{};
-
-        // Update email if changed
-        if (email.isNotEmpty && data['email'] != email) {
-          updates['email'] = email;
-        }
-
-        // Update displayName if changed
-        if (displayName != null && displayName.isNotEmpty && data['displayName'] != displayName) {
-          updates['displayName'] = displayName;
-        }
-
-        // Update photoUrl if changed
-        if (photoUrl != data['photoUrl']) {
-          updates['photoUrl'] = photoUrl;
-        }
-
-        // Only update if there are changes
-        if (updates.isNotEmpty) {
-          await userRef.update(updates);
-        }
-      }
-    } catch (e) {
-      // Log but don't throw - the user is still authenticated
-      // Profile sync can be retried later
-      // In production, this would be logged to a monitoring service
+      await _syncService.upsertUser(UserModel(
+        email: user.email ?? '',
+        displayName: user.displayName ?? '',
+        photoUrl: user.photoURL,
+        timezone: '', // preserved on the backend for existing users
+        fcmTokens: const [],
+        createdAt: DateTime.now().toUtc(),
+      ));
+    } catch (_) {
+      // Swallow — the user is still authenticated; profile sync retries later.
     }
   }
 

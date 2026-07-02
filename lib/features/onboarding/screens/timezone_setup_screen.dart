@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/utils/timezone_helper.dart';
 import '../../../core/router/routes.dart';
 import '../../../services/providers/auth_state_provider.dart';
+import '../../../services/providers/sync_provider.dart';
+import '../../../services/sync_service.dart';
 
 /// Timezone setup screen for onboarding.
 /// Auto-detects device timezone and allows user to search and select a different one.
@@ -79,10 +80,8 @@ class _TimezoneSetupScreenState extends ConsumerState<TimezoneSetupScreen> {
     });
 
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .update({'timezone': _selectedTimezone});
+      final syncService = ref.read(syncServiceProvider);
+      await syncService.updateUser(uid, {'timezone': _selectedTimezone});
 
       // Refresh the auth state to pick up the new timezone
       await ref.read(authStateProvider.notifier).refreshProfile();
@@ -90,11 +89,11 @@ class _TimezoneSetupScreenState extends ConsumerState<TimezoneSetupScreen> {
       if (mounted) {
         context.go(AppRoutes.pairing);
       }
-    } on FirebaseException catch (e) {
+    } on SyncException catch (e) {
       if (mounted) {
         setState(() {
           _isSaving = false;
-          _error = _getFirebaseErrorMessage(e);
+          _error = _mapSyncError(e);
         });
       }
     } catch (e) {
@@ -107,11 +106,12 @@ class _TimezoneSetupScreenState extends ConsumerState<TimezoneSetupScreen> {
     }
   }
 
-  String _getFirebaseErrorMessage(FirebaseException e) {
+  String _mapSyncError(SyncException e) {
     switch (e.code) {
-      case 'permission-denied':
+      case 'http-401':
         return 'Permission denied. Please sign in again.';
-      case 'unavailable':
+      case 'http-503':
+      case 'http-network':
         return 'Network error. Please check your connection.';
       default:
         return 'Failed to save timezone. Please try again.';

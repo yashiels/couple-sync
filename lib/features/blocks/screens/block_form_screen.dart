@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:timezone/timezone.dart';
 import '../../../core/models/time_block.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/utils/block_labels.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../services/providers/auth_state_provider.dart';
-import '../../../services/providers/firestore_provider.dart';
+import '../../../services/providers/sync_provider.dart';
 import '../widgets/recurrence_picker_widget.dart';
 
 /// Form screen for creating or editing manual time blocks.
@@ -92,17 +91,12 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
     setState(() {
       _isLoading = true;
     });
-    
+
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('timeblocks')
-          .doc(profile!.coupleId)
-          .collection('blocks')
-          .doc(blockId)
-          .get();
-      
-      if (doc.exists) {
-        final block = TimeBlock.fromJson(doc.data()!, doc.id);
+      final syncService = ref.read(syncServiceProvider);
+      final block = await syncService.getBlock(profile!.coupleId!, blockId);
+
+      if (block != null) {
         setState(() {
           _existingBlock = block;
           _titleController.text = block.title;
@@ -186,7 +180,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
     });
     
     try {
-      final firestoreService = ref.read(firestoreServiceProvider);
+      final syncService = ref.read(syncServiceProvider);
       
       final block = TimeBlock(
         userId: uid,
@@ -204,14 +198,14 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
       
       if (_existingBlock != null) {
         // Update existing block
-        await firestoreService.updateBlock(
+        await syncService.updateBlock(
           profile!.coupleId!,
           widget.args!.blockId!,
           block.toJson(),
         );
       } else {
         // Create new block
-        await firestoreService.createBlock(profile!.coupleId!, block);
+        await syncService.createBlock(profile!.coupleId!, block);
       }
       
       if (mounted) {
@@ -259,8 +253,8 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
     });
     
     try {
-      final firestoreService = ref.read(firestoreServiceProvider);
-      await firestoreService.deleteBlock(
+      final syncService = ref.read(syncServiceProvider);
+      await syncService.deleteBlock(
         profile!.coupleId!,
         widget.args!.blockId!,
       );

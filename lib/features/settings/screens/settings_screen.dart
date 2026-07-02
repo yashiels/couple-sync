@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -12,6 +10,7 @@ import '../../../services/calendar_service.dart';
 import '../../../services/providers/auth_state_provider.dart';
 import '../../../services/providers/calendar_provider.dart';
 import '../../../services/providers/couple_providers.dart';
+import '../../../services/providers/sync_provider.dart';
 import '../widgets/settings_section_widget.dart';
 
 /// Provider for notification settings (local flag, doesn't affect FCM registration).
@@ -281,10 +280,9 @@ class SettingsScreen extends ConsumerWidget {
   ) async {
     if (uid == null) return;
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .update({'showLateNightWindows': value});
+      await ref
+          .read(syncServiceProvider)
+          .updateUser(uid, {'showLateNightWindows': value});
       await ref.read(authStateProvider.notifier).refreshProfile();
     } catch (e) {
       if (context.mounted) {
@@ -625,16 +623,15 @@ class SettingsScreen extends ConsumerWidget {
   Future<void> _handleUnpair(BuildContext context, WidgetRef ref) async {
     try {
       final authState = ref.read(authStateProvider);
-      final uid = authState.uid;
-      if (uid == null) return;
+      final profile = authState.profile;
+      if (profile?.coupleId == null) return;
 
-      // Delegate to the unpairCouple Cloud Function. It atomically marks the
-      // couple inactive (appending unpairHistory), clears coupleId on BOTH
-      // users, and deletes shared timeblocks/overlaps. Client-side writes to
-      // the partner's user doc and the couples doc are blocked by Firestore
-      // security rules, so unpair MUST go through this callable.
-      final callable = FirebaseFunctions.instance.httpsCallable('unpairCouple');
-      await callable();
+      // Delegate to the backend (POST /couples/:id/unpair). It atomically
+      // marks the couple inactive (appending unpairHistory), clears coupleId
+      // on BOTH users, and deletes shared timeblocks/overlaps. Client-side
+      // writes to the partner's user doc are blocked by the backend's
+      // couple-membership authz, so unpair MUST go through this endpoint.
+      await ref.read(syncServiceProvider).unpair(profile!.coupleId!);
 
       // Refresh local profile so providers reflect the cleared coupleId.
       await ref.read(authStateProvider.notifier).refreshProfile();
@@ -642,15 +639,6 @@ class SettingsScreen extends ConsumerWidget {
       // Navigate to pairing screen so the user can pair again if desired.
       if (context.mounted) {
         context.go(AppRoutes.pairing);
-      }
-    } on FirebaseFunctionsException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to unpair: ${e.message ?? e.code}'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
       }
     } catch (e) {
       if (context.mounted) {

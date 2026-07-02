@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:couple_sync/services/notification_service.dart';
+import 'package:couple_sync/services/sync_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
@@ -9,44 +9,32 @@ import 'package:mockito/mockito.dart';
 
 @GenerateMocks([
   FirebaseMessaging,
-  FirebaseFirestore,
   LocalNotificationDisplay,
   NotificationSettings,
-], customMocks: [
-  MockSpec<CollectionReference<Map<String, dynamic>>>(
-    as: #MockCollectionReferenceMap,
-  ),
-  MockSpec<DocumentReference<Map<String, dynamic>>>(
-    as: #MockDocumentReferenceMap,
-  ),
+  SyncService,
 ])
 import 'notification_service_test.mocks.dart';
 
 void main() {
   late MockFirebaseMessaging mockMessaging;
-  late MockFirebaseFirestore mockFirestore;
   late MockLocalNotificationDisplay mockDisplay;
-  late MockCollectionReferenceMap mockUsersCollection;
-  late MockDocumentReferenceMap mockUserDoc;
+  late MockSyncService mockSyncService;
   late MockNotificationSettings mockSettings;
 
   setUp(() {
     mockMessaging = MockFirebaseMessaging();
-    mockFirestore = MockFirebaseFirestore();
     mockDisplay = MockLocalNotificationDisplay();
-    mockUsersCollection = MockCollectionReferenceMap();
-    mockUserDoc = MockDocumentReferenceMap();
+    mockSyncService = MockSyncService();
     mockSettings = MockNotificationSettings();
 
-    when(mockFirestore.collection('users')).thenReturn(mockUsersCollection);
-    when(mockUsersCollection.doc(any)).thenReturn(mockUserDoc);
-    when(mockUserDoc.update(any)).thenAnswer((_) async {});
+    // storeToken swallows errors in production; default to a no-op.
+    when(mockSyncService.registerFcmToken(any)).thenAnswer((_) async {});
   });
 
   NotificationService createService({Stream<RemoteMessage>? messageStream}) {
     return NotificationService(
       messaging: mockMessaging,
-      firestore: mockFirestore,
+      syncService: mockSyncService,
       display: mockDisplay,
       messageStream: messageStream ?? const Stream.empty(),
     );
@@ -85,10 +73,7 @@ void main() {
 
         await service.initialize('user-123');
 
-        verify(mockUserDoc.update(any)).called(1);
-        final captured =
-            verify(mockUsersCollection.doc(captureAny)).captured;
-        expect(captured.last, 'user-123');
+        verify(mockSyncService.registerFcmToken('test-fcm-token')).called(1);
       });
 
       test('skips token storage when FCM token is null', () async {
@@ -97,7 +82,7 @@ void main() {
 
         await service.initialize('user-123');
 
-        verifyNever(mockUserDoc.update(any));
+        verifyNever(mockSyncService.registerFcmToken(any));
       });
 
       test('forwards foreground messages to handleForegroundMessage', () async {
@@ -132,27 +117,12 @@ void main() {
     });
 
     group('storeToken', () {
-      test('calls Firestore update on user doc with fcmTokens key', () async {
+      test('calls registerFcmToken with the token', () async {
         final service = createService();
 
         await service.storeToken('user-456', 'my-token');
 
-        verify(mockFirestore.collection('users')).called(1);
-        verify(mockUsersCollection.doc('user-456')).called(1);
-        final captured = verify(mockUserDoc.update(captureAny)).captured;
-        expect(captured.length, 1);
-        final data = captured.first as Map;
-        expect(data.containsKey('fcmTokens'), isTrue);
-      });
-
-      test('uses FieldValue.arrayUnion (update, not set)', () async {
-        final service = createService();
-
-        await service.storeToken('user-456', 'my-token');
-
-        // Verify update() was called, not set()
-        verify(mockUserDoc.update(any)).called(1);
-        verifyNever(mockUserDoc.set(any));
+        verify(mockSyncService.registerFcmToken('my-token')).called(1);
       });
     });
 

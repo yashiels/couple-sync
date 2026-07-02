@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 /// Unpair history entry for couples
 class UnpairHistoryEntry {
   final DateTime at;
@@ -19,7 +17,7 @@ class UnpairHistoryEntry {
 
   Map<String, dynamic> toJson() {
     return {
-      'at': Timestamp.fromDate(at),
+      'at': at.millisecondsSinceEpoch,
       'reason': reason,
     };
   }
@@ -92,9 +90,9 @@ class CoupleModel {
       'userAUid': userAUid,
       'userBUid': userBUid,
       'status': status.name,
-      'pairedAt': Timestamp.fromDate(pairedAt),
+      'pairedAt': pairedAt.millisecondsSinceEpoch,
       'unpairHistory': unpairHistory.map((e) => e.toJson()).toList(),
-      'createdAt': Timestamp.fromDate(createdAt),
+      'createdAt': createdAt.millisecondsSinceEpoch,
     };
   }
 
@@ -161,9 +159,15 @@ class CoupleModel {
   }
 }
 
-/// Parse a DateTime from either a Firestore Timestamp or UTC milliseconds int.
+/// Parse a DateTime from int ms since epoch, an ISO-8601 string, or a DateTime.
 DateTime _parseDateTime(dynamic value) {
-  if (value is Timestamp) return value.toDate();
-  if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
-  return DateTime.now();
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value, isUtc: true);
+  }
+  if (value is DateTime) return value.toUtc();
+  if (value is String) {
+    final parsed = DateTime.tryParse(value);
+    if (parsed != null) return parsed.toUtc();
+  }
+  return DateTime.now().toUtc();
 }

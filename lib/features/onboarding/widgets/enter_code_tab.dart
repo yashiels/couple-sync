@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import '../../../services/providers/auth_state_provider.dart';
+import '../../../services/providers/sync_provider.dart';
+import '../../../services/sync_service.dart';
 
 /// Tab for entering partner's invite code and redeeming it.
 /// Calls the redeemInvite Cloud Function and handles all error cases.
@@ -152,7 +153,7 @@ class _EnterCodeTabState extends ConsumerState<EnterCodeTab> {
     );
   }
 
-  /// Redeems the invite code by calling the redeemInvite Cloud Function.
+  /// Redeems the invite code via the backend (POST /invites/:code/redeem).
   Future<void> _redeemCode() async {
     final code = _codeController.text.trim().toUpperCase();
 
@@ -177,14 +178,10 @@ class _EnterCodeTabState extends ConsumerState<EnterCodeTab> {
         throw Exception('Not authenticated');
       }
 
-      // Call the redeemInvite Cloud Function
-      final callable = FirebaseFunctions.instance.httpsCallable('redeemInvite');
-      final result = await callable({'code': code});
+      final syncService = ref.read(syncServiceProvider);
+      final coupleId = await syncService.redeemInvite(code);
 
-      final data = result.data as Map<String, dynamic>;
-      final coupleId = data['coupleId'] as String?;
-
-      if (coupleId != null) {
+      if (coupleId.isNotEmpty) {
         setState(() {
           _success = 'Successfully paired with your partner!';
           _isLoading = false;
@@ -195,37 +192,30 @@ class _EnterCodeTabState extends ConsumerState<EnterCodeTab> {
       } else {
         throw Exception('Failed to create couple');
       }
-    } on FirebaseFunctionsException catch (e) {
+    } on SyncException catch (e) {
       String errorMessage;
-      
-      // Map error codes to user-friendly messages
       switch (e.code) {
-        case 'invalid-argument':
-          errorMessage = 'Invalid code format';
-          break;
-        case 'not-found':
+        case 'http-404':
           errorMessage = 'Invalid invite code';
           break;
-        case 'failed-precondition':
-          // Check for specific error messages from Cloud Function
-          if (e.message?.contains('expired') ?? false) {
-            errorMessage = 'This invite code has expired';
-          } else if (e.message?.contains('own code') ?? false) {
-            errorMessage = 'You cannot redeem your own code';
-          } else if (e.message?.contains('already paired') ?? false) {
-            errorMessage = 'You are already paired with a partner';
-          } else {
-            errorMessage = 'This invite code is no longer valid';
-          }
+        case 'http-409':
+          // Expired / own code / already paired — backend returns 409 with a
+          // message; surface a generic but accurate hint.
+          errorMessage = (e.originalError?.toString() ?? '')
+                  .contains('expired')
+              ? 'This invite code has expired'
+              : (e.originalError?.toString() ?? '').contains('own code')
+                  ? 'You cannot redeem your own code'
+                  : (e.originalError?.toString() ?? '')
+                          .contains('already paired')
+                      ? 'You are already paired with a partner'
+                      : 'This invite code is no longer valid';
           break;
-        case 'permission-denied':
+        case 'http-401':
           errorMessage = 'You do not have permission to redeem this code';
           break;
-        case 'unavailable':
+        case 'http-503':
           errorMessage = 'Service temporarily unavailable. Please try again';
-          break;
-        case 'deadline-exceeded':
-          errorMessage = 'Request timed out. Please try again';
           break;
         default:
           errorMessage = 'Failed to redeem code. Please try again';
