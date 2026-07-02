@@ -10,6 +10,7 @@ import { blockRoutes } from './routes/blocks.js';
 import { userRoutes } from './routes/users.js';
 import { coupleRoutes } from './routes/couples.js';
 import { inviteRoutes } from './routes/invites.js';
+import { overlapRoutes } from './routes/overlaps.js';
 import { adminRoutes, startCleanupCron } from './cron.js';
 
 const log = pino({ name: 'api' });
@@ -54,6 +55,8 @@ async function bootstrap() {
   await app.register(inviteRoutes);
   // REST: admin endpoints (V4 — manual cleanup trigger).
   await app.register(adminRoutes);
+  // REST: GET /overlaps/latest (V8 — reconnect fetch of stored overlap).
+  await app.register(overlapRoutes);
 
   // Daily 03:00 UTC cleanup of expired invites.
   const cleanupJob = startCleanupCron(log);

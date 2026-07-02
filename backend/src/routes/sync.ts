@@ -6,6 +6,7 @@ import {
   parseOverlapMessage,
   handleOverlapMessage,
   makeOverlapDeps,
+  type OverlapMessage,
 } from '../overlap.js';
 
 /**
@@ -45,6 +46,34 @@ export function sendToCouple(coupleId: string, msg: unknown, excludeUid?: string
     if (excludeUid && uid === excludeUid) continue;
     sendToUid(uid, msg);
   }
+}
+
+/**
+ * V8 — authorize an incoming `overlap` WS message against the socket's authed
+ * uid. Returns the parsed message only if:
+ *   - the envelope parses (parseOverlapMessage ok), AND
+ *   - `msg.computedBy === socketUid` (prevents a client forging another uid as
+ *     the writer — which would otherwise let it overwrite the couple's
+ *     overlaps_latest row + push FCM to the partner under a fake sender).
+ *
+ * On mismatch a warning is logged and `null` is returned so the caller skips
+ * persist/push. Pure + exported so the security boundary is unit-tested
+ * directly (see __tests__/sync.test.ts).
+ */
+export function authorizeOverlapMessage(
+  raw: unknown,
+  socketUid: string
+): { msg: OverlapMessage } | null {
+  const msg = parseOverlapMessage(raw);
+  if (!msg) return null;
+  if (msg.computedBy !== socketUid) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[sync] overlap rejected: computedBy ${msg.computedBy} !== socket uid ${socketUid} (coupleId=${msg.coupleId})`
+    );
+    return null;
+  }
+  return { msg };
 }
 
 /**
@@ -121,8 +150,9 @@ export const syncRoutes: FastifyPluginCallback = (app) => {
       if (typeof raw !== 'object' || raw === null) return;
       const tagged = raw as { t?: string };
       if (tagged.t === 'overlap') {
-        const msg = parseOverlapMessage(raw);
-        if (!msg) return;
+        const accepted = authorizeOverlapMessage(raw, uid);
+        if (!accepted) return;
+        const { msg } = accepted;
         // Fire-and-forget; errors are logged inside the handler, not thrown
         // back at the socket (a single bad overlap must not kill the connection).
         handleOverlapMessage(msg, makeOverlapDeps()).catch((err) => {

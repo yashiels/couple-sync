@@ -94,3 +94,70 @@ cd /Volumes/pulsar/apex-local/Developer/github/skyner-group/couple-sync
 2. Enforce App Check on **Cloud Firestore** (writes) and **Cloud Functions** (callables).
 3. Copy the debug secret; add to `firebase.json` `appCheck` debug token for local dev, or set via the debug provider in `lib/main.dart`.
 
+## VPS self-host setup
+
+The self-hosted backend (Fastify + Postgres + WS, replacing Firestore/Cloud Functions) runs on the Oracle Always Free ARM VPS. These steps are manual console / DNS / firewall work — they cannot be automated by `deploy.sh`.
+
+### 1. Firebase Spark service account (free, no Blaze)
+The backend keeps Firebase Auth + FCM (both free on Spark). It needs a service-account key to call `admin.auth().verifyIdToken` and `admin.messaging().sendEachForMulticast` from the VPS.
+
+1. Firebase Console → pick your Spark project → **Project Settings → Service Accounts**.
+2. Click **"Generate new private key"** → download the JSON file.
+3. Stringify the JSON (e.g. `jq -c . < downloaded-key.json`) and paste the full single-line result into `backend/.env` as `FIREBASE_SERVICE_ACCOUNT_JSON`.
+4. Set `FIREBASE_PROJECT_ID` in the same `.env` to the project ID shown at the top of Project Settings.
+5. Confirm Auth providers (Email/Google/Apple) and FCM are enabled — they are by default on Spark.
+
+### 2. Point the API domain at the VPS IP
+1. In your DNS provider, create an **A record** for your chosen api subdomain (e.g. `api.yourdomain.tld`) pointing at the VPS public IP.
+2. Wait for propagation (`dig +short api.yourdomain.tld` should return the VPS IP).
+3. Set `DOMAIN=api.yourdomain.tld` in `backend/.env` on the VPS — Caddy reads this and auto-provisions TLS.
+
+### 3. Open ports 80/443 on the Oracle VPS
+Oracle Cloud's default VCN security list blocks inbound HTTP/HTTPS. Two layers must be opened:
+
+**a. VCN Security List (Oracle Cloud Console)**
+1. Oracle Cloud Console → Networking → Virtual Cloud Networks → pick your VCN → Security Lists → Default Security List (or the one attached to your instance's subnet).
+2. Add **Ingress** rules:
+   - `0.0.0.0/0` TCP **80** (HTTP, Caddy HTTP-01 challenge + redirect)
+   - `0.0.0.0/0` TCP **443** (HTTPS)
+3. Save.
+
+**b. iptables on the VPS itself**
+Oracle's Ubuntu/Oracle-Linux images ship with iptables rules that drop everything except SSH even after the security list is opened. On the VPS:
+
+```bash
+sudo iptables -I INPUT 6 -p tcp --dport 80 -j ACCEPT
+sudo iptables -I INPUT 6 -p tcp --dport 443 -j ACCEPT
+sudo netfilter-persistent save   # Ubuntu/Debian
+# or: sudo /sbin/iptables-save | sudo tee /etc/iptables/rules.v4
+```
+
+Verify from outside the VPS: `curl -sI http://api.yourdomain.tld/health` should reach Caddy (a redirect or 200, not a timeout).
+
+### 4. Bootstrap + deploy
+1. First-time only — on the VPS:
+   ```bash
+   sudo mkdir -p /opt/couple-sync && sudo chown -R $USER /opt/couple-sync
+   git clone <your-repo-url> /opt/couple-sync
+   cd /opt/couple-sync
+   cp backend/.env.example backend/.env
+   # edit backend/.env: DATABASE_URL is overridden by compose; set FIREBASE_PROJECT_ID,
+   # FIREBASE_SERVICE_ACCOUNT_JSON, DOMAIN. ADMIN_TOKEN optional.
+   ```
+2. From your laptop:
+   ```bash
+   VPS_HOST=user@your-vps-host ./deploy.sh
+   ```
+   The script pulls, rebuilds the stack, waits for postgres, and runs migrations. Re-runnable.
+
+### 5. Point the Flutter app at the API
+Set the backend `baseUrl` in the Flutter app config (see `lib/services/sync_service.dart`) to `https://api.yourdomain.tld`. The WS URL is `wss://api.yourdomain.tld/sync`.
+
+### 6. Postgres backups (optional, ~$0)
+Set a cron on the VPS for nightly `pg_dump` to a B2/S3 bucket:
+
+```bash
+0 3 * * *  docker compose -f /opt/couple-sync/docker-compose.yml exec -T postgres pg_dump -U couple couplesync | gzip > /backups/couplesync-$(date +\%F).sql.gz
+```
+
+

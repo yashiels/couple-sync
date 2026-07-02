@@ -119,7 +119,7 @@ export function validateWindows(input: unknown[]): OverlapWindow[] {
 
 // ─── WS message handler ─────────────────────────────────────────────────────
 
-interface OverlapMessage {
+export interface OverlapMessage {
   t: 'overlap';
   coupleId: string;
   windows: unknown[];
