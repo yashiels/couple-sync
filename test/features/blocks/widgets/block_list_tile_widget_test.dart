@@ -1,4 +1,5 @@
 import 'package:couple_sync/core/models/time_block.dart';
+import 'package:couple_sync/core/utils/format_utils.dart';
 import 'package:couple_sync/features/blocks/widgets/block_list_tile_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -133,9 +134,14 @@ void main() {
         ),
       );
 
-      // Same day: "15 Jun • 09:00 - 10:30"
+      // C3: same day uses locale-aware 12h time (formatTimeHm = DateFormat.jm()).
+      // Note: jm() emits a NARROW NO-BREAK SPACE (U+202F) before the am/pm
+      // marker, so compare against the formatter output rather than a literal.
+      final startDt = DateTime(2024, 6, 15, 9, 0);
+      final endDt = DateTime(2024, 6, 15, 10, 30);
       expect(find.textContaining('15 Jun'), findsOneWidget);
-      expect(find.textContaining('09:00 - 10:30'), findsOneWidget);
+      expect(find.textContaining(formatTimeHm(startDt)), findsOneWidget);
+      expect(find.textContaining(formatTimeHm(endDt)), findsOneWidget);
     });
 
     testWidgets('formats cross-day time range correctly', (tester) async {

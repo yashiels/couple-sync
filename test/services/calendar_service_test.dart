@@ -100,7 +100,8 @@ void main() {
         final mockAccount = MockGoogleSignInAccount();
         final mockAuth = MockGoogleSignInAuthentication();
 
-        when(mockGoogleSignIn.signOut()).thenAnswer((_) async => null);
+        // C6: connect() no longer calls signOut() first — it signs in directly
+        // to preserve silent refresh and avoid a forced consent sheet.
         when(mockGoogleSignIn.signIn())
             .thenAnswer((_) async => mockAccount);
         when(mockAccount.authentication)
@@ -110,7 +111,7 @@ void main() {
         final result = await calendarService.connect();
 
         expect(result, isTrue);
-        verify(mockGoogleSignIn.signOut()).called(1);
+        verifyNever(mockGoogleSignIn.signOut());
         verify(mockGoogleSignIn.signIn()).called(1);
         expect(
           fakeSecureStorage._store['google_calendar_access_token'],
@@ -226,14 +227,23 @@ void main() {
     group('disconnect', () {
       test('clears tokens and signs out', () async {
         fakeSecureStorage._store['google_calendar_access_token'] = 'token';
-        fakeSecureStorage._store['google_calendar_refresh_token'] = 'refresh';
         fakeSecureStorage._store['google_calendar_token_expiry'] = 'expiry';
 
         when(mockGoogleSignIn.signOut()).thenAnswer((_) async => null);
 
         await calendarService.disconnect();
 
-        expect(fakeSecureStorage._store, isEmpty);
+        // C6: disconnect() clears the access token + expiry and signs out.
+        // The old _refreshTokenKey was removed in C6, so disconnect() no
+        // longer deletes a refresh-token key.
+        expect(
+          fakeSecureStorage._store.containsKey('google_calendar_access_token'),
+          isFalse,
+        );
+        expect(
+          fakeSecureStorage._store.containsKey('google_calendar_token_expiry'),
+          isFalse,
+        );
         verify(mockGoogleSignIn.signOut()).called(1);
       });
 

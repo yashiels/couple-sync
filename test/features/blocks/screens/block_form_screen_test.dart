@@ -1,4 +1,5 @@
 import 'package:couple_sync/core/models/user_model.dart';
+import 'package:couple_sync/core/utils/format_utils.dart';
 import 'package:couple_sync/features/blocks/screens/block_form_screen.dart';
 import 'package:couple_sync/core/router/routes.dart';
 import 'package:couple_sync/services/auth_service.dart';
@@ -12,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
+import 'package:timezone/data/latest.dart' as tz_data;
 
 @GenerateMocks([
   FirebaseAuth,
@@ -114,6 +116,11 @@ void main() {
   late MockCollectionReferenceMap mockCollection;
   late MockDocumentReferenceMap mockDocRef;
 
+  setUpAll(() {
+    // C3: prod _tzLabel() calls getLocation() which needs the tz database.
+    tz_data.initializeTimeZones();
+  });
+
   setUp(() {
     mockAuth = MockFirebaseAuth();
     mockFirestore = MockFirebaseFirestore();
@@ -203,7 +210,7 @@ void main() {
       await _pumpBlockFormScreen(tester, notifier: notifier);
 
       expect(find.text('Visibility'), findsOneWidget);
-      expect(find.text('Both Partners'), findsOneWidget);
+      expect(find.text('Both partners'), findsOneWidget);
     });
 
     testWidgets('displays Start and End labels', (tester) async {
@@ -248,7 +255,9 @@ void main() {
 
       await _pumpBlockFormScreen(tester, notifier: notifier);
 
-      expect(find.text('Timezone: Europe/London'), findsOneWidget);
+      // C3: timezone is now a readable card — IANA id + UTC offset + current time.
+      expect(find.textContaining('Europe/London'), findsOneWidget);
+      expect(find.byIcon(Icons.schedule), findsOneWidget);
     });
 
     testWidgets('displays Recurrence section', (tester) async {
@@ -601,8 +610,9 @@ void main() {
         args: BlockFormArgs(initialDate: initialDate),
       );
 
-      // Should show the initial date formatted as d/m/y for both start and end (same day)
-      expect(find.text('15/6/2025'), findsNWidgets(2));
+      // C3: start + end date buttons both show the initialDate via formatDateYMd.
+      final expected = formatDateYMd(initialDate);
+      expect(find.text(expected), findsNWidgets(2));
     });
   });
 
@@ -663,14 +673,14 @@ void main() {
       await _pumpBlockFormScreen(tester, notifier: notifier);
 
       // Open Visibility dropdown
-      await tester.tap(find.text('Both Partners'));
+      await tester.tap(find.text('Both partners'));
       await tester.pumpAndSettle();
 
-      // Select Only Me
-      await tester.tap(find.text('Only Me').last);
+      // Select Only me
+      await tester.tap(find.text('Only me').last);
       await tester.pumpAndSettle();
 
-      expect(find.text('Only Me'), findsOneWidget);
+      expect(find.text('Only me'), findsOneWidget);
     });
   });
 }

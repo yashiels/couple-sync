@@ -384,7 +384,7 @@ void main() {
       expect(find.text('Google'), findsAtLeastNWidgets(1));
       expect(find.text('Work'), findsAtLeastNWidgets(1));
       expect(find.text('Busy'), findsOneWidget);
-      expect(find.text('Both Partners'), findsOneWidget);
+      expect(find.text('Both partners'), findsOneWidget);
       expect(find.text('Close'), findsOneWidget);
     });
 
