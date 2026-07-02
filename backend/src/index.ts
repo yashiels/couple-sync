@@ -7,6 +7,9 @@ import { getPool, endPool } from './db.js';
 import { initFirebaseAdmin } from './firebase.js';
 import { authRoutes } from './routes/auth.js';
 import { syncRoutes } from './routes/sync.js';
+import { blockRoutes } from './routes/blocks.js';
+import { userRoutes } from './routes/users.js';
+import { coupleRoutes } from './routes/couples.js';
 
 const log = pino({ name: 'api' });
 
@@ -39,6 +42,13 @@ async function bootstrap() {
 
   // WebSocket sync route: /sync (upgraded)
   await app.register(syncRoutes);
+
+  // REST: block CRUD + WS broadcast (V3).
+  await app.register(blockRoutes);
+  // REST: user profile GET/PATCH (V3).
+  await app.register(userRoutes);
+  // REST: couple GET (V3).
+  await app.register(coupleRoutes);
 
   // node-cron placeholder — cleanupExpiredInvites port comes later.
   const cleanupJob = cron.schedule('0 * * * *', () => {
