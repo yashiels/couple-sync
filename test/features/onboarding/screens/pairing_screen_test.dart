@@ -108,6 +108,8 @@ class _TestAuthNotifier extends StateNotifier<AuthState>
   @override
   Future<bool> signInWithApple() async => false;
   @override
+  Future<bool> signInWithEmail(String email, String password) async => false;
+  @override
   Future<void> signOut() async {}
   @override
   String? get lastError => null;

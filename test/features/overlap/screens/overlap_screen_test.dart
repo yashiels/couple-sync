@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:couple_sync/core/models/overlap_result.dart';
 import 'package:couple_sync/core/models/user_model.dart';
+import 'package:couple_sync/core/overlap/overlap_controller.dart';
 import 'package:couple_sync/features/overlap/screens/overlap_screen.dart';
 import 'package:couple_sync/features/overlap/widgets/window_card_widget.dart';
 import 'package:couple_sync/services/providers/auth_state_provider.dart';
@@ -78,23 +81,50 @@ Widget _buildSubject({
       partnerProfileProvider.overrideWith(
         (ref) => Future.value(partner),
       ),
-      if (overlapError != null)
-        overlapWindowsProvider.overrideWith(
-          (ref) => Stream.error(overlapError),
-        )
-      else if (overlapLoading)
-        overlapWindowsProvider.overrideWith(
-          (ref) => const Stream<OverlapResult?>.empty(),
-        )
-      else
-        overlapWindowsProvider.overrideWith(
-          (ref) => Stream.value(overlap),
+      // overlap_screen now reads overlapControllerProvider(coupleId) (the
+      // device-side AsyncNotifier), not overlapWindowsProvider. Override the
+      // family with a stub controller that returns the test OverlapResult.
+      overlapControllerProvider.overrideWith(
+        () => _StubOverlapController(
+          result: overlap,
+          error: overlapError,
+          loading: overlapLoading,
         ),
+      ),
     ],
     child: const MaterialApp(
       home: OverlapScreen(),
     ),
   );
+}
+
+/// Test-only [OverlapController] that short-circuits [build] to return a fixed
+/// [OverlapResult] (or throw / hang) instead of wiring up Firestore streams.
+class _StubOverlapController extends OverlapController {
+  final OverlapResult? result;
+  final Object? error;
+  final bool loading;
+
+  _StubOverlapController({
+    this.result,
+    this.error,
+    this.loading = false,
+  });
+
+  @override
+  Future<OverlapResult> build(String coupleId) {
+    if (error != null) throw error!;
+    if (loading) {
+      // Never-completing future keeps the provider in the loading state.
+      return Completer<OverlapResult>().future;
+    }
+    return Future.value(result ??
+        OverlapResult(
+          windows: const [],
+          computedAt: DateTime.now(),
+          inputHash: '',
+        ));
+  }
 }
 
 void main() {

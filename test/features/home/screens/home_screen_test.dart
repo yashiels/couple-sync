@@ -1,5 +1,6 @@
 import 'package:couple_sync/core/models/overlap_result.dart';
 import 'package:couple_sync/core/models/user_model.dart';
+import 'package:couple_sync/core/overlap/overlap_controller.dart';
 import 'package:couple_sync/features/home/screens/home_screen.dart';
 import 'package:couple_sync/features/home/partner_clock_widget.dart';
 import 'package:couple_sync/features/home/next_window_card_widget.dart';
@@ -72,8 +73,12 @@ Widget _buildSubject({
       currentUserProfileProvider.overrideWithValue(effectiveUserProfile),
       partnerProfileProvider
           .overrideWith((ref) async => effectivePartnerProfile),
-      overlapWindowsProvider
-          .overrideWith((ref) => Stream.value(effectiveOverlapResult)),
+      // home_screen now reads overlapControllerProvider(coupleId) (the
+      // device-side AsyncNotifier), not overlapWindowsProvider. Override the
+      // family with a stub controller that returns the test OverlapResult.
+      overlapControllerProvider.overrideWith(
+        () => _StubOverlapController(effectiveOverlapResult),
+      ),
       calendarSyncNotifierProvider.overrideWith(
         (ref) => _NoOpCalendarSyncNotifier(),
       ),
@@ -84,6 +89,16 @@ Widget _buildSubject({
   );
 }
 
+/// Test-only [OverlapController] that short-circuits [build] to return a fixed
+/// [OverlapResult] instead of wiring up Firestore streams.
+class _StubOverlapController extends OverlapController {
+  final OverlapResult _result;
+  _StubOverlapController(this._result);
+
+  @override
+  Future<OverlapResult> build(String coupleId) => Future.value(_result);
+}
+
 /// Build with no couple (coupleId is null) to test the "no partner" state.
 Widget _buildNoCoupleSubject() {
   final noCoupleProfile = _mockUserProfile.copyWith(clearCoupleId: true);
@@ -92,8 +107,8 @@ Widget _buildNoCoupleSubject() {
     overrides: [
       currentUserProfileProvider.overrideWithValue(noCoupleProfile),
       partnerProfileProvider.overrideWith((ref) async => null),
-      overlapWindowsProvider
-          .overrideWith((ref) => Stream.value(null)),
+      // coupleId is null, so HomeScreen shows the "no partner" state and never
+      // watches overlapControllerProvider — no override needed here.
       calendarSyncNotifierProvider.overrideWith(
         (ref) => _NoOpCalendarSyncNotifier(),
       ),

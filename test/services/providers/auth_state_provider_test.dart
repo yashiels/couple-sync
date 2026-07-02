@@ -595,5 +595,8 @@ class _FakeAuthStateNotifier extends StateNotifier<AuthState>
   Future<bool> signInWithApple() async => false;
 
   @override
+  Future<bool> signInWithEmail(String email, String password) async => false;
+
+  @override
   Future<void> signOut() async {}
 }
