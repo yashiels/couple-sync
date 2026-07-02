@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/models/overlap_result.dart';
 import '../../../core/overlap/overlap_controller.dart';
 import '../../../core/router/routes.dart';
+import '../../../core/utils/format_utils.dart';
 import '../../../services/providers/couple_providers.dart';
 import '../../../services/providers/auth_state_provider.dart';
 import '../widgets/window_card_widget.dart';
@@ -367,7 +368,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
               children: [
                 if (_minDurationMinutes != null)
                   FilterChip(
-                    label: Text('Min ${_formatDuration(_minDurationMinutes!)}'),
+                    label: Text('Min ${formatDurationMinutes(_minDurationMinutes!)}'),
                     selected: true,
                     onSelected: (_) =>
                         setState(() => _minDurationMinutes = null),
@@ -538,17 +539,5 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
       _minDurationMinutes = null;
       _minScore = null;
     });
-  }
-
-  String _formatDuration(int minutes) {
-    if (minutes < 60) {
-      return '$minutes min';
-    }
-    final hours = minutes ~/ 60;
-    final mins = minutes.remainder(60);
-    if (mins == 0) {
-      return '$hours hr';
-    }
-    return '$hours hr $mins min';
   }
 }

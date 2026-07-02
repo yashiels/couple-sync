@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/models/time_block.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/format_utils.dart';
 
 /// Widget to display a time block event on the calendar.
 /// Shows block details with color coding based on ownership and category.
@@ -201,7 +202,7 @@ class BlockDetailDialog extends StatelessWidget {
             context,
             Icons.timelapse,
             'Duration',
-            _formatDuration(block.durationMinutes),
+            formatDurationMinutes(block.durationMinutes),
           ),
           const SizedBox(height: 12),
           _buildDetailRow(
@@ -328,18 +329,6 @@ class BlockDetailDialog extends StatelessWidget {
       'Dec',
     ];
     return '${dateTime.day} ${months[dateTime.month - 1]} ${dateTime.year}';
-  }
-
-  String _formatDuration(int minutes) {
-    if (minutes < 60) {
-      return '$minutes min';
-    }
-    final hours = minutes ~/ 60;
-    final mins = minutes % 60;
-    if (mins == 0) {
-      return '$hours hr';
-    }
-    return '$hours hr $mins min';
   }
 
   String _getCategoryLabel(TimeBlockCategory category) {

@@ -2,11 +2,11 @@ import 'package:intl/intl.dart';
 
 /// Shared formatters so screens stop hand-rolling dates/durations.
 String formatDurationMinutes(int minutes) {
-  final h = minutes ~/ 60;
-  final m = minutes % 60;
-  if (h == 0) return '${m}m';
-  if (m == 0) return '${h}h';
-  return '${h}h ${m}m';
+  if (minutes < 60) return '$minutes min';
+  final hours = minutes ~/ 60;
+  final mins = minutes % 60;
+  if (mins == 0) return '$hours hr';
+  return '$hours hr $mins min';
 }
 
 String formatDateYMd(DateTime dt) => DateFormat.yMd().format(dt);

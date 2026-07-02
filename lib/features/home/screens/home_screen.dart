@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/models/overlap_result.dart';
 import '../../../core/overlap/overlap_controller.dart';
 import '../../../core/router/routes.dart';
+import '../../../core/utils/format_utils.dart';
 import '../../../services/providers/auth_state_provider.dart';
 import '../../../services/providers/calendar_provider.dart';
 import '../../../services/providers/couple_providers.dart';
@@ -359,7 +360,7 @@ class _UpcomingWindowCard extends StatelessWidget {
             ),
           ),
           trailing: Text(
-            _formatDuration(window.durationMinutes),
+            formatDurationMinutes(window.durationMinutes),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -378,17 +379,5 @@ class _UpcomingWindowCard extends StatelessWidget {
         partnerTimezone: partnerTimezone,
       ),
     );
-  }
-
-  String _formatDuration(int minutes) {
-    if (minutes < 60) {
-      return '$minutes min';
-    }
-    final hours = minutes ~/ 60;
-    final mins = minutes.remainder(60);
-    if (mins == 0) {
-      return '$hours hr';
-    }
-    return '$hours hr $mins min';
   }
 }

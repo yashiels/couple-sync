@@ -6,6 +6,7 @@ import 'package:timezone/timezone.dart' as tz;
 import '../../../core/models/overlap_result.dart';
 import '../../../core/utils/timezone_helper.dart';
 import '../../../core/router/routes.dart';
+import '../../../core/utils/format_utils.dart';
 
 /// Card displaying the next free window with countdown.
 /// Shows date, time (both timezones), duration, and quality score.
@@ -141,7 +142,7 @@ class _NextWindowCardState extends State<NextWindowCard> {
                 children: [
                   _buildInfoChip(
                     icon: Icons.schedule,
-                    label: _formatDuration(widget.window!.durationMinutes),
+                    label: formatDurationMinutes(widget.window!.durationMinutes),
                   ),
                   const SizedBox(width: 12),
                   _buildInfoChip(
@@ -274,15 +275,4 @@ class _NextWindowCardState extends State<NextWindowCard> {
     );
   }
 
-  String _formatDuration(int minutes) {
-    if (minutes < 60) {
-      return '$minutes min';
-    }
-    final hours = minutes ~/ 60;
-    final mins = minutes.remainder(60);
-    if (mins == 0) {
-      return '$hours hr';
-    }
-    return '$hours hr $mins min';
-  }
 }

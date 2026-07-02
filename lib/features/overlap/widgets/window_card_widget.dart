@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../../../core/models/overlap_result.dart';
 import '../../../core/utils/timezone_helper.dart';
+import '../../../core/utils/format_utils.dart';
 
 /// Card displaying a single overlap window with date, time ranges (both timezones),
 /// duration, and score breakdown.
@@ -69,7 +70,7 @@ class WindowCardWidget extends StatelessWidget {
                   _buildInfoChip(
                     theme: theme,
                     icon: Icons.schedule,
-                    label: _formatDuration(window.durationMinutes),
+                    label: formatDurationMinutes(window.durationMinutes),
                   ),
                   if (window.reasonableBoth) ...[
                     const SizedBox(width: 12),
@@ -210,18 +211,6 @@ class WindowCardWidget extends StatelessWidget {
     final userLocation = tz.getLocation(userTimezone);
     final userStart = tz.TZDateTime.from(window.startDateTime, userLocation);
     return dateFormat.format(userStart);
-  }
-
-  String _formatDuration(int minutes) {
-    if (minutes < 60) {
-      return '$minutes min';
-    }
-    final hours = minutes ~/ 60;
-    final mins = minutes.remainder(60);
-    if (mins == 0) {
-      return '$hours hr';
-    }
-    return '$hours hr $mins min';
   }
 
   Color _getScoreColor(double score) {
