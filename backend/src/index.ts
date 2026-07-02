@@ -5,6 +5,8 @@ import pino from 'pino';
 import { getConfig } from './config.js';
 import { getPool, endPool } from './db.js';
 import { initFirebaseAdmin } from './firebase.js';
+import { authRoutes } from './routes/auth.js';
+import { syncRoutes } from './routes/sync.js';
 
 const log = pino({ name: 'api' });
 
@@ -32,10 +34,11 @@ async function bootstrap() {
 
   app.get('/health', async () => ({ status: 'ok', time: Date.now() }));
 
-  // WS placeholder — auth + sync routes come in later tasks.
-  app.get('/sync', { websocket: true }, (socket, _req) => {
-    socket.send(JSON.stringify({ t: 'hello', msg: 'sync not implemented yet' }));
-  });
+  // REST auth routes: /auth/verify, /auth/fcm-token
+  await app.register(authRoutes);
+
+  // WebSocket sync route: /sync (upgraded)
+  await app.register(syncRoutes);
 
   // node-cron placeholder — cleanupExpiredInvites port comes later.
   const cleanupJob = cron.schedule('0 * * * *', () => {
