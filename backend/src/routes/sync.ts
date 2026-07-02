@@ -2,6 +2,11 @@ import type { FastifyPluginCallback, FastifyRequest } from 'fastify';
 import type { WebSocket } from 'ws';
 import { authenticate } from '../auth.js';
 import { query } from '../db.js';
+import {
+  parseOverlapMessage,
+  handleOverlapMessage,
+  makeOverlapDeps,
+} from '../overlap.js';
 
 /**
  * In-memory connection registry.
@@ -86,6 +91,47 @@ export const syncRoutes: FastifyPluginCallback = (app) => {
     }
 
     socket.send(JSON.stringify({ t: 'hello', uid, coupleId }));
+
+    /**
+     * V5 — incoming message dispatch. The device sends tagged JSON
+     * messages; currently only `overlap` is handled here (block set/del
+     * arrive over REST in V3). Malformed JSON or unknown `t` are dropped
+     * silently; malformed overlap payloads are logged inside the handler.
+     */
+    socket.on('message', (data: unknown, isBinary: boolean) => {
+      if (isBinary) return; // not used — all sync messages are JSON text
+      let raw: unknown;
+      try {
+        let text: string;
+        if (typeof data === 'string') {
+          text = data;
+        } else if (Buffer.isBuffer(data)) {
+          text = data.toString();
+        } else if (data instanceof ArrayBuffer) {
+          text = Buffer.from(data).toString();
+        } else if (Array.isArray(data)) {
+          text = Buffer.concat(data as readonly Uint8Array[]).toString();
+        } else {
+          text = String(data);
+        }
+        raw = JSON.parse(text);
+      } catch {
+        return; // drop malformed JSON
+      }
+      if (typeof raw !== 'object' || raw === null) return;
+      const tagged = raw as { t?: string };
+      if (tagged.t === 'overlap') {
+        const msg = parseOverlapMessage(raw);
+        if (!msg) return;
+        // Fire-and-forget; errors are logged inside the handler, not thrown
+        // back at the socket (a single bad overlap must not kill the connection).
+        handleOverlapMessage(msg, makeOverlapDeps()).catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error('[sync] overlap handler failed:', err);
+        });
+      }
+      // Unknown `t` → ignore (forward-compat with future message types).
+    });
 
     socket.on('close', () => {
       sockets.delete(uid);
