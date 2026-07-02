@@ -1,20 +1,9 @@
 import type { FastifyRequest } from 'fastify';
+import admin from 'firebase-admin';
 import { getAuth } from './firebase.js';
 
-/**
- * Decoded Firebase ID token. The fields here are the subset the app
- * actually uses; the real object has many more (all from admin.auth.DecodedIdToken).
- */
-export interface DecodedIdToken {
-  uid: string;
-  email?: string;
-  email_verified?: boolean;
-  name?: string;
-  picture?: string;
-  firebase?: {
-    sign_in_provider?: string;
-  };
-}
+/** Firebase ID token — use the SDK's type, not a hand-rolled subset. */
+export type DecodedIdToken = admin.auth.DecodedIdToken;
 
 export class UnauthorizedError extends Error {
   statusCode = 401 as const;
@@ -40,15 +29,7 @@ export async function authenticate(request: FastifyRequest): Promise<DecodedIdTo
     throw new UnauthorizedError('Missing bearer token');
   }
   try {
-    const decoded = await getAuth().verifyIdToken(token);
-    return {
-      uid: decoded.uid,
-      email: decoded.email,
-      email_verified: decoded.email_verified,
-      name: decoded.name,
-      picture: decoded.picture,
-      firebase: decoded.firebase,
-    };
+    return await getAuth().verifyIdToken(token);
   } catch (err) {
     throw new UnauthorizedError(
       `Invalid Firebase ID token: ${err instanceof Error ? err.message : String(err)}`

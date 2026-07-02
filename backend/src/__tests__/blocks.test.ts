@@ -23,7 +23,6 @@ vi.mock('../firebase.js', () => ({
   getAuth: () => ({ verifyIdToken }),
   initFirebaseAdmin: vi.fn(),
   getMessaging: vi.fn(),
-  isFirebaseReady: () => true,
 }));
 
 // db.query is the pool query; getPool().connect() returns a tx client whose

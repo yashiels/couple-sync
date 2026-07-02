@@ -16,7 +16,6 @@ vi.mock('../firebase.js', () => ({
   getAuth: () => ({ verifyIdToken: vi.fn() }),
   initFirebaseAdmin: vi.fn(),
   getMessaging: vi.fn(),
-  isFirebaseReady: () => true,
 }));
 
 vi.mock('../config.js', () => ({

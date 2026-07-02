@@ -40,7 +40,3 @@ export function getMessaging(): admin.messaging.Messaging {
   if (!initialized) initFirebaseAdmin();
   return admin.messaging();
 }
-
-export function isFirebaseReady(): boolean {
-  return initialized;
-}
