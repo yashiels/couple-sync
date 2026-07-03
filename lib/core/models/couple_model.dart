@@ -1,14 +1,9 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 /// Unpair history entry for couples
 class UnpairHistoryEntry {
   final DateTime at;
   final String reason;
 
-  const UnpairHistoryEntry({
-    required this.at,
-    required this.reason,
-  });
+  const UnpairHistoryEntry({required this.at, required this.reason});
 
   factory UnpairHistoryEntry.fromJson(Map<String, dynamic> json) {
     return UnpairHistoryEntry(
@@ -18,20 +13,11 @@ class UnpairHistoryEntry {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'at': Timestamp.fromDate(at),
-      'reason': reason,
-    };
+    return {'at': at.millisecondsSinceEpoch, 'reason': reason};
   }
 
-  UnpairHistoryEntry copyWith({
-    DateTime? at,
-    String? reason,
-  }) {
-    return UnpairHistoryEntry(
-      at: at ?? this.at,
-      reason: reason ?? this.reason,
-    );
+  UnpairHistoryEntry copyWith({DateTime? at, String? reason}) {
+    return UnpairHistoryEntry(at: at ?? this.at, reason: reason ?? this.reason);
   }
 
   @override
@@ -79,8 +65,11 @@ class CoupleModel {
         orElse: () => CoupleStatus.inactive,
       ),
       pairedAt: _parseDateTime(json['pairedAt']),
-      unpairHistory: (json['unpairHistory'] as List<dynamic>?)
-              ?.map((e) => UnpairHistoryEntry.fromJson(e as Map<String, dynamic>))
+      unpairHistory:
+          (json['unpairHistory'] as List<dynamic>?)
+              ?.map(
+                (e) => UnpairHistoryEntry.fromJson(e as Map<String, dynamic>),
+              )
               .toList() ??
           [],
       createdAt: _parseDateTime(json['createdAt']),
@@ -92,9 +81,9 @@ class CoupleModel {
       'userAUid': userAUid,
       'userBUid': userBUid,
       'status': status.name,
-      'pairedAt': Timestamp.fromDate(pairedAt),
+      'pairedAt': pairedAt.millisecondsSinceEpoch,
       'unpairHistory': unpairHistory.map((e) => e.toJson()).toList(),
-      'createdAt': Timestamp.fromDate(createdAt),
+      'createdAt': createdAt.millisecondsSinceEpoch,
     };
   }
 
@@ -140,13 +129,13 @@ class CoupleModel {
 
   @override
   int get hashCode => Object.hash(
-        userAUid,
-        userBUid,
-        status,
-        pairedAt,
-        Object.hashAll(unpairHistory),
-        createdAt,
-      );
+    userAUid,
+    userBUid,
+    status,
+    pairedAt,
+    Object.hashAll(unpairHistory),
+    createdAt,
+  );
 
   @override
   String toString() =>
@@ -161,9 +150,15 @@ class CoupleModel {
   }
 }
 
-/// Parse a DateTime from either a Firestore Timestamp or UTC milliseconds int.
+/// Parse a DateTime from int ms since epoch, an ISO-8601 string, or a DateTime.
 DateTime _parseDateTime(dynamic value) {
-  if (value is Timestamp) return value.toDate();
-  if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
-  return DateTime.now();
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value, isUtc: true);
+  }
+  if (value is DateTime) return value.toUtc();
+  if (value is String) {
+    final parsed = DateTime.tryParse(value);
+    if (parsed != null) return parsed.toUtc();
+  }
+  return DateTime.now().toUtc();
 }

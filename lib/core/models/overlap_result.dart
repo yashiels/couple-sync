@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 /// Overlap window representing a mutual free time period
 class OverlapWindow {
   final int startUtc; // Milliseconds since epoch (UTC)
@@ -75,13 +73,8 @@ class OverlapWindow {
           reasonableBoth == other.reasonableBoth;
 
   @override
-  int get hashCode => Object.hash(
-        startUtc,
-        endUtc,
-        durationMinutes,
-        score,
-        reasonableBoth,
-      );
+  int get hashCode =>
+      Object.hash(startUtc, endUtc, durationMinutes, score, reasonableBoth);
 
   @override
   String toString() =>
@@ -92,55 +85,49 @@ class OverlapWindow {
 class OverlapResult {
   final List<OverlapWindow> windows;
   final DateTime computedAt;
-  final String blockHashA;
-  final String blockHashB;
+  final String inputHash;
+  final String? computedBy;
 
   const OverlapResult({
     required this.windows,
     required this.computedAt,
-    required this.blockHashA,
-    required this.blockHashB,
+    required this.inputHash,
+    this.computedBy,
   });
 
   factory OverlapResult.fromJson(Map<String, dynamic> json) {
     return OverlapResult(
-      windows: (json['windows'] as List<dynamic>?)
+      windows:
+          (json['windows'] as List<dynamic>?)
               ?.map((e) => OverlapWindow.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
-      computedAt: json['computedAt'] is Timestamp
-          ? (json['computedAt'] as Timestamp).toDate()
-          : json['computedAt'] is int
-              ? DateTime.fromMillisecondsSinceEpoch(
-                  json['computedAt'] as int,
-                  isUtc: true,
-                )
-              : DateTime.now().toUtc(),
-      blockHashA: json['blockHashA'] as String,
-      blockHashB: json['blockHashB'] as String,
+      computedAt: _parseDateTime(json['computedAt']),
+      inputHash: json['inputHash'] as String? ?? '',
+      computedBy: json['computedBy'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'windows': windows.map((e) => e.toJson()).toList(),
-      'computedAt': Timestamp.fromDate(computedAt),
-      'blockHashA': blockHashA,
-      'blockHashB': blockHashB,
+      'computedAt': computedAt.millisecondsSinceEpoch, // int, not Timestamp
+      'inputHash': inputHash,
+      'computedBy': computedBy,
     };
   }
 
   OverlapResult copyWith({
     List<OverlapWindow>? windows,
     DateTime? computedAt,
-    String? blockHashA,
-    String? blockHashB,
+    String? inputHash,
+    String? computedBy,
   }) {
     return OverlapResult(
       windows: windows ?? List.from(this.windows),
       computedAt: computedAt ?? this.computedAt,
-      blockHashA: blockHashA ?? this.blockHashA,
-      blockHashB: blockHashB ?? this.blockHashB,
+      inputHash: inputHash ?? this.inputHash,
+      computedBy: computedBy ?? this.computedBy,
     );
   }
 
@@ -169,16 +156,12 @@ class OverlapResult {
           runtimeType == other.runtimeType &&
           _listEquals(windows, other.windows) &&
           computedAt == other.computedAt &&
-          blockHashA == other.blockHashA &&
-          blockHashB == other.blockHashB;
+          inputHash == other.inputHash &&
+          computedBy == other.computedBy;
 
   @override
-  int get hashCode => Object.hash(
-        Object.hashAll(windows),
-        computedAt,
-        blockHashA,
-        blockHashB,
-      );
+  int get hashCode =>
+      Object.hash(Object.hashAll(windows), computedAt, inputHash, computedBy);
 
   @override
   String toString() =>
@@ -191,4 +174,17 @@ class OverlapResult {
     }
     return true;
   }
+}
+
+/// Parse a DateTime from int ms since epoch, an ISO-8601 string, or a DateTime.
+DateTime _parseDateTime(dynamic value) {
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value, isUtc: true);
+  }
+  if (value is DateTime) return value.toUtc();
+  if (value is String) {
+    final parsed = DateTime.tryParse(value);
+    if (parsed != null) return parsed.toUtc();
+  }
+  return DateTime.now().toUtc();
 }

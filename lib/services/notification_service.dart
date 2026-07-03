@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'sync_service.dart';
 
 /// Abstract interface for displaying local notifications in the foreground.
 /// Implementations can use flutter_local_notifications or any other backend.
@@ -13,7 +13,7 @@ abstract class LocalNotificationDisplay {
 ///
 /// Responsibilities:
 /// - Request notification permissions on iOS
-/// - Register and refresh FCM token in Firestore
+/// - Register and refresh FCM token on the backend (POST /auth/fcm-token)
 /// - Handle foreground messages (show local notification unless suppressed)
 /// - Background messages are handled natively by the OS
 ///
@@ -24,7 +24,7 @@ abstract class LocalNotificationDisplay {
 /// ```
 class NotificationService {
   final FirebaseMessaging _messaging;
-  final FirebaseFirestore _firestore;
+  final SyncService _syncService;
   final LocalNotificationDisplay? _display;
   final Stream<RemoteMessage> _messageStream;
   bool _suppressDisplay = false;
@@ -34,13 +34,13 @@ class NotificationService {
 
   NotificationService({
     FirebaseMessaging? messaging,
-    FirebaseFirestore? firestore,
+    required SyncService syncService,
     LocalNotificationDisplay? display,
     Stream<RemoteMessage>? messageStream,
-  })  : _messaging = messaging ?? FirebaseMessaging.instance,
-        _firestore = firestore ?? FirebaseFirestore.instance,
-        _display = display,
-        _messageStream = messageStream ?? FirebaseMessaging.onMessage;
+  }) : _messaging = messaging ?? FirebaseMessaging.instance,
+       _syncService = syncService,
+       _display = display,
+       _messageStream = messageStream ?? FirebaseMessaging.onMessage;
 
   /// Initialize FCM: request permissions, register token, set up handlers.
   ///
@@ -48,11 +48,7 @@ class NotificationService {
   /// authenticated so the token can be stored against their UID.
   Future<void> initialize(String userId) async {
     // Request permissions — required on iOS, no-op on Android
-    await _messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    await _messaging.requestPermission(alert: true, badge: true, sound: true);
 
     // Get current token and store in Firestore
     final token = await _messaging.getToken();
@@ -69,15 +65,13 @@ class NotificationService {
     _foregroundMessageSub = _messageStream.listen(handleForegroundMessage);
   }
 
-  /// Store or refresh an FCM token in the user's Firestore document.
-  /// Uses arrayUnion so duplicate tokens are never written.
+  /// Register or refresh the FCM token on the backend (POST /auth/fcm-token).
+  /// The backend dedups tokens for the user resolved from the Bearer token.
   Future<void> storeToken(String userId, String token) async {
     try {
-      await _firestore.collection('users').doc(userId).update({
-        'fcmTokens': FieldValue.arrayUnion([token]),
-      });
+      await _syncService.registerFcmToken(token);
     } catch (_) {
-      // Silently fail if user doc doesn't exist yet — token will be stored on next refresh
+      // Silently fail if the backend is unreachable — token retries on next refresh.
     }
   }
 

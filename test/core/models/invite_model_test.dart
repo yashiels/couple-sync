@@ -55,8 +55,9 @@ void main() {
       });
 
       test('handles deepLinkUrl present', () {
-        final invite =
-            createTestInvite(deepLinkUrl: 'https://app.example.com/invite/ABC123');
+        final invite = createTestInvite(
+          deepLinkUrl: 'https://app.example.com/invite/ABC123',
+        );
         final json = invite.toJson();
         final restored = InviteModel.fromJson(json);
         expect(restored.deepLinkUrl, 'https://app.example.com/invite/ABC123');
@@ -72,15 +73,13 @@ void main() {
       });
 
       test('accepted status roundtrips correctly', () {
-        final json =
-            createTestInvite(status: InviteStatus.accepted).toJson();
+        final json = createTestInvite(status: InviteStatus.accepted).toJson();
         final invite = InviteModel.fromJson(json);
         expect(invite.status, InviteStatus.accepted);
       });
 
       test('expired status roundtrips correctly', () {
-        final json =
-            createTestInvite(status: InviteStatus.expired).toJson();
+        final json = createTestInvite(status: InviteStatus.expired).toJson();
         final invite = InviteModel.fromJson(json);
         expect(invite.status, InviteStatus.expired);
       });

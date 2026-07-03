@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 /// Time block type enum
 enum TimeBlockType { busy, free, tentative }
 
@@ -77,14 +75,7 @@ class TimeBlock {
         (e) => e.name == json['visibility'],
         orElse: () => TimeBlockVisibility.bothPartners,
       ),
-      createdAt: json['createdAt'] is Timestamp
-          ? (json['createdAt'] as Timestamp).toDate()
-          : json['createdAt'] is int
-              ? DateTime.fromMillisecondsSinceEpoch(
-                  json['createdAt'] as int,
-                  isUtc: true,
-                )
-              : DateTime.now().toUtc(),
+      createdAt: _parseDateTime(json['createdAt']),
     );
   }
 
@@ -100,7 +91,7 @@ class TimeBlock {
       'recurrenceRule': recurrenceRule,
       'source': source.name,
       'visibility': visibility.name,
-      'createdAt': Timestamp.fromDate(createdAt),
+      'createdAt': createdAt.millisecondsSinceEpoch,
     };
   }
 
@@ -128,8 +119,9 @@ class TimeBlock {
       startUtc: startUtc ?? this.startUtc,
       endUtc: endUtc ?? this.endUtc,
       timezone: timezone ?? this.timezone,
-      recurrenceRule:
-          clearRecurrenceRule ? null : (recurrenceRule ?? this.recurrenceRule),
+      recurrenceRule: clearRecurrenceRule
+          ? null
+          : (recurrenceRule ?? this.recurrenceRule),
       source: source ?? this.source,
       visibility: visibility ?? this.visibility,
       createdAt: createdAt ?? this.createdAt,
@@ -173,21 +165,34 @@ class TimeBlock {
 
   @override
   int get hashCode => Object.hash(
-        id,
-        userId,
-        title,
-        type,
-        category,
-        startUtc,
-        endUtc,
-        timezone,
-        recurrenceRule,
-        source,
-        visibility,
-        createdAt,
-      );
+    id,
+    userId,
+    title,
+    type,
+    category,
+    startUtc,
+    endUtc,
+    timezone,
+    recurrenceRule,
+    source,
+    visibility,
+    createdAt,
+  );
 
   @override
   String toString() =>
       'TimeBlock(userId: $userId, title: $title, type: $type, start: $startDateTime, end: $endDateTime)';
+}
+
+/// Parse a DateTime from int ms since epoch, an ISO-8601 string, or a DateTime.
+DateTime _parseDateTime(dynamic value) {
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value, isUtc: true);
+  }
+  if (value is DateTime) return value.toUtc();
+  if (value is String) {
+    final parsed = DateTime.tryParse(value);
+    if (parsed != null) return parsed.toUtc();
+  }
+  return DateTime.now().toUtc();
 }

@@ -1,3 +1,4 @@
+import 'package:couple_sync/core/models/time_block.dart';
 import 'package:couple_sync/core/theme/app_colors.dart';
 import 'package:couple_sync/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
@@ -101,21 +102,23 @@ void main() {
 
   group('AppTheme.getCategoryColorLight', () {
     test('returns correct color for known categories', () {
-      expect(AppTheme.getCategoryColorLight('work'), equals(AppColors.categoryWorkLight));
-      expect(AppTheme.getCategoryColorLight('study'), equals(AppColors.categoryStudyLight));
-      expect(AppTheme.getCategoryColorLight('sleep'), equals(AppColors.categorySleepLight));
-    });
-
-    test('is case-insensitive', () {
       expect(
-        AppTheme.getCategoryColorLight('WORK'),
-        equals(AppTheme.getCategoryColorLight('work')),
+        AppTheme.getCategoryColorLight(TimeBlockCategory.work),
+        equals(AppColors.categoryWorkLight),
+      );
+      expect(
+        AppTheme.getCategoryColorLight(TimeBlockCategory.study),
+        equals(AppColors.categoryStudyLight),
+      );
+      expect(
+        AppTheme.getCategoryColorLight(TimeBlockCategory.sleep),
+        equals(AppColors.categorySleepLight),
       );
     });
 
-    test('falls back to Other color for unknown categories', () {
+    test('returns Other color for the other category', () {
       expect(
-        AppTheme.getCategoryColorLight('unknown_category'),
+        AppTheme.getCategoryColorLight(TimeBlockCategory.other),
         equals(AppColors.categoryOtherLight),
       );
     });
@@ -123,13 +126,19 @@ void main() {
 
   group('AppTheme.getCategoryColorDark', () {
     test('returns correct color for known categories', () {
-      expect(AppTheme.getCategoryColorDark('work'), equals(AppColors.categoryWorkDark));
-      expect(AppTheme.getCategoryColorDark('exercise'), equals(AppColors.categoryExerciseDark));
+      expect(
+        AppTheme.getCategoryColorDark(TimeBlockCategory.work),
+        equals(AppColors.categoryWorkDark),
+      );
+      expect(
+        AppTheme.getCategoryColorDark(TimeBlockCategory.exercise),
+        equals(AppColors.categoryExerciseDark),
+      );
     });
 
-    test('falls back to Other color for unknown categories', () {
+    test('returns Other color for the other category', () {
       expect(
-        AppTheme.getCategoryColorDark('unknown_category'),
+        AppTheme.getCategoryColorDark(TimeBlockCategory.other),
         equals(AppColors.categoryOtherDark),
       );
     });
@@ -138,14 +147,14 @@ void main() {
   group('AppTheme.getCategoryColor (brightness-aware)', () {
     test('returns dark variant when brightness is dark', () {
       expect(
-        AppTheme.getCategoryColor('work', Brightness.dark),
+        AppTheme.getCategoryColor(TimeBlockCategory.work, Brightness.dark),
         equals(AppColors.categoryWorkDark),
       );
     });
 
     test('returns light variant when brightness is light', () {
       expect(
-        AppTheme.getCategoryColor('work', Brightness.light),
+        AppTheme.getCategoryColor(TimeBlockCategory.work, Brightness.light),
         equals(AppColors.categoryWorkLight),
       );
     });

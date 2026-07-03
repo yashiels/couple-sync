@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../../core/models/user_model.dart';
 import '../auth_service.dart';
+import 'sync_provider.dart';
 
 /// Authentication state that tracks user and profile data for routing decisions.
 class AuthState {
@@ -13,11 +13,7 @@ class AuthState {
   final UserModel? userProfile;
   final bool isLoading;
 
-  const AuthState({
-    this.firebaseUser,
-    this.userProfile,
-    this.isLoading = true,
-  });
+  const AuthState({this.firebaseUser, this.userProfile, this.isLoading = true});
 
   /// Whether the user is authenticated (has Firebase user)
   bool get isAuthenticated => firebaseUser != null;
@@ -42,14 +38,17 @@ class AuthState {
     bool clearUserProfile = false,
   }) {
     return AuthState(
-      firebaseUser: clearFirebaseUser ? null : (firebaseUser ?? this.firebaseUser),
+      firebaseUser: clearFirebaseUser
+          ? null
+          : (firebaseUser ?? this.firebaseUser),
       userProfile: clearUserProfile ? null : (userProfile ?? this.userProfile),
       isLoading: isLoading ?? this.isLoading,
     );
   }
 
   @override
-  String toString() => 'AuthState(isAuthenticated: $isAuthenticated, '
+  String toString() =>
+      'AuthState(isAuthenticated: $isAuthenticated, '
       'hasTimezone: $hasTimezone, hasCouple: $hasCouple, isLoading: $isLoading)';
 }
 
@@ -57,20 +56,23 @@ class AuthState {
 /// and fetching user profile data from Firestore.
 class AuthStateNotifier extends StateNotifier<AuthState> {
   final FirebaseAuth _auth;
-  final FirebaseFirestore _firestore;
   final AuthService _authService;
+  final Future<UserModel?> Function(String uid) _fetchProfile;
+  final Duration _profileRetryDelay;
 
   String? _lastError;
   StreamSubscription<User?>? _authStateSubscription;
 
   AuthStateNotifier({
     FirebaseAuth? auth,
-    FirebaseFirestore? firestore,
     required AuthService authService,
-  })  : _auth = auth ?? FirebaseAuth.instance,
-        _firestore = firestore ?? FirebaseFirestore.instance,
-        _authService = authService,
-        super(const AuthState()) {
+    required Future<UserModel?> Function(String uid) fetchProfile,
+    Duration profileRetryDelay = const Duration(milliseconds: 1500),
+  }) : _auth = auth ?? FirebaseAuth.instance,
+       _authService = authService,
+       _fetchProfile = fetchProfile,
+       _profileRetryDelay = profileRetryDelay,
+       super(const AuthState()) {
     _init();
   }
 
@@ -88,49 +90,37 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       }
 
       // User signed in - update Firebase user and fetch profile
-      state = state.copyWith(
-        firebaseUser: user,
-        isLoading: true,
-      );
+      state = state.copyWith(firebaseUser: user, isLoading: true);
 
       await _fetchUserProfile(user.uid);
     });
   }
 
-  /// Fetches the user profile from Firestore and updates state.
-  /// Retries once after a short delay if doc not found (handles race with
-  /// _createOrUpdateUserDocument during initial sign-in).
+  /// Fetches the user profile from the backend (GET /users/me via
+  /// [SyncService]) and updates state. Retries once after a short delay if the
+  /// profile is not yet present (handles the race with the /auth/verify upsert
+  /// during initial sign-in).
   Future<void> _fetchUserProfile(String uid, {bool isRetry = false}) async {
     try {
-      final doc = await _firestore.collection('users').doc(uid).get();
+      final profile = await _fetchProfile(uid);
 
-      if (doc.exists && doc.data() != null) {
-        final profile = UserModel.fromJson(doc.data()!);
-        state = state.copyWith(
-          userProfile: profile,
-          isLoading: false,
-        );
+      if (profile != null) {
+        state = state.copyWith(userProfile: profile, isLoading: false);
       } else if (!isRetry) {
-        // Doc may still be creating — retry once after a short delay
-        await Future.delayed(const Duration(milliseconds: 1500));
+        // Profile may still be creating — retry once after a short delay.
+        await Future.delayed(_profileRetryDelay);
         return _fetchUserProfile(uid, isRetry: true);
       } else {
-        // No profile document after retry - user needs onboarding
-        state = state.copyWith(
-          userProfile: null,
-          isLoading: false,
-        );
+        // No profile after retry - user needs onboarding.
+        state = state.copyWith(userProfile: null, isLoading: false);
       }
     } catch (e) {
-      // Error fetching profile - keep authenticated but no profile
-      state = state.copyWith(
-        userProfile: null,
-        isLoading: false,
-      );
+      // Error fetching profile - keep authenticated but no profile.
+      state = state.copyWith(userProfile: null, isLoading: false);
     }
   }
 
-  /// Manually refresh the user profile from Firestore.
+  /// Manually refresh the user profile from the backend.
   Future<void> refreshProfile() async {
     final uid = state.uid;
     if (uid != null) {
@@ -160,6 +150,19 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
     try {
       _lastError = null;
       await _authService.signInWithApple();
+      return true;
+    } on AuthException catch (e) {
+      _lastError = e.message;
+      return false;
+    }
+  }
+
+  /// Sign in (or create) a user with email + password. Dev-only path.
+  /// Returns true on success, false on failure. Check [lastError].
+  Future<bool> signInWithEmail(String email, String password) async {
+    try {
+      _lastError = null;
+      await _authService.signInWithEmail(email, password);
       return true;
     } on AuthException catch (e) {
       _lastError = e.message;
@@ -205,13 +208,22 @@ final googleSignInProvider = Provider<GoogleSignIn>((ref) {
 /// Provider for the AuthService.
 /// Use this for direct access to auth operations.
 final authServiceProvider = Provider<AuthService>((ref) {
-  return AuthService(googleSignIn: ref.watch(googleSignInProvider));
+  return AuthService(
+    googleSignIn: ref.watch(googleSignInProvider),
+    syncService: ref.watch(syncServiceProvider),
+  );
 });
 
 /// Provider for authentication state.
 /// Use this in guards and UI to check auth status, timezone, and couple pairing.
-final authStateProvider = StateNotifierProvider<AuthStateNotifier, AuthState>((ref) {
-  return AuthStateNotifier(authService: ref.watch(authServiceProvider));
+final authStateProvider = StateNotifierProvider<AuthStateNotifier, AuthState>((
+  ref,
+) {
+  final sync = ref.watch(syncServiceProvider);
+  return AuthStateNotifier(
+    authService: ref.watch(authServiceProvider),
+    fetchProfile: (uid) => sync.getUser(uid),
+  );
 });
 
 /// Convenience provider to check if app is loading auth state.

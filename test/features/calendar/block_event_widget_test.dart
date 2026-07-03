@@ -74,9 +74,11 @@ void main() {
       final start = DateTime(2024, 6, 15, 9, 0).millisecondsSinceEpoch;
       final end = DateTime(2024, 6, 15, 9, 15).millisecondsSinceEpoch;
 
-      await tester.pumpWidget(_buildSubject(
-        block: _makeBlock(startUtc: start, endUtc: end),
-      ));
+      await tester.pumpWidget(
+        _buildSubject(
+          block: _makeBlock(startUtc: start, endUtc: end),
+        ),
+      );
 
       expect(find.text('Work Meeting'), findsOneWidget);
       expect(find.text('09:00 - 09:15'), findsNothing);
@@ -84,60 +86,69 @@ void main() {
 
     testWidgets('calls onTap when tapped', (tester) async {
       var tapped = false;
-      await tester.pumpWidget(_buildSubject(
-        block: _makeBlock(),
-        onTap: () => tapped = true,
-      ));
+      await tester.pumpWidget(
+        _buildSubject(block: _makeBlock(), onTap: () => tapped = true),
+      );
 
       await tester.tap(find.byType(GestureDetector).first);
       expect(tapped, isTrue);
     });
 
-    testWidgets('renders each category without errors in light theme',
-        (tester) async {
+    testWidgets('renders each category without errors in light theme', (
+      tester,
+    ) async {
       for (final category in TimeBlockCategory.values) {
-        await tester.pumpWidget(_buildSubject(
-          block: _makeBlock(category: category, title: category.name),
-        ));
+        await tester.pumpWidget(
+          _buildSubject(
+            block: _makeBlock(category: category, title: category.name),
+          ),
+        );
 
         expect(find.text(category.name), findsOneWidget);
       }
     });
 
-    testWidgets('renders each category without errors in dark theme',
-        (tester) async {
+    testWidgets('renders each category without errors in dark theme', (
+      tester,
+    ) async {
       for (final category in TimeBlockCategory.values) {
-        await tester.pumpWidget(_buildSubject(
-          block: _makeBlock(category: category, title: category.name),
-          brightness: Brightness.dark,
-        ));
+        await tester.pumpWidget(
+          _buildSubject(
+            block: _makeBlock(category: category, title: category.name),
+            brightness: Brightness.dark,
+          ),
+        );
 
         expect(find.text(category.name), findsOneWidget);
       }
     });
 
-    testWidgets('renders with reduced opacity for partner blocks',
-        (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        block: _makeBlock(),
-        isCurrentUser: false,
-      ));
+    testWidgets('renders with reduced opacity for partner blocks', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _buildSubject(block: _makeBlock(), isCurrentUser: false),
+      );
 
       // Widget renders without error — visual opacity tested via rendering
       expect(find.text('Work Meeting'), findsOneWidget);
     });
 
     testWidgets('title truncates with ellipsis on overflow', (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        block: _makeBlock(
+      await tester.pumpWidget(
+        _buildSubject(
+          block: _makeBlock(
             title:
-                'Very Long Title That Should Overflow The Available Space Completely'),
-      ));
+                'Very Long Title That Should Overflow The Available Space Completely',
+          ),
+        ),
+      );
 
       // Widget renders; Text widget has maxLines: 1, overflow: ellipsis
       expect(
         find.text(
-            'Very Long Title That Should Overflow The Available Space Completely'),
+          'Very Long Title That Should Overflow The Available Space Completely',
+        ),
         findsOneWidget,
       );
     });
@@ -188,7 +199,8 @@ void main() {
 
     testWidgets('shows "Partner" for partner', (tester) async {
       await tester.pumpWidget(
-          buildDialog(block: _makeBlock(), isCurrentUser: false));
+        buildDialog(block: _makeBlock(), isCurrentUser: false),
+      );
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 
@@ -235,10 +247,12 @@ void main() {
       expect(find.text('Manual'), findsOneWidget);
     });
 
-    testWidgets('shows Google Calendar source for google blocks',
-        (tester) async {
+    testWidgets('shows Google Calendar source for google blocks', (
+      tester,
+    ) async {
       await tester.pumpWidget(
-          buildDialog(block: _makeBlock(source: TimeBlockSource.google)));
+        buildDialog(block: _makeBlock(source: TimeBlockSource.google)),
+      );
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 
@@ -263,21 +277,28 @@ void main() {
       final start = DateTime.utc(2024, 6, 15, 9, 0).millisecondsSinceEpoch;
       final end = DateTime.utc(2024, 6, 15, 10, 30).millisecondsSinceEpoch;
 
-      await tester
-          .pumpWidget(buildDialog(block: _makeBlock(startUtc: start, endUtc: end)));
+      await tester.pumpWidget(
+        buildDialog(
+          block: _makeBlock(startUtc: start, endUtc: end),
+        ),
+      );
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 
       expect(find.text('1 hr 30 min'), findsOneWidget);
     });
 
-    testWidgets('formats duration in minutes only for < 60 min',
-        (tester) async {
+    testWidgets('formats duration in minutes only for < 60 min', (
+      tester,
+    ) async {
       final start = DateTime.utc(2024, 6, 15, 9, 0).millisecondsSinceEpoch;
       final end = DateTime.utc(2024, 6, 15, 9, 45).millisecondsSinceEpoch;
 
-      await tester
-          .pumpWidget(buildDialog(block: _makeBlock(startUtc: start, endUtc: end)));
+      await tester.pumpWidget(
+        buildDialog(
+          block: _makeBlock(startUtc: start, endUtc: end),
+        ),
+      );
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 
@@ -286,7 +307,8 @@ void main() {
 
     testWidgets('renders in dark theme', (tester) async {
       await tester.pumpWidget(
-          buildDialog(block: _makeBlock(), brightness: Brightness.dark));
+        buildDialog(block: _makeBlock(), brightness: Brightness.dark),
+      );
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 

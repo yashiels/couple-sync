@@ -35,10 +35,10 @@ class _TestAuthState extends AuthState {
     required bool authenticated,
     required bool timezone,
     required bool couple,
-  })  : _isAuthenticated = authenticated,
-        _hasTimezone = timezone,
-        _hasCouple = couple,
-        super(isLoading: loading);
+  }) : _isAuthenticated = authenticated,
+       _hasTimezone = timezone,
+       _hasCouple = couple,
+       super(isLoading: loading);
 
   @override
   bool get isAuthenticated => _isAuthenticated;
@@ -86,14 +86,17 @@ void main() {
       expect(computeRedirect(unauthState, AppRoutes.auth), isNull);
     });
 
-    test('preserves invite code — redirects /pairing?code=ABC123 to /auth?pendingInvite=ABC123', () {
-      final result = computeRedirect(
-        unauthState,
-        AppRoutes.pairing,
-        queryParams: const {'code': 'ABC123'},
-      );
-      expect(result, '/auth?pendingInvite=ABC123');
-    });
+    test(
+      'preserves invite code — redirects /pairing?code=ABC123 to /auth?pendingInvite=ABC123',
+      () {
+        final result = computeRedirect(
+          unauthState,
+          AppRoutes.pairing,
+          queryParams: const {'code': 'ABC123'},
+        );
+        expect(result, '/auth?pendingInvite=ABC123');
+      },
+    );
 
     test('redirects /pairing without code to plain /auth', () {
       expect(computeRedirect(unauthState, AppRoutes.pairing), AppRoutes.auth);
@@ -132,11 +135,14 @@ void main() {
       expect(result, '/pairing?code=ABC123');
     });
 
-    test('does not redirect /auth without pendingInvite (goes to timezone-setup instead)', () {
-      // No pendingInvite — Guard 1b is skipped, Guard 2 fires
-      final result = computeRedirect(authNoTimezoneState, AppRoutes.auth);
-      expect(result, AppRoutes.timezoneSetup);
-    });
+    test(
+      'does not redirect /auth without pendingInvite (goes to timezone-setup instead)',
+      () {
+        // No pendingInvite — Guard 1b is skipped, Guard 2 fires
+        final result = computeRedirect(authNoTimezoneState, AppRoutes.auth);
+        expect(result, AppRoutes.timezoneSetup);
+      },
+    );
 
     test('URI-encodes the code when building the redirect URL', () {
       // GoRouter decodes query param values before handing them to redirects,
@@ -173,7 +179,10 @@ void main() {
     });
 
     test('redirects /auth to /timezone-setup', () {
-      expect(computeRedirect(noTimezoneState, AppRoutes.auth), AppRoutes.timezoneSetup);
+      expect(
+        computeRedirect(noTimezoneState, AppRoutes.auth),
+        AppRoutes.timezoneSetup,
+      );
     });
 
     test('redirects to /timezone-setup from /settings', () {
@@ -196,21 +205,24 @@ void main() {
     });
 
     test('redirects to /pairing from /home', () {
-      expect(
-        computeRedirect(noCoupleState, AppRoutes.home),
-        AppRoutes.pairing,
-      );
+      expect(computeRedirect(noCoupleState, AppRoutes.home), AppRoutes.pairing);
     });
 
     test('stays on /pairing', () {
       expect(computeRedirect(noCoupleState, AppRoutes.pairing), isNull);
     });
 
-    test('redirects /timezone-setup to /pairing (timezone already done, back nav not allowed)', () {
-      // The timezoneSetup carve-out was a dead guard — reaching Guard 3 means
-      // hasTimezone is true, so revisiting /timezone-setup should redirect forward.
-      expect(computeRedirect(noCoupleState, AppRoutes.timezoneSetup), AppRoutes.pairing);
-    });
+    test(
+      'redirects /timezone-setup to /pairing (timezone already done, back nav not allowed)',
+      () {
+        // The timezoneSetup carve-out was a dead guard — reaching Guard 3 means
+        // hasTimezone is true, so revisiting /timezone-setup should redirect forward.
+        expect(
+          computeRedirect(noCoupleState, AppRoutes.timezoneSetup),
+          AppRoutes.pairing,
+        );
+      },
+    );
 
     test('redirects /auth to /pairing', () {
       expect(computeRedirect(noCoupleState, AppRoutes.auth), AppRoutes.pairing);

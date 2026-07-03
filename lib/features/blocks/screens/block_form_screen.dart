@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:timezone/timezone.dart';
 import '../../../core/models/time_block.dart';
 import '../../../core/router/routes.dart';
+import '../../../core/utils/block_labels.dart';
+import '../../../core/utils/format_utils.dart';
 import '../../../services/providers/auth_state_provider.dart';
-import '../../../services/providers/firestore_provider.dart';
+import '../../../services/providers/sync_provider.dart';
 import '../widgets/recurrence_picker_widget.dart';
 
 /// Form screen for creating or editing manual time blocks.
@@ -21,41 +23,41 @@ class BlockFormScreen extends ConsumerStatefulWidget {
 class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
-  
+
   TimeBlockType _type = TimeBlockType.busy;
   TimeBlockCategory _category = TimeBlockCategory.other;
   TimeBlockVisibility _visibility = TimeBlockVisibility.bothPartners;
-  
+
   late DateTime _startDate;
   late TimeOfDay _startTime;
   late DateTime _endDate;
   late TimeOfDay _endTime;
-  
+
   String _timezone = 'UTC';
   String? _recurrenceRule;
-  
+
   bool _isLoading = false;
   bool _isDeleting = false;
   String? _error;
-  
+
   TimeBlock? _existingBlock;
 
   @override
   void initState() {
     super.initState();
-    
+
     // Initialize dates
     final now = DateTime.now();
     _startDate = widget.args?.initialDate ?? now;
     _startTime = TimeOfDay.fromDateTime(_startDate);
     _endDate = _startDate.add(const Duration(hours: 1));
     _endTime = TimeOfDay.fromDateTime(_endDate);
-    
+
     // Load existing block if editing
     if (widget.args?.blockId != null) {
       _loadBlock();
     }
-    
+
     // Set timezone from user profile
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final profile = ref.read(authStateProvider).profile;
@@ -77,7 +79,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
   Future<void> _loadBlock() async {
     final blockId = widget.args?.blockId;
     if (blockId == null) return;
-    
+
     final profile = ref.read(authStateProvider).profile;
     if (profile?.coupleId == null) {
       setState(() {
@@ -85,21 +87,16 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
       });
       return;
     }
-    
+
     setState(() {
       _isLoading = true;
     });
-    
+
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('timeblocks')
-          .doc(profile!.coupleId)
-          .collection('blocks')
-          .doc(blockId)
-          .get();
-      
-      if (doc.exists) {
-        final block = TimeBlock.fromJson(doc.data()!, doc.id);
+      final syncService = ref.read(syncServiceProvider);
+      final block = await syncService.getBlock(profile!.coupleId!, blockId);
+
+      if (block != null) {
         setState(() {
           _existingBlock = block;
           _titleController.text = block.title;
@@ -158,33 +155,33 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
   /// Save the block (create or update)
   Future<void> _saveBlock() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     if (!_isEndTimeValid) {
       setState(() {
         _error = 'End time must be after start time';
       });
       return;
     }
-    
+
     final authState = ref.read(authStateProvider);
     final uid = authState.uid;
     final profile = authState.profile;
-    
+
     if (uid == null || profile?.coupleId == null) {
       setState(() {
         _error = 'Not authenticated or not in a couple';
       });
       return;
     }
-    
+
     setState(() {
       _isLoading = true;
       _error = null;
     });
-    
+
     try {
-      final firestoreService = ref.read(firestoreServiceProvider);
-      
+      final syncService = ref.read(syncServiceProvider);
+
       final block = TimeBlock(
         userId: uid,
         title: _titleController.text.trim(),
@@ -198,19 +195,19 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
         visibility: _visibility,
         createdAt: _existingBlock?.createdAt ?? DateTime.now().toUtc(),
       );
-      
+
       if (_existingBlock != null) {
         // Update existing block
-        await firestoreService.updateBlock(
+        await syncService.updateBlock(
           profile!.coupleId!,
           widget.args!.blockId!,
           block.toJson(),
         );
       } else {
         // Create new block
-        await firestoreService.createBlock(profile!.coupleId!, block);
+        await syncService.createBlock(profile!.coupleId!, block);
       }
-      
+
       if (mounted) {
         Navigator.of(context).pop(true); // Return true to indicate success
       }
@@ -225,12 +222,14 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
   /// Delete the block with confirmation
   Future<void> _deleteBlock() async {
     if (_existingBlock == null) return;
-    
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Block'),
-        content: const Text('Are you sure you want to delete this time block? This action cannot be undone.'),
+        content: const Text(
+          'Are you sure you want to delete this time block? This action cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -244,24 +243,21 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
         ],
       ),
     );
-    
+
     if (confirmed != true) return;
-    
+
     final profile = ref.read(authStateProvider).profile;
     if (profile?.coupleId == null || widget.args?.blockId == null) return;
-    
+
     setState(() {
       _isDeleting = true;
       _error = null;
     });
-    
+
     try {
-      final firestoreService = ref.read(firestoreServiceProvider);
-      await firestoreService.deleteBlock(
-        profile!.coupleId!,
-        widget.args!.blockId!,
-      );
-      
+      final syncService = ref.read(syncServiceProvider);
+      await syncService.deleteBlock(profile!.coupleId!, widget.args!.blockId!);
+
       if (mounted) {
         Navigator.of(context).pop(true);
       }
@@ -276,7 +272,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.args?.blockId != null;
-    
+
     return Scaffold(
       appBar: AppBar(
         title: Text(isEditing ? 'Edit Block' : 'New Block'),
@@ -323,7 +319,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                       items: TimeBlockType.values.map((type) {
                         return DropdownMenuItem(
                           value: type,
-                          child: Text(_getTypeLabel(type)),
+                          child: Text(type.label),
                         );
                       }).toList(),
                       onChanged: (value) {
@@ -344,7 +340,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                       items: TimeBlockCategory.values.map((category) {
                         return DropdownMenuItem(
                           value: category,
-                          child: Text(_getCategoryLabel(category)),
+                          child: Text(category.label),
                         );
                       }).toList(),
                       onChanged: (value) {
@@ -365,12 +361,13 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                       items: TimeBlockVisibility.values.map((visibility) {
                         return DropdownMenuItem(
                           value: visibility,
-                          child: Text(_getVisibilityLabel(visibility)),
+                          child: Text(visibility.label),
                         );
                       }).toList(),
                       onChanged: (value) {
                         setState(() {
-                          _visibility = value ?? TimeBlockVisibility.bothPartners;
+                          _visibility =
+                              value ?? TimeBlockVisibility.bothPartners;
                         });
                       },
                     ),
@@ -387,15 +384,17 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                         Expanded(
                           child: OutlinedButton.icon(
                             icon: const Icon(Icons.calendar_today),
-                            label: Text(
-                              '${_startDate.day}/${_startDate.month}/${_startDate.year}',
-                            ),
+                            label: Text(formatDateYMd(_startDate)),
                             onPressed: () async {
                               final date = await showDatePicker(
                                 context: context,
                                 initialDate: _startDate,
-                                firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                                firstDate: DateTime.now().subtract(
+                                  const Duration(days: 365),
+                                ),
+                                lastDate: DateTime.now().add(
+                                  const Duration(days: 365),
+                                ),
                               );
                               if (date != null) {
                                 setState(() {
@@ -409,9 +408,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                         Expanded(
                           child: OutlinedButton.icon(
                             icon: const Icon(Icons.access_time),
-                            label: Text(
-                              _startTime.format(context),
-                            ),
+                            label: Text(_startTime.format(context)),
                             onPressed: () async {
                               final time = await showTimePicker(
                                 context: context,
@@ -430,25 +427,24 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                     const SizedBox(height: 16),
 
                     // End date/time
-                    Text(
-                      'End',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
+                    Text('End', style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
                     Row(
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
                             icon: const Icon(Icons.calendar_today),
-                            label: Text(
-                              '${_endDate.day}/${_endDate.month}/${_endDate.year}',
-                            ),
+                            label: Text(formatDateYMd(_endDate)),
                             onPressed: () async {
                               final date = await showDatePicker(
                                 context: context,
                                 initialDate: _endDate,
-                                firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                                firstDate: DateTime.now().subtract(
+                                  const Duration(days: 365),
+                                ),
+                                lastDate: DateTime.now().add(
+                                  const Duration(days: 365),
+                                ),
                               );
                               if (date != null) {
                                 setState(() {
@@ -462,9 +458,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                         Expanded(
                           child: OutlinedButton.icon(
                             icon: const Icon(Icons.access_time),
-                            label: Text(
-                              _endTime.format(context),
-                            ),
+                            label: Text(_endTime.format(context)),
                             onPressed: () async {
                               final time = await showTimePicker(
                                 context: context,
@@ -480,7 +474,7 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                         ),
                       ],
                     ),
-                    
+
                     // End time validation error
                     if (!_isEndTimeValid)
                       Padding(
@@ -496,9 +490,26 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                     const SizedBox(height: 24),
 
                     // Timezone display
-                    Text(
-                      'Timezone: $_timezone',
-                      style: Theme.of(context).textTheme.bodySmall,
+                    Card(
+                      margin: EdgeInsets.zero,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.schedule, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _tzLabel(_timezone),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 24),
 
@@ -529,7 +540,9 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _isLoading || _isDeleting ? null : _saveBlock,
+                        onPressed: _isLoading || _isDeleting
+                            ? null
+                            : _saveBlock,
                         child: _isLoading
                             ? const SizedBox(
                                 height: 20,
@@ -548,46 +561,14 @@ class _BlockFormScreenState extends ConsumerState<BlockFormScreen> {
     );
   }
 
-  String _getTypeLabel(TimeBlockType type) {
-    switch (type) {
-      case TimeBlockType.busy:
-        return 'Busy';
-      case TimeBlockType.free:
-        return 'Free';
-      case TimeBlockType.tentative:
-        return 'Tentative';
-    }
-  }
-
-  String _getCategoryLabel(TimeBlockCategory category) {
-    switch (category) {
-      case TimeBlockCategory.work:
-        return 'Work';
-      case TimeBlockCategory.study:
-        return 'Study';
-      case TimeBlockCategory.commute:
-        return 'Commute';
-      case TimeBlockCategory.exercise:
-        return 'Exercise';
-      case TimeBlockCategory.social:
-        return 'Social';
-      case TimeBlockCategory.meals:
-        return 'Meals';
-      case TimeBlockCategory.sleep:
-        return 'Sleep';
-      case TimeBlockCategory.personal:
-        return 'Personal';
-      case TimeBlockCategory.other:
-        return 'Other';
-    }
-  }
-
-  String _getVisibilityLabel(TimeBlockVisibility visibility) {
-    switch (visibility) {
-      case TimeBlockVisibility.bothPartners:
-        return 'Both Partners';
-      case TimeBlockVisibility.onlyMe:
-        return 'Only Me';
-    }
+  /// Build a readable timezone label: IANA id + UTC offset + current local time.
+  String _tzLabel(String tzId) {
+    final loc = getLocation(tzId);
+    final now = TZDateTime.now(loc);
+    final offset = now.timeZoneOffset;
+    final sign = offset.isNegative ? '-' : '+';
+    final hh = offset.inHours.abs().toString().padLeft(2, '0');
+    final mm = (offset.inMinutes.abs() % 60).toString().padLeft(2, '0');
+    return '$tzId (UTC$sign$hh:$mm) · now ${formatTimeHm(now)}';
   }
 }

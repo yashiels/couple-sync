@@ -1,5 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:couple_sync/services/auth_service.dart';
+import 'package:couple_sync/services/sync_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -8,88 +8,43 @@ import 'package:mockito/mockito.dart';
 
 @GenerateMocks([
   FirebaseAuth,
-  FirebaseFirestore,
   GoogleSignIn,
   GoogleSignInAccount,
   GoogleSignInAuthentication,
   User,
   UserCredential,
   AdditionalUserInfo,
-  CollectionReference,
-  DocumentReference,
-  DocumentSnapshot,
-], customMocks: [
-  MockSpec<CollectionReference<Map<String, dynamic>>>(
-    as: #MockCollectionReferenceMap,
-  ),
-  MockSpec<DocumentReference<Map<String, dynamic>>>(
-    as: #MockDocumentReferenceMap,
-  ),
-  MockSpec<DocumentSnapshot<Map<String, dynamic>>>(
-    as: #MockDocumentSnapshotMap,
-  ),
+  SyncService,
 ])
 import 'auth_service_test.mocks.dart';
 
 void main() {
   late MockFirebaseAuth mockAuth;
-  late MockFirebaseFirestore mockFirestore;
   late MockGoogleSignIn mockGoogleSignIn;
+  late MockSyncService mockSyncService;
   late AuthService authService;
-
-  late MockCollectionReferenceMap mockUsersCollection;
-  late MockDocumentReferenceMap mockUserDoc;
-  late MockDocumentSnapshotMap mockDocSnapshot;
 
   setUp(() {
     mockAuth = MockFirebaseAuth();
-    mockFirestore = MockFirebaseFirestore();
     mockGoogleSignIn = MockGoogleSignIn();
+    mockSyncService = MockSyncService();
 
-    mockUsersCollection = MockCollectionReferenceMap();
-    mockUserDoc = MockDocumentReferenceMap();
-    mockDocSnapshot = MockDocumentSnapshotMap();
+    // upsertUser swallows errors in production; default to a no-op so sign-in
+    // succeeds unless a test overrides this.
+    when(mockSyncService.upsertUser(any)).thenAnswer((_) async {});
 
     authService = AuthService(
       auth: mockAuth,
-      firestore: mockFirestore,
       googleSignIn: mockGoogleSignIn,
+      syncService: mockSyncService,
     );
   });
 
-  void stubFirestoreForNewUser(MockUser mockUser) {
+  void stubUser(MockUser mockUser) {
     when(mockUser.uid).thenReturn('test-uid');
     when(mockUser.email).thenReturn('test@example.com');
     when(mockUser.displayName).thenReturn('Test User');
     when(mockUser.photoURL).thenReturn('https://photo.url/test.jpg');
-
-    when(mockFirestore.collection('users')).thenReturn(mockUsersCollection);
-    when(mockUsersCollection.doc('test-uid')).thenReturn(mockUserDoc);
-    when(mockUserDoc.get()).thenAnswer((_) async => mockDocSnapshot);
-    when(mockDocSnapshot.exists).thenReturn(false);
-    when(mockUserDoc.set(any)).thenAnswer((_) async {});
-  }
-
-  void stubFirestoreForExistingUser(
-    MockUser mockUser, {
-    Map<String, dynamic>? existingData,
-  }) {
-    when(mockUser.uid).thenReturn('test-uid');
-    when(mockUser.email).thenReturn('test@example.com');
-    when(mockUser.displayName).thenReturn('Test User');
-    when(mockUser.photoURL).thenReturn('https://photo.url/test.jpg');
-
-    when(mockFirestore.collection('users')).thenReturn(mockUsersCollection);
-    when(mockUsersCollection.doc('test-uid')).thenReturn(mockUserDoc);
-    when(mockUserDoc.get()).thenAnswer((_) async => mockDocSnapshot);
-    when(mockDocSnapshot.exists).thenReturn(true);
-    when(mockDocSnapshot.data()).thenReturn(existingData ??
-        {
-          'email': 'test@example.com',
-          'displayName': 'Test User',
-          'photoUrl': 'https://photo.url/test.jpg',
-        });
-    when(mockUserDoc.update(any)).thenAnswer((_) async {});
   }
 
   group('AuthService', () {
@@ -135,140 +90,105 @@ void main() {
 
         expect(
           () => authService.signInWithGoogle(),
-          throwsA(isA<AuthException>().having(
-            (e) => e.code,
-            'code',
-            'sign-in-cancelled',
-          )),
+          throwsA(
+            isA<AuthException>().having(
+              (e) => e.code,
+              'code',
+              'sign-in-cancelled',
+            ),
+          ),
         );
       });
 
-      test('signs in successfully and creates new user doc', () async {
+      test('signs in successfully and calls upsertUser on sign-in', () async {
         final mockGoogleAccount = MockGoogleSignInAccount();
         final mockGoogleAuth = MockGoogleSignInAuthentication();
         final mockUserCredential = MockUserCredential();
         final mockUser = MockUser();
 
-        when(mockGoogleSignIn.signIn())
-            .thenAnswer((_) async => mockGoogleAccount);
-        when(mockGoogleAccount.authentication)
-            .thenAnswer((_) async => mockGoogleAuth);
+        when(
+          mockGoogleSignIn.signIn(),
+        ).thenAnswer((_) async => mockGoogleAccount);
+        when(
+          mockGoogleAccount.authentication,
+        ).thenAnswer((_) async => mockGoogleAuth);
         when(mockGoogleAuth.accessToken).thenReturn('access-token');
         when(mockGoogleAuth.idToken).thenReturn('id-token');
-        when(mockAuth.signInWithCredential(any))
-            .thenAnswer((_) async => mockUserCredential);
+        when(
+          mockAuth.signInWithCredential(any),
+        ).thenAnswer((_) async => mockUserCredential);
         when(mockUserCredential.user).thenReturn(mockUser);
 
-        stubFirestoreForNewUser(mockUser);
+        stubUser(mockUser);
 
         final result = await authService.signInWithGoogle();
 
         expect(result, mockUser);
         verify(mockAuth.signInWithCredential(any)).called(1);
-        verify(mockUserDoc.set(any)).called(1);
+        verify(mockSyncService.upsertUser(any)).called(1);
       });
 
-      test('signs in and updates existing user doc when data changed',
-          () async {
-        final mockGoogleAccount = MockGoogleSignInAccount();
-        final mockGoogleAuth = MockGoogleSignInAuthentication();
-        final mockUserCredential = MockUserCredential();
-        final mockUser = MockUser();
+      test(
+        'throws AuthException when signInWithCredential returns null user',
+        () async {
+          final mockGoogleAccount = MockGoogleSignInAccount();
+          final mockGoogleAuth = MockGoogleSignInAuthentication();
+          final mockUserCredential = MockUserCredential();
 
-        when(mockGoogleSignIn.signIn())
-            .thenAnswer((_) async => mockGoogleAccount);
-        when(mockGoogleAccount.authentication)
-            .thenAnswer((_) async => mockGoogleAuth);
-        when(mockGoogleAuth.accessToken).thenReturn('access-token');
-        when(mockGoogleAuth.idToken).thenReturn('id-token');
-        when(mockAuth.signInWithCredential(any))
-            .thenAnswer((_) async => mockUserCredential);
-        when(mockUserCredential.user).thenReturn(mockUser);
+          when(
+            mockGoogleSignIn.signIn(),
+          ).thenAnswer((_) async => mockGoogleAccount);
+          when(
+            mockGoogleAccount.authentication,
+          ).thenAnswer((_) async => mockGoogleAuth);
+          when(mockGoogleAuth.accessToken).thenReturn('access-token');
+          when(mockGoogleAuth.idToken).thenReturn('id-token');
+          when(
+            mockAuth.signInWithCredential(any),
+          ).thenAnswer((_) async => mockUserCredential);
+          when(mockUserCredential.user).thenReturn(null);
 
-        stubFirestoreForExistingUser(mockUser, existingData: {
-          'email': 'old@example.com',
-          'displayName': 'Old Name',
-          'photoUrl': 'https://old.url/photo.jpg',
-        });
-
-        final result = await authService.signInWithGoogle();
-
-        expect(result, mockUser);
-        verify(mockUserDoc.update(any)).called(1);
-      });
-
-      test('signs in and skips update when no data changed', () async {
-        final mockGoogleAccount = MockGoogleSignInAccount();
-        final mockGoogleAuth = MockGoogleSignInAuthentication();
-        final mockUserCredential = MockUserCredential();
-        final mockUser = MockUser();
-
-        when(mockGoogleSignIn.signIn())
-            .thenAnswer((_) async => mockGoogleAccount);
-        when(mockGoogleAccount.authentication)
-            .thenAnswer((_) async => mockGoogleAuth);
-        when(mockGoogleAuth.accessToken).thenReturn('access-token');
-        when(mockGoogleAuth.idToken).thenReturn('id-token');
-        when(mockAuth.signInWithCredential(any))
-            .thenAnswer((_) async => mockUserCredential);
-        when(mockUserCredential.user).thenReturn(mockUser);
-
-        stubFirestoreForExistingUser(mockUser);
-
-        await authService.signInWithGoogle();
-
-        verifyNever(mockUserDoc.update(any));
-      });
-
-      test('throws AuthException when signInWithCredential returns null user',
-          () async {
-        final mockGoogleAccount = MockGoogleSignInAccount();
-        final mockGoogleAuth = MockGoogleSignInAuthentication();
-        final mockUserCredential = MockUserCredential();
-
-        when(mockGoogleSignIn.signIn())
-            .thenAnswer((_) async => mockGoogleAccount);
-        when(mockGoogleAccount.authentication)
-            .thenAnswer((_) async => mockGoogleAuth);
-        when(mockGoogleAuth.accessToken).thenReturn('access-token');
-        when(mockGoogleAuth.idToken).thenReturn('id-token');
-        when(mockAuth.signInWithCredential(any))
-            .thenAnswer((_) async => mockUserCredential);
-        when(mockUserCredential.user).thenReturn(null);
-
-        expect(
-          () => authService.signInWithGoogle(),
-          throwsA(isA<AuthException>().having(
-            (e) => e.code,
-            'code',
-            'sign-in-failed',
-          )),
-        );
-      });
+          expect(
+            () => authService.signInWithGoogle(),
+            throwsA(
+              isA<AuthException>().having(
+                (e) => e.code,
+                'code',
+                'sign-in-failed',
+              ),
+            ),
+          );
+        },
+      );
 
       test('wraps FirebaseAuthException as AuthException', () async {
         final mockGoogleAccount = MockGoogleSignInAccount();
         final mockGoogleAuth = MockGoogleSignInAuthentication();
 
-        when(mockGoogleSignIn.signIn())
-            .thenAnswer((_) async => mockGoogleAccount);
-        when(mockGoogleAccount.authentication)
-            .thenAnswer((_) async => mockGoogleAuth);
+        when(
+          mockGoogleSignIn.signIn(),
+        ).thenAnswer((_) async => mockGoogleAccount);
+        when(
+          mockGoogleAccount.authentication,
+        ).thenAnswer((_) async => mockGoogleAuth);
         when(mockGoogleAuth.accessToken).thenReturn('access-token');
         when(mockGoogleAuth.idToken).thenReturn('id-token');
-        when(mockAuth.signInWithCredential(any))
-            .thenThrow(FirebaseAuthException(
-          code: 'network-request-failed',
-          message: 'Network error',
-        ));
+        when(mockAuth.signInWithCredential(any)).thenThrow(
+          FirebaseAuthException(
+            code: 'network-request-failed',
+            message: 'Network error',
+          ),
+        );
 
         expect(
           () => authService.signInWithGoogle(),
-          throwsA(isA<AuthException>().having(
-            (e) => e.message,
-            'message',
-            'Network error. Please check your connection and try again.',
-          )),
+          throwsA(
+            isA<AuthException>().having(
+              (e) => e.message,
+              'message',
+              'Network error. Please check your connection and try again.',
+            ),
+          ),
         );
       });
 
@@ -277,11 +197,9 @@ void main() {
 
         expect(
           () => authService.signInWithGoogle(),
-          throwsA(isA<AuthException>().having(
-            (e) => e.code,
-            'code',
-            'unknown-error',
-          )),
+          throwsA(
+            isA<AuthException>().having((e) => e.code, 'code', 'unknown-error'),
+          ),
         );
       });
     });
@@ -299,18 +217,22 @@ void main() {
 
       test('wraps FirebaseAuthException as AuthException', () async {
         when(mockGoogleSignIn.signOut()).thenAnswer((_) async => null);
-        when(mockAuth.signOut()).thenThrow(FirebaseAuthException(
-          code: 'too-many-requests',
-          message: 'Rate limited',
-        ));
+        when(mockAuth.signOut()).thenThrow(
+          FirebaseAuthException(
+            code: 'too-many-requests',
+            message: 'Rate limited',
+          ),
+        );
 
         expect(
           () => authService.signOut(),
-          throwsA(isA<AuthException>().having(
-            (e) => e.message,
-            'message',
-            'Too many attempts. Please try again later.',
-          )),
+          throwsA(
+            isA<AuthException>().having(
+              (e) => e.message,
+              'message',
+              'Too many attempts. Please try again later.',
+            ),
+          ),
         );
       });
 
@@ -319,11 +241,9 @@ void main() {
 
         expect(
           () => authService.signOut(),
-          throwsA(isA<AuthException>().having(
-            (e) => e.code,
-            'code',
-            'unknown-error',
-          )),
+          throwsA(
+            isA<AuthException>().having((e) => e.code, 'code', 'unknown-error'),
+          ),
         );
       });
     });
@@ -352,7 +272,7 @@ void main() {
         'invalid-credential': 'Invalid credentials. Please try again.',
         'account-exists-with-different-credential':
             'An account already exists with a different sign-in method. '
-                'Please use the original sign-in method.',
+            'Please use the original sign-in method.',
         'some-other-code': 'Sign in failed. Please try again.',
       };
 
@@ -361,25 +281,27 @@ void main() {
           final mockGoogleAccount = MockGoogleSignInAccount();
           final mockGoogleAuth = MockGoogleSignInAuthentication();
 
-          when(mockGoogleSignIn.signIn())
-              .thenAnswer((_) async => mockGoogleAccount);
-          when(mockGoogleAccount.authentication)
-              .thenAnswer((_) async => mockGoogleAuth);
+          when(
+            mockGoogleSignIn.signIn(),
+          ).thenAnswer((_) async => mockGoogleAccount);
+          when(
+            mockGoogleAccount.authentication,
+          ).thenAnswer((_) async => mockGoogleAuth);
           when(mockGoogleAuth.accessToken).thenReturn('access-token');
           when(mockGoogleAuth.idToken).thenReturn('id-token');
-          when(mockAuth.signInWithCredential(any))
-              .thenThrow(FirebaseAuthException(
-            code: entry.key,
-            message: 'original',
-          ));
+          when(mockAuth.signInWithCredential(any)).thenThrow(
+            FirebaseAuthException(code: entry.key, message: 'original'),
+          );
 
           expect(
             () => authService.signInWithGoogle(),
-            throwsA(isA<AuthException>().having(
-              (e) => e.message,
-              'message',
-              entry.value,
-            )),
+            throwsA(
+              isA<AuthException>().having(
+                (e) => e.message,
+                'message',
+                entry.value,
+              ),
+            ),
           );
         });
       }

@@ -26,8 +26,7 @@ void main() {
     });
 
     test('returns true when calendar is connected', () async {
-      when(mockCalendarService.isConnected)
-          .thenAnswer((_) async => true);
+      when(mockCalendarService.isConnected).thenAnswer((_) async => true);
 
       final container = ProviderContainer(
         overrides: [
@@ -42,8 +41,7 @@ void main() {
     });
 
     test('returns false when calendar is not connected', () async {
-      when(mockCalendarService.isConnected)
-          .thenAnswer((_) async => false);
+      when(mockCalendarService.isConnected).thenAnswer((_) async => false);
 
       final container = ProviderContainer(
         overrides: [
@@ -75,21 +73,17 @@ void main() {
     }
 
     test('initial state loads connection status', () async {
-      when(mockCalendarService.isConnected)
-          .thenAnswer((_) async => true);
+      when(mockCalendarService.isConnected).thenAnswer((_) async => true);
 
       final container = createContainer();
 
       // Initially loading
-      final initialState =
-          container.read(calendarConnectionNotifierProvider);
-      expect(
-        initialState,
-        isA<AsyncLoading<bool>>(),
-      );
+      final initialState = container.read(calendarConnectionNotifierProvider);
+      expect(initialState, isA<AsyncLoading<bool>>());
 
       // Wait for load to complete
-      await container.read(calendarConnectionNotifierProvider.notifier)
+      await container
+          .read(calendarConnectionNotifierProvider.notifier)
           .refresh();
 
       final state = container.read(calendarConnectionNotifierProvider);
@@ -98,11 +92,11 @@ void main() {
     });
 
     test('initial state loads as false when not connected', () async {
-      when(mockCalendarService.isConnected)
-          .thenAnswer((_) async => false);
+      when(mockCalendarService.isConnected).thenAnswer((_) async => false);
 
       final container = createContainer();
-      await container.read(calendarConnectionNotifierProvider.notifier)
+      await container
+          .read(calendarConnectionNotifierProvider.notifier)
           .refresh();
 
       final state = container.read(calendarConnectionNotifierProvider);
@@ -111,17 +105,16 @@ void main() {
 
     group('connect', () {
       test('returns true and updates state on success', () async {
-        when(mockCalendarService.isConnected)
-            .thenAnswer((_) async => false);
-        when(mockCalendarService.connect())
-            .thenAnswer((_) async => true);
+        when(mockCalendarService.isConnected).thenAnswer((_) async => false);
+        when(mockCalendarService.connect()).thenAnswer((_) async => true);
 
         final container = createContainer();
         // Wait for initial load
         await Future.delayed(Duration.zero);
 
-        final notifier =
-            container.read(calendarConnectionNotifierProvider.notifier);
+        final notifier = container.read(
+          calendarConnectionNotifierProvider.notifier,
+        );
         final result = await notifier.connect();
 
         expect(result, isTrue);
@@ -130,28 +123,28 @@ void main() {
         verify(mockCalendarService.connect()).called(1);
       });
 
-      test('returns false and updates state when connect returns false',
-          () async {
-        when(mockCalendarService.isConnected)
-            .thenAnswer((_) async => false);
-        when(mockCalendarService.connect())
-            .thenAnswer((_) async => false);
+      test(
+        'returns false and updates state when connect returns false',
+        () async {
+          when(mockCalendarService.isConnected).thenAnswer((_) async => false);
+          when(mockCalendarService.connect()).thenAnswer((_) async => false);
 
-        final container = createContainer();
-        await Future.delayed(Duration.zero);
+          final container = createContainer();
+          await Future.delayed(Duration.zero);
 
-        final notifier =
-            container.read(calendarConnectionNotifierProvider.notifier);
-        final result = await notifier.connect();
+          final notifier = container.read(
+            calendarConnectionNotifierProvider.notifier,
+          );
+          final result = await notifier.connect();
 
-        expect(result, isFalse);
-        final state = container.read(calendarConnectionNotifierProvider);
-        expect(state.value, isFalse);
-      });
+          expect(result, isFalse);
+          final state = container.read(calendarConnectionNotifierProvider);
+          expect(state.value, isFalse);
+        },
+      );
 
       test('returns false and sets error state on exception', () async {
-        when(mockCalendarService.isConnected)
-            .thenAnswer((_) async => false);
+        when(mockCalendarService.isConnected).thenAnswer((_) async => false);
         when(mockCalendarService.connect()).thenAnswer(
           (_) async => throw const CalendarException(
             code: 'connection-failed',
@@ -162,8 +155,9 @@ void main() {
         final container = createContainer();
         await Future.delayed(Duration.zero);
 
-        final notifier =
-            container.read(calendarConnectionNotifierProvider.notifier);
+        final notifier = container.read(
+          calendarConnectionNotifierProvider.notifier,
+        );
         final result = await notifier.connect();
 
         expect(result, isFalse);
@@ -175,16 +169,15 @@ void main() {
 
     group('disconnect', () {
       test('sets state to false on success', () async {
-        when(mockCalendarService.isConnected)
-            .thenAnswer((_) async => true);
-        when(mockCalendarService.disconnect())
-            .thenAnswer((_) async {});
+        when(mockCalendarService.isConnected).thenAnswer((_) async => true);
+        when(mockCalendarService.disconnect()).thenAnswer((_) async {});
 
         final container = createContainer();
         await Future.delayed(Duration.zero);
 
-        final notifier =
-            container.read(calendarConnectionNotifierProvider.notifier);
+        final notifier = container.read(
+          calendarConnectionNotifierProvider.notifier,
+        );
         await notifier.disconnect();
 
         final state = container.read(calendarConnectionNotifierProvider);
@@ -193,8 +186,7 @@ void main() {
       });
 
       test('sets error state on exception', () async {
-        when(mockCalendarService.isConnected)
-            .thenAnswer((_) async => true);
+        when(mockCalendarService.isConnected).thenAnswer((_) async => true);
         when(mockCalendarService.disconnect()).thenAnswer(
           (_) async => throw const CalendarException(
             code: 'disconnect-failed',
@@ -205,8 +197,9 @@ void main() {
         final container = createContainer();
         await Future.delayed(Duration.zero);
 
-        final notifier =
-            container.read(calendarConnectionNotifierProvider.notifier);
+        final notifier = container.read(
+          calendarConnectionNotifierProvider.notifier,
+        );
         await notifier.disconnect();
 
         final state = container.read(calendarConnectionNotifierProvider);
@@ -227,8 +220,9 @@ void main() {
         // Wait for initial load
         await Future.delayed(Duration.zero);
 
-        final notifier =
-            container.read(calendarConnectionNotifierProvider.notifier);
+        final notifier = container.read(
+          calendarConnectionNotifierProvider.notifier,
+        );
         await notifier.refresh();
 
         final state = container.read(calendarConnectionNotifierProvider);
@@ -244,8 +238,8 @@ void main() {
       expect(
         calendarConnectionNotifierProvider,
         isA<
-            StateNotifierProvider<CalendarConnectionNotifier,
-                AsyncValue<bool>>>(),
+          StateNotifierProvider<CalendarConnectionNotifier, AsyncValue<bool>>
+        >(),
       );
     });
   });

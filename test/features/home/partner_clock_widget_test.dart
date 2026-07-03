@@ -70,10 +70,12 @@ void main() {
     });
 
     testWidgets('shows fallback time for invalid timezone', (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        userTimezone: 'Invalid/Zone',
-        partnerTimezone: 'Also/Invalid',
-      ));
+      await tester.pumpWidget(
+        _buildSubject(
+          userTimezone: 'Invalid/Zone',
+          partnerTimezone: 'Also/Invalid',
+        ),
+      );
 
       // TimezoneHelper returns '--:--' for invalid timezones
       expect(find.text('--:--'), findsNWidgets(2));

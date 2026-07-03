@@ -7,10 +7,10 @@ import '../../../core/utils/timezone_helper.dart';
 class PartnerClockWidget extends StatefulWidget {
   /// User's timezone IANA ID
   final String userTimezone;
-  
+
   /// Partner's timezone IANA ID
   final String partnerTimezone;
-  
+
   /// Partner's display name
   final String partnerName;
 
@@ -54,7 +54,7 @@ class _PartnerClockWidgetState extends State<PartnerClockWidget> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -69,14 +69,10 @@ class _PartnerClockWidgetState extends State<PartnerClockWidget> {
                 isUser: true,
               ),
             ),
-            
+
             // Divider
-            Container(
-              height: 60,
-              width: 1,
-              color: theme.dividerColor,
-            ),
-            
+            Container(height: 60, width: 1, color: theme.dividerColor),
+
             // Partner's clock
             Expanded(
               child: _ClockColumn(
@@ -111,14 +107,14 @@ class _ClockColumn extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final offset = TimezoneHelper.getCurrentOffset(timezone);
-    
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           label,
           style: theme.textTheme.bodySmall?.copyWith(
-            color: isUser 
+            color: isUser
                 ? theme.colorScheme.primary
                 : theme.colorScheme.secondary,
           ),

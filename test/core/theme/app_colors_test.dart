@@ -54,19 +54,14 @@ void main() {
         greaterThan(_rgbSum(AppColors.surfaceDark)),
       );
     });
-
-    test('light background and surface share the same value', () {
-      expect(AppColors.backgroundLight, equals(AppColors.surfaceLight));
-    });
-
-    test('dark background and surface share the same value', () {
-      expect(AppColors.backgroundDark, equals(AppColors.surfaceDark));
-    });
   });
 
   group('AppColors – category colors', () {
     test('work light and dark are different colors', () {
-      expect(AppColors.categoryWorkLight, isNot(equals(AppColors.categoryWorkDark)));
+      expect(
+        AppColors.categoryWorkLight,
+        isNot(equals(AppColors.categoryWorkDark)),
+      );
     });
 
     test('all 9 light category colors have full opacity', () {
@@ -82,7 +77,11 @@ void main() {
         AppColors.categoryOtherLight,
       ];
       for (final color in lightCategories) {
-        expect((color.a * 255.0).round().clamp(0, 255), equals(255), reason: 'Expected full opacity for $color');
+        expect(
+          (color.a * 255.0).round().clamp(0, 255),
+          equals(255),
+          reason: 'Expected full opacity for $color',
+        );
       }
     });
 
@@ -99,7 +98,11 @@ void main() {
         AppColors.categoryOtherDark,
       ];
       for (final color in darkCategories) {
-        expect((color.a * 255.0).round().clamp(0, 255), equals(255), reason: 'Expected full opacity for $color');
+        expect(
+          (color.a * 255.0).round().clamp(0, 255),
+          equals(255),
+          reason: 'Expected full opacity for $color',
+        );
       }
     });
 

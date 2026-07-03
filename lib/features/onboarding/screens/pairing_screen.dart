@@ -1,19 +1,19 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/providers/auth_state_provider.dart';
+import '../../../services/providers/sync_provider.dart';
 import '../widgets/share_code_tab.dart';
 import '../widgets/enter_code_tab.dart';
 
 /// Pairing screen with two tabs for sharing and entering invite codes.
-/// Listens for coupleId changes so the screen navigates away when
-/// the partner redeems the invite (even if this device shared the code).
+/// Polls the backend for the current user's coupleId so the screen navigates
+/// away when the partner redeems the invite (even if this device shared the
+/// code).
 ///
 /// Pass [initialCode] when navigating here from a deep-linked invite URL so
 /// the screen switches directly to the "Enter Code" tab and pre-fills the
-/// invite code field. The router reads the `code` query parameter and passes
-/// it via the GoRoute builder.
+/// invite code field.
 class PairingScreen extends ConsumerStatefulWidget {
   /// Invite code to pre-fill in the Enter Code tab (may be null).
   final String? initialCode;
@@ -27,40 +27,48 @@ class PairingScreen extends ConsumerStatefulWidget {
 class _PairingScreenState extends ConsumerState<PairingScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  StreamSubscription<DocumentSnapshot>? _userDocSub;
+  Timer? _pairPoll;
 
   @override
   void initState() {
     super.initState();
     // Start on "Enter Code" tab (index 1) when arriving via a deep link.
     final startIndex = (widget.initialCode?.isNotEmpty == true) ? 1 : 0;
-    _tabController = TabController(length: 2, vsync: this, initialIndex: startIndex);
-    _listenForPairing();
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: startIndex,
+    );
+    _pollForPairing();
   }
 
-  /// Listen to the current user's Firestore doc for coupleId changes.
-  /// When the partner redeems the invite, coupleId is set by the Cloud Function.
-  void _listenForPairing() {
+  /// Poll the backend (GET /users/me) every 3s for coupleId. When the partner
+  /// redeems the invite the backend sets coupleId on this user; we refresh the
+  /// auth state so the router redirects to home.
+  // TODO(v8): replace polling with a push channel (WS user-namespace or FCM
+  // data message) once the backend supports it.
+  void _pollForPairing() {
     final uid = ref.read(authStateProvider).uid;
     if (uid == null) return;
-
-    _userDocSub = FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .snapshots()
-        .listen((snapshot) {
-      if (!snapshot.exists) return;
-      final data = snapshot.data();
-      if (data != null && data['coupleId'] != null) {
-        // Partner paired — refresh auth state so router redirects to home
-        ref.read(authStateProvider.notifier).refreshProfile();
+    final sync = ref.read(syncServiceProvider);
+    _pairPoll = Timer.periodic(const Duration(seconds: 3), (_) async {
+      try {
+        final user = await sync.getUser(uid);
+        if (user?.coupleId != null) {
+          _pairPoll?.cancel();
+          if (mounted) {
+            ref.read(authStateProvider.notifier).refreshProfile();
+          }
+        }
+      } catch (_) {
+        // Network blip — keep polling.
       }
     });
   }
 
   @override
   void dispose() {
-    _userDocSub?.cancel();
+    _pairPoll?.cancel();
     _tabController.dispose();
     super.dispose();
   }
