@@ -56,9 +56,7 @@ void main() {
     });
 
     testWidgets('displays score badge', (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        window: _createWindow(score: 45),
-      ));
+      await tester.pumpWidget(_buildSubject(window: _createWindow(score: 45)));
       // Raw score displayed as integer
       expect(find.text('45'), findsOneWidget);
     });
@@ -86,43 +84,46 @@ void main() {
 
   group('WindowCardWidget duration formatting', () {
     testWidgets('displays minutes for short durations', (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        window: _createWindow(durationMinutes: 30),
-      ));
+      await tester.pumpWidget(
+        _buildSubject(window: _createWindow(durationMinutes: 30)),
+      );
       expect(find.text('30 min'), findsOneWidget);
     });
 
     testWidgets('displays hours for exact hour durations', (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        window: _createWindow(durationMinutes: 120),
-      ));
+      await tester.pumpWidget(
+        _buildSubject(window: _createWindow(durationMinutes: 120)),
+      );
       expect(find.text('2 hr'), findsOneWidget);
     });
 
-    testWidgets('displays hours and minutes for mixed durations',
-        (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        window: _createWindow(durationMinutes: 90),
-      ));
+    testWidgets('displays hours and minutes for mixed durations', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _buildSubject(window: _createWindow(durationMinutes: 90)),
+      );
       expect(find.text('1 hr 30 min'), findsOneWidget);
     });
   });
 
   group('WindowCardWidget reasonable hours', () {
-    testWidgets('shows "Reasonable hours" chip when reasonableBoth is true',
-        (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        window: _createWindow(reasonableBoth: true),
-      ));
+    testWidgets('shows "Reasonable hours" chip when reasonableBoth is true', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _buildSubject(window: _createWindow(reasonableBoth: true)),
+      );
       expect(find.text('Reasonable hours'), findsOneWidget);
       expect(find.byIcon(Icons.wb_sunny), findsOneWidget);
     });
 
-    testWidgets('hides "Reasonable hours" chip when reasonableBoth is false',
-        (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        window: _createWindow(reasonableBoth: false),
-      ));
+    testWidgets('hides "Reasonable hours" chip when reasonableBoth is false', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _buildSubject(window: _createWindow(reasonableBoth: false)),
+      );
       expect(find.text('Reasonable hours'), findsNothing);
       expect(find.byIcon(Icons.wb_sunny), findsNothing);
     });
@@ -130,30 +131,22 @@ void main() {
 
   group('WindowCardWidget score colors', () {
     testWidgets('high score (>=40) uses green', (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        window: _createWindow(score: 45),
-      ));
+      await tester.pumpWidget(_buildSubject(window: _createWindow(score: 45)));
       expect(find.text('45'), findsOneWidget);
     });
 
     testWidgets('medium score (>=25) renders', (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        window: _createWindow(score: 30),
-      ));
+      await tester.pumpWidget(_buildSubject(window: _createWindow(score: 30)));
       expect(find.text('30'), findsOneWidget);
     });
 
     testWidgets('low score (>=15) renders', (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        window: _createWindow(score: 20),
-      ));
+      await tester.pumpWidget(_buildSubject(window: _createWindow(score: 20)));
       expect(find.text('20'), findsOneWidget);
     });
 
     testWidgets('very low score (<15) renders', (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        window: _createWindow(score: 10),
-      ));
+      await tester.pumpWidget(_buildSubject(window: _createWindow(score: 10)));
       expect(find.text('10'), findsOneWidget);
     });
   });
@@ -161,9 +154,7 @@ void main() {
   group('WindowCardWidget interaction', () {
     testWidgets('calls onTap when card is tapped', (tester) async {
       var tapped = false;
-      await tester.pumpWidget(_buildSubject(
-        onTap: () => tapped = true,
-      ));
+      await tester.pumpWidget(_buildSubject(onTap: () => tapped = true));
 
       await tester.tap(find.byType(InkWell).first);
       expect(tapped, isTrue);
@@ -177,17 +168,17 @@ void main() {
 
   group('WindowCardWidget timezone display', () {
     testWidgets('displays user timezone offset', (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        userTimezone: 'Africa/Johannesburg',
-      ));
+      await tester.pumpWidget(
+        _buildSubject(userTimezone: 'Africa/Johannesburg'),
+      );
       // Should show UTC+2 for Africa/Johannesburg
       expect(find.textContaining('UTC'), findsAtLeast(1));
     });
 
     testWidgets('displays partner timezone offset', (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        partnerTimezone: 'America/New_York',
-      ));
+      await tester.pumpWidget(
+        _buildSubject(partnerTimezone: 'America/New_York'),
+      );
       // Should show UTC-4 or UTC-5 depending on DST
       expect(find.textContaining('UTC'), findsAtLeast(1));
     });

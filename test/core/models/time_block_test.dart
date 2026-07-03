@@ -54,8 +54,9 @@ void main() {
       });
 
       test('handles recurrenceRule present', () {
-        final block =
-            createTestBlock(recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO,WE,FR');
+        final block = createTestBlock(
+          recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO,WE,FR',
+        );
         final json = block.toJson();
         expect(json['recurrenceRule'], 'FREQ=WEEKLY;BYDAY=MO,WE,FR');
 
@@ -143,15 +144,13 @@ void main() {
       });
 
       test('clearRecurrenceRule removes rule', () {
-        final block =
-            createTestBlock(recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO');
+        final block = createTestBlock(recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO');
         final copy = block.copyWith(clearRecurrenceRule: true);
         expect(copy.recurrenceRule, isNull);
       });
 
       test('preserves recurrenceRule when not clearing', () {
-        final block =
-            createTestBlock(recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO');
+        final block = createTestBlock(recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO');
         final copy = block.copyWith(title: 'Updated');
         expect(copy.recurrenceRule, 'FREQ=WEEKLY;BYDAY=MO');
       });

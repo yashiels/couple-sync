@@ -58,7 +58,8 @@ void main() {
     });
 
     test('regions are sorted alphabetically', () {
-      final regions = TimezoneHelper.getTimezonesGroupedByRegion().keys.toList();
+      final regions = TimezoneHelper.getTimezonesGroupedByRegion().keys
+          .toList();
       final sorted = [...regions]..sort();
       expect(regions, equals(sorted));
     });
@@ -168,12 +169,15 @@ void main() {
       expect(tz, isNotEmpty);
     });
 
-    test('falls back to UTC when detection fails in test environment', () async {
-      // In the test VM the timezone name may not be in the abbreviation map,
-      // so the helper always returns UTC or a valid mapped IANA ID.
-      final tz = await TimezoneHelper.detectDeviceTimezone();
-      expect(TimezoneHelper.isValidTimezone(tz), isTrue);
-    });
+    test(
+      'falls back to UTC when detection fails in test environment',
+      () async {
+        // In the test VM the timezone name may not be in the abbreviation map,
+        // so the helper always returns UTC or a valid mapped IANA ID.
+        final tz = await TimezoneHelper.detectDeviceTimezone();
+        expect(TimezoneHelper.isValidTimezone(tz), isTrue);
+      },
+    );
   });
 }
 

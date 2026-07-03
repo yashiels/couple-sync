@@ -88,10 +88,7 @@ void main() {
 
         expect(restored.unpairHistory.length, 1);
         expect(restored.unpairHistory.first.reason, 'moved on');
-        expect(
-          restored.unpairHistory.first.at.toUtc(),
-          entry.at.toUtc(),
-        );
+        expect(restored.unpairHistory.first.at.toUtc(), entry.at.toUtc());
       });
 
       test('handles null unpairHistory field as empty list', () {
@@ -165,9 +162,7 @@ void main() {
       test('different unpairHistory is not equal', () {
         final a = createTestCouple();
         final b = createTestCouple(
-          unpairHistory: [
-            UnpairHistoryEntry(at: unpairAt, reason: 'reason'),
-          ],
+          unpairHistory: [UnpairHistoryEntry(at: unpairAt, reason: 'reason')],
         );
         expect(a, isNot(equals(b)));
       });

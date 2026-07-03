@@ -25,11 +25,19 @@ void main() {
       // Reflective check: the service file is imported and compiled.
       // A compile error here means the method was removed.
       // Full behaviour tested in auth_service_test.dart.
-      expect(true, isTrue, reason: 'auth_service.dart compiles with signInWithGoogle');
+      expect(
+        true,
+        isTrue,
+        reason: 'auth_service.dart compiles with signInWithGoogle',
+      );
     });
 
     test('AuthService API declares signInWithApple', () {
-      expect(true, isTrue, reason: 'auth_service.dart compiles with signInWithApple');
+      expect(
+        true,
+        isTrue,
+        reason: 'auth_service.dart compiles with signInWithApple',
+      );
     });
   });
 
@@ -77,24 +85,30 @@ void main() {
       expect(TimeBlockSource.values, contains(TimeBlockSource.google));
     });
 
-    test('TimeBlock created from freebusy has correct source and generic title', () {
-      final block = TimeBlock(
-        userId: 'user-a',
-        title: 'Busy',
-        type: TimeBlockType.busy,
-        category: TimeBlockCategory.other,
-        startUtc: DateTime.utc(2026, 4, 8, 9, 0, 0).millisecondsSinceEpoch,
-        endUtc: DateTime.utc(2026, 4, 8, 10, 0, 0).millisecondsSinceEpoch,
-        timezone: 'America/New_York',
-        source: TimeBlockSource.google,
-        visibility: TimeBlockVisibility.bothPartners,
-        createdAt: DateTime.utc(2026, 4, 8),
-      );
+    test(
+      'TimeBlock created from freebusy has correct source and generic title',
+      () {
+        final block = TimeBlock(
+          userId: 'user-a',
+          title: 'Busy',
+          type: TimeBlockType.busy,
+          category: TimeBlockCategory.other,
+          startUtc: DateTime.utc(2026, 4, 8, 9, 0, 0).millisecondsSinceEpoch,
+          endUtc: DateTime.utc(2026, 4, 8, 10, 0, 0).millisecondsSinceEpoch,
+          timezone: 'America/New_York',
+          source: TimeBlockSource.google,
+          visibility: TimeBlockVisibility.bothPartners,
+          createdAt: DateTime.utc(2026, 4, 8),
+        );
 
-      expect(block.source, TimeBlockSource.google);
-      expect(block.title, 'Busy',
-          reason: 'Privacy-first: freebusy blocks never expose event titles');
-    });
+        expect(block.source, TimeBlockSource.google);
+        expect(
+          block.title,
+          'Busy',
+          reason: 'Privacy-first: freebusy blocks never expose event titles',
+        );
+      },
+    );
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -155,32 +169,33 @@ void main() {
       final result = OverlapResult(
         windows: [],
         computedAt: computedAt,
-        blockHashA: 'hash-a',
-        blockHashB: 'hash-b',
+        inputHash: 'hash-a',
       );
 
       expect(result.computedAt, equals(computedAt));
     });
 
-    test('overlap SLA: computedAt within 5 seconds of a simulated block change', () {
-      final blockChangedAt = DateTime.utc(2026, 4, 8, 12, 0, 0);
-      // Simulate: cloud function ran and wrote OverlapResult 3 seconds later
-      final computedAt = blockChangedAt.add(const Duration(seconds: 3));
-      final slaMillis = computedAt.difference(blockChangedAt).inMilliseconds;
+    test(
+      'overlap SLA: computedAt within 5 seconds of a simulated block change',
+      () {
+        final blockChangedAt = DateTime.utc(2026, 4, 8, 12, 0, 0);
+        // Simulate: cloud function ran and wrote OverlapResult 3 seconds later
+        final computedAt = blockChangedAt.add(const Duration(seconds: 3));
+        final slaMillis = computedAt.difference(blockChangedAt).inMilliseconds;
 
-      expect(
-        slaMillis,
-        lessThanOrEqualTo(5000),
-        reason: 'Overlap must be computed within 5 seconds of block change',
-      );
-    });
+        expect(
+          slaMillis,
+          lessThanOrEqualTo(5000),
+          reason: 'Overlap must be computed within 5 seconds of block change',
+        );
+      },
+    );
 
     test('OverlapResult with empty windows list signals no free overlap', () {
       final result = OverlapResult(
         windows: [],
         computedAt: DateTime.utc(2026, 4, 8, 12, 0, 0),
-        blockHashA: 'hash-a',
-        blockHashB: 'hash-b',
+        inputHash: 'hash-a',
       );
 
       expect(result.windows, isEmpty);
@@ -192,111 +207,142 @@ void main() {
   // SC 7 — Both partners see the same overlap results in their own timezones
   // The OverlapWindow stores UTC epoch millis. Each client converts to local tz.
   // ─────────────────────────────────────────────────────────────────────────
-  group('SC-7: Overlap windows store UTC timestamps for timezone-safe display', () {
-    // A fixed overlap window: 09:00–10:00 UTC on 2026-04-08
-    // Computed at runtime so the test is not sensitive to epoch math errors.
-    final windowStartUtcMs =
-        DateTime.utc(2026, 4, 8, 9, 0, 0).millisecondsSinceEpoch;
-    final windowEndUtcMs =
-        DateTime.utc(2026, 4, 8, 10, 0, 0).millisecondsSinceEpoch;
+  group(
+    'SC-7: Overlap windows store UTC timestamps for timezone-safe display',
+    () {
+      // A fixed overlap window: 09:00–10:00 UTC on 2026-04-08
+      // Computed at runtime so the test is not sensitive to epoch math errors.
+      final windowStartUtcMs = DateTime.utc(
+        2026,
+        4,
+        8,
+        9,
+        0,
+        0,
+      ).millisecondsSinceEpoch;
+      final windowEndUtcMs = DateTime.utc(
+        2026,
+        4,
+        8,
+        10,
+        0,
+        0,
+      ).millisecondsSinceEpoch;
 
-    late OverlapWindow window;
+      late OverlapWindow window;
 
-    setUp(() {
-      window = OverlapWindow(
-        startUtc: windowStartUtcMs,
-        endUtc: windowEndUtcMs,
-        durationMinutes: 60,
-        score: 0.85,
-        reasonableBoth: true,
-      );
-    });
+      setUp(() {
+        window = OverlapWindow(
+          startUtc: windowStartUtcMs,
+          endUtc: windowEndUtcMs,
+          durationMinutes: 60,
+          score: 0.85,
+          reasonableBoth: true,
+        );
+      });
 
-    test('OverlapWindow startDateTime preserves epoch and is UTC', () {
-      expect(window.startDateTime.millisecondsSinceEpoch, windowStartUtcMs);
-      expect(window.startDateTime.isUtc, isTrue);
-    });
+      test('OverlapWindow startDateTime preserves epoch and is UTC', () {
+        expect(window.startDateTime.millisecondsSinceEpoch, windowStartUtcMs);
+        expect(window.startDateTime.isUtc, isTrue);
+      });
 
-    test('OverlapWindow endDateTime preserves epoch and is UTC', () {
-      expect(window.endDateTime.millisecondsSinceEpoch, windowEndUtcMs);
-      expect(window.endDateTime.isUtc, isTrue);
-    });
+      test('OverlapWindow endDateTime preserves epoch and is UTC', () {
+        expect(window.endDateTime.millisecondsSinceEpoch, windowEndUtcMs);
+        expect(window.endDateTime.isUtc, isTrue);
+      });
 
-    test('partner A (Africa/Johannesburg, UTC+2) converts window correctly', () {
-      final locationA = tz.getLocation('Africa/Johannesburg');
-      final startA = tz.TZDateTime.fromMillisecondsSinceEpoch(
-        locationA,
-        window.startUtc,
-      );
-      final endA = tz.TZDateTime.fromMillisecondsSinceEpoch(
-        locationA,
-        window.endUtc,
-      );
+      test(
+        'partner A (Africa/Johannesburg, UTC+2) converts window correctly',
+        () {
+          final locationA = tz.getLocation('Africa/Johannesburg');
+          final startA = tz.TZDateTime.fromMillisecondsSinceEpoch(
+            locationA,
+            window.startUtc,
+          );
+          final endA = tz.TZDateTime.fromMillisecondsSinceEpoch(
+            locationA,
+            window.endUtc,
+          );
 
-      // SAST = UTC+2: 09:00Z → 11:00 local
-      expect(startA.hour, 11);
-      expect(startA.minute, 0);
-      expect(endA.hour, 12);
-      expect(endA.minute, 0);
-    });
-
-    test('partner B (America/New_York, UTC-4 in April DST) converts window correctly', () {
-      final locationB = tz.getLocation('America/New_York');
-      final startB = tz.TZDateTime.fromMillisecondsSinceEpoch(
-        locationB,
-        window.startUtc,
-      );
-      final endB = tz.TZDateTime.fromMillisecondsSinceEpoch(
-        locationB,
-        window.endUtc,
-      );
-
-      // EDT = UTC-4 (April is in daylight saving time): 09:00Z → 05:00 local
-      expect(startB.hour, 5);
-      expect(startB.minute, 0);
-      expect(endB.hour, 6);
-      expect(endB.minute, 0);
-    });
-
-    test('both partners reference the same UTC epoch (same moment in time)', () {
-      final locationA = tz.getLocation('Africa/Johannesburg');
-      final locationB = tz.getLocation('America/New_York');
-
-      final startA = tz.TZDateTime.fromMillisecondsSinceEpoch(
-        locationA,
-        window.startUtc,
-      );
-      final startB = tz.TZDateTime.fromMillisecondsSinceEpoch(
-        locationB,
-        window.startUtc,
+          // SAST = UTC+2: 09:00Z → 11:00 local
+          expect(startA.hour, 11);
+          expect(startA.minute, 0);
+          expect(endA.hour, 12);
+          expect(endA.minute, 0);
+        },
       );
 
-      // Same epoch millis → same UTC instant despite different local times
-      expect(
-        startA.millisecondsSinceEpoch,
-        startB.millisecondsSinceEpoch,
-        reason: 'Both partners see the same moment: just displayed in local tz',
-      );
-    });
+      test(
+        'partner B (America/New_York, UTC-4 in April DST) converts window correctly',
+        () {
+          final locationB = tz.getLocation('America/New_York');
+          final startB = tz.TZDateTime.fromMillisecondsSinceEpoch(
+            locationB,
+            window.startUtc,
+          );
+          final endB = tz.TZDateTime.fromMillisecondsSinceEpoch(
+            locationB,
+            window.endUtc,
+          );
 
-    test('window duration is the same regardless of which timezone is used', () {
-      final durationMs = window.endUtc - window.startUtc;
-      expect(durationMs, 60 * 60 * 1000, reason: '60-minute window');
-      expect(window.durationMinutes, 60);
-      expect(window.durationHours, 1.0);
-    });
-  });
+          // EDT = UTC-4 (April is in daylight saving time): 09:00Z → 05:00 local
+          expect(startB.hour, 5);
+          expect(startB.minute, 0);
+          expect(endB.hour, 6);
+          expect(endB.minute, 0);
+        },
+      );
+
+      test(
+        'both partners reference the same UTC epoch (same moment in time)',
+        () {
+          final locationA = tz.getLocation('Africa/Johannesburg');
+          final locationB = tz.getLocation('America/New_York');
+
+          final startA = tz.TZDateTime.fromMillisecondsSinceEpoch(
+            locationA,
+            window.startUtc,
+          );
+          final startB = tz.TZDateTime.fromMillisecondsSinceEpoch(
+            locationB,
+            window.startUtc,
+          );
+
+          // Same epoch millis → same UTC instant despite different local times
+          expect(
+            startA.millisecondsSinceEpoch,
+            startB.millisecondsSinceEpoch,
+            reason:
+                'Both partners see the same moment: just displayed in local tz',
+          );
+        },
+      );
+
+      test(
+        'window duration is the same regardless of which timezone is used',
+        () {
+          final durationMs = window.endUtc - window.startUtc;
+          expect(durationMs, 60 * 60 * 1000, reason: '60-minute window');
+          expect(window.durationMinutes, 60);
+          expect(window.durationHours, 1.0);
+        },
+      );
+    },
+  );
 
   // ─────────────────────────────────────────────────────────────────────────
   // SC 8 — Push notification fires when new free windows are found
   // Covered in depth by: test/services/notification_service_test.dart
   // ─────────────────────────────────────────────────────────────────────────
   group('SC-8: Notification service is wired to FCM', () {
-    test('notification route: tapping a push notification navigates to /overlap', () {
-      // app.dart listens to FirebaseMessaging.onMessageOpenedApp and routes to /overlap.
-      // This test confirms the overlap route exists and can be a navigation target.
-      expect(AppRoutes.overlap, '/overlap');
-    });
+    test(
+      'notification route: tapping a push notification navigates to /overlap',
+      () {
+        // app.dart listens to FirebaseMessaging.onMessageOpenedApp and routes to /overlap.
+        // This test confirms the overlap route exists and can be a navigation target.
+        expect(AppRoutes.overlap, '/overlap');
+      },
+    );
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -322,28 +368,26 @@ void main() {
 
     test('all routes start with a leading slash', () {
       for (final route in allRoutes) {
-        expect(route, startsWith('/'),
-            reason: '$route must start with /');
+        expect(route, startsWith('/'), reason: '$route must start with /');
       }
     });
 
     test('onboarding flow routes are present', () {
-      expect(allRoutes, containsAll([
-        '/auth',
-        '/timezone-setup',
-        '/pairing',
-      ]));
+      expect(allRoutes, containsAll(['/auth', '/timezone-setup', '/pairing']));
     });
 
     test('main app screen routes are present', () {
-      expect(allRoutes, containsAll([
-        '/home',
-        '/calendar',
-        '/blocks',
-        '/block-form',
-        '/overlap',
-        '/settings',
-      ]));
+      expect(
+        allRoutes,
+        containsAll([
+          '/home',
+          '/calendar',
+          '/blocks',
+          '/block-form',
+          '/overlap',
+          '/settings',
+        ]),
+      );
     });
   });
 
@@ -354,25 +398,28 @@ void main() {
   // ios and android keys (validated by wiring-check.sh passing).
   // ─────────────────────────────────────────────────────────────────────────
   group('SC-10: Cross-platform build markers', () {
-    test('platform-agnostic: TimeBlock uses int UTC millis (not platform types)', () {
-      // Using int (not DateTime or Timestamp) guarantees the model serializes
-      // identically on iOS and Android.
-      final block = TimeBlock(
-        userId: 'u1',
-        title: 'Test',
-        type: TimeBlockType.busy,
-        category: TimeBlockCategory.other,
-        startUtc: 1744106400000,
-        endUtc: 1744110000000,
-        timezone: 'UTC',
-        source: TimeBlockSource.manual,
-        visibility: TimeBlockVisibility.bothPartners,
-        createdAt: DateTime.utc(2026, 4, 8),
-      );
+    test(
+      'platform-agnostic: TimeBlock uses int UTC millis (not platform types)',
+      () {
+        // Using int (not DateTime or Timestamp) guarantees the model serializes
+        // identically on iOS and Android.
+        final block = TimeBlock(
+          userId: 'u1',
+          title: 'Test',
+          type: TimeBlockType.busy,
+          category: TimeBlockCategory.other,
+          startUtc: 1744106400000,
+          endUtc: 1744110000000,
+          timezone: 'UTC',
+          source: TimeBlockSource.manual,
+          visibility: TimeBlockVisibility.bothPartners,
+          createdAt: DateTime.utc(2026, 4, 8),
+        );
 
-      expect(block.startUtc, isA<int>());
-      expect(block.endUtc, isA<int>());
-    });
+        expect(block.startUtc, isA<int>());
+        expect(block.endUtc, isA<int>());
+      },
+    );
 
     test('platform-agnostic: OverlapWindow uses int UTC millis', () {
       final window = OverlapWindow(

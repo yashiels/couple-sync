@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/utils/timezone_helper.dart';
 import '../../../core/router/routes.dart';
 import '../../../services/providers/auth_state_provider.dart';
+import '../../../services/providers/sync_provider.dart';
+import '../../../services/sync_service.dart';
 
 /// Timezone setup screen for onboarding.
 /// Auto-detects device timezone and allows user to search and select a different one.
@@ -13,7 +14,8 @@ class TimezoneSetupScreen extends ConsumerStatefulWidget {
   const TimezoneSetupScreen({super.key});
 
   @override
-  ConsumerState<TimezoneSetupScreen> createState() => _TimezoneSetupScreenState();
+  ConsumerState<TimezoneSetupScreen> createState() =>
+      _TimezoneSetupScreenState();
 }
 
 class _TimezoneSetupScreenState extends ConsumerState<TimezoneSetupScreen> {
@@ -22,7 +24,7 @@ class _TimezoneSetupScreenState extends ConsumerState<TimezoneSetupScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
   String? _error;
-  
+
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
@@ -44,7 +46,7 @@ class _TimezoneSetupScreenState extends ConsumerState<TimezoneSetupScreen> {
     try {
       await TimezoneHelper.initialize();
       final detectedTimezone = await TimezoneHelper.detectDeviceTimezone();
-      
+
       if (mounted) {
         setState(() {
           _selectedTimezone = detectedTimezone;
@@ -64,7 +66,7 @@ class _TimezoneSetupScreenState extends ConsumerState<TimezoneSetupScreen> {
   /// Save selected timezone to Firestore and navigate to next step.
   Future<void> _saveAndContinue() async {
     if (_selectedTimezone == null) return;
-    
+
     final uid = ref.read(authStateProvider).uid;
     if (uid == null) {
       setState(() {
@@ -79,10 +81,8 @@ class _TimezoneSetupScreenState extends ConsumerState<TimezoneSetupScreen> {
     });
 
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .update({'timezone': _selectedTimezone});
+      final syncService = ref.read(syncServiceProvider);
+      await syncService.updateUser(uid, {'timezone': _selectedTimezone});
 
       // Refresh the auth state to pick up the new timezone
       await ref.read(authStateProvider.notifier).refreshProfile();
@@ -90,11 +90,11 @@ class _TimezoneSetupScreenState extends ConsumerState<TimezoneSetupScreen> {
       if (mounted) {
         context.go(AppRoutes.pairing);
       }
-    } on FirebaseException catch (e) {
+    } on SyncException catch (e) {
       if (mounted) {
         setState(() {
           _isSaving = false;
-          _error = _getFirebaseErrorMessage(e);
+          _error = _mapSyncError(e);
         });
       }
     } catch (e) {
@@ -107,11 +107,12 @@ class _TimezoneSetupScreenState extends ConsumerState<TimezoneSetupScreen> {
     }
   }
 
-  String _getFirebaseErrorMessage(FirebaseException e) {
+  String _mapSyncError(SyncException e) {
     switch (e.code) {
-      case 'permission-denied':
+      case 'http-401':
         return 'Permission denied. Please sign in again.';
-      case 'unavailable':
+      case 'http-503':
+      case 'http-network':
         return 'Network error. Please check your connection.';
       default:
         return 'Failed to save timezone. Please try again.';
@@ -121,7 +122,7 @@ class _TimezoneSetupScreenState extends ConsumerState<TimezoneSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Set Your Timezone'),
@@ -374,8 +375,8 @@ class _TimezoneList extends StatelessWidget {
             Text(
               'Try a different search term',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -401,17 +402,19 @@ class _TimezoneList extends StatelessWidget {
               child: Text(
                 region,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             // Timezones in this region
-            ...timezones.map((timezone) => _TimezoneTile(
-                  timezone: timezone,
-                  isSelected: selectedTimezone == timezone,
-                  onTap: () => onTimezoneSelected(timezone),
-                )),
+            ...timezones.map(
+              (timezone) => _TimezoneTile(
+                timezone: timezone,
+                isSelected: selectedTimezone == timezone,
+                onTap: () => onTimezoneSelected(timezone),
+              ),
+            ),
             const SizedBox(height: 8),
           ],
         );
@@ -459,9 +462,7 @@ class _TimezoneTile extends StatelessWidget {
         ),
       ),
       onTap: onTap,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       tileColor: isSelected
           ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
           : null,

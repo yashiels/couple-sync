@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 /// Invite status enum
 enum InviteStatus { pending, accepted, expired }
 
@@ -26,11 +24,7 @@ class InviteModel {
       code: json['code'] as String,
       createdByUid: json['createdByUid'] as String,
       coupleId: json['coupleId'] as String?,
-      expiresAt: json['expiresAt'] is Timestamp
-          ? (json['expiresAt'] as Timestamp).toDate()
-          : json['expiresAt'] is int
-              ? DateTime.fromMillisecondsSinceEpoch(json['expiresAt'] as int)
-              : DateTime.now(),
+      expiresAt: _parseDateTime(json['expiresAt']),
       status: InviteStatus.values.firstWhere(
         (e) => e.name == json['status'],
         orElse: () => InviteStatus.pending,
@@ -44,7 +38,7 @@ class InviteModel {
       'code': code,
       'createdByUid': createdByUid,
       'coupleId': coupleId,
-      'expiresAt': Timestamp.fromDate(expiresAt),
+      'expiresAt': expiresAt.millisecondsSinceEpoch,
       'status': status.name,
       'deepLinkUrl': deepLinkUrl,
     };
@@ -87,16 +81,23 @@ class InviteModel {
           deepLinkUrl == other.deepLinkUrl;
 
   @override
-  int get hashCode => Object.hash(
-        code,
-        createdByUid,
-        coupleId,
-        expiresAt,
-        status,
-        deepLinkUrl,
-      );
+  int get hashCode =>
+      Object.hash(code, createdByUid, coupleId, expiresAt, status, deepLinkUrl);
 
   @override
   String toString() =>
       'InviteModel(code: $code, createdByUid: $createdByUid, status: $status, expiresAt: $expiresAt)';
+}
+
+/// Parse a DateTime from int ms since epoch, an ISO-8601 string, or a DateTime.
+DateTime _parseDateTime(dynamic value) {
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value, isUtc: true);
+  }
+  if (value is DateTime) return value.toUtc();
+  if (value is String) {
+    final parsed = DateTime.tryParse(value);
+    if (parsed != null) return parsed.toUtc();
+  }
+  return DateTime.now().toUtc();
 }

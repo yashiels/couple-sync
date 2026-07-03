@@ -26,7 +26,7 @@ class TimezoneHelper {
       // This returns abbreviations like 'SAST' not IANA IDs
       // So we try to match common cases
       final localName = DateTime.now().timeZoneName;
-      
+
       // Map common abbreviations to IANA IDs
       final abbreviationMap = {
         'SAST': 'Africa/Johannesburg',
@@ -49,7 +49,7 @@ class TimezoneHelper {
         'NZDT': 'Pacific/Auckland',
         'UTC': 'UTC',
       };
-      
+
       final ianaId = abbreviationMap[localName];
       if (ianaId != null && isValidTimezone(ianaId)) {
         return ianaId;
@@ -80,7 +80,7 @@ class TimezoneHelper {
   /// and values are lists of timezone IDs in that region.
   static Map<String, List<String>> getTimezonesGroupedByRegion() {
     final Map<String, List<String>> grouped = {};
-    
+
     for (final tzId in getAllTimezones()) {
       final region = _extractRegion(tzId);
       grouped.putIfAbsent(region, () => []).add(tzId);
@@ -122,12 +122,12 @@ class TimezoneHelper {
       final location = tz.getLocation(timezoneId);
       final now = tz.TZDateTime.now(location);
       final offset = now.timeZoneOffset;
-      
+
       final hours = offset.inHours;
       final minutes = offset.inMinutes.remainder(60).abs();
-      
+
       final sign = hours >= 0 ? '+' : '';
-      
+
       if (minutes == 0) {
         return 'UTC$sign$hours';
       } else {
@@ -161,11 +161,11 @@ class TimezoneHelper {
 
     final normalizedQuery = query.toLowerCase();
     final allTimezones = getAllTimezones();
-    
+
     // Prioritize matches that start with the query
     final startMatches = <String>[];
     final containsMatches = <String>[];
-    
+
     for (final tzId in allTimezones) {
       final normalized = tzId.toLowerCase().replaceAll('_', ' ');
       if (normalized.startsWith(normalizedQuery)) {
@@ -174,16 +174,18 @@ class TimezoneHelper {
         containsMatches.add(tzId);
       }
     }
-    
+
     return [...startMatches, ...containsMatches];
   }
 
   /// Search timezones grouped by region.
   /// Returns a map of region → matching timezone IDs.
-  static Map<String, List<String>> searchTimezonesGroupedByRegion(String query) {
+  static Map<String, List<String>> searchTimezonesGroupedByRegion(
+    String query,
+  ) {
     final matches = searchTimezones(query);
     final Map<String, List<String>> grouped = {};
-    
+
     for (final tzId in matches) {
       final region = _extractRegion(tzId);
       grouped.putIfAbsent(region, () => []).add(tzId);

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/time_block.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/format_utils.dart';
 
 /// Widget to display a single time block in the block management list.
 /// Shows title, time range, category color, and source badge.
@@ -30,12 +31,7 @@ class BlockListTileWidget extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border(
-              left: BorderSide(
-                color: categoryColor,
-                width: 4,
-              ),
-            ),
+            border: Border(left: BorderSide(color: categoryColor, width: 4)),
           ),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -51,7 +47,7 @@ class BlockListTileWidget extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                
+
                 // Content
                 Expanded(
                   child: Column(
@@ -63,9 +59,8 @@ class BlockListTileWidget extends StatelessWidget {
                           Expanded(
                             child: Text(
                               block.title,
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -75,7 +70,7 @@ class BlockListTileWidget extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      
+
                       // Time range
                       Text(
                         timeRange,
@@ -84,26 +79,23 @@ class BlockListTileWidget extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      
+
                       // Owner indicator
                       Text(
                         isCurrentUser ? 'You' : 'Partner',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: isCurrentUser 
-                            ? Theme.of(context).colorScheme.primary
-                            : Colors.grey[500],
+                          color: isCurrentUser
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.grey[500],
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
                   ),
                 ),
-                
+
                 // Navigation indicator
-                Icon(
-                  Icons.chevron_right,
-                  color: Colors.grey[400],
-                ),
+                Icon(Icons.chevron_right, color: Colors.grey[400]),
               ],
             ),
           ),
@@ -115,28 +107,21 @@ class BlockListTileWidget extends StatelessWidget {
   /// Build the source badge (manual or google)
   Widget _buildSourceBadge(BuildContext context) {
     final isManual = block.source == TimeBlockSource.manual;
-    final badgeColor = isManual 
-      ? Theme.of(context).colorScheme.primary
-      : Colors.green;
-    
+    final badgeColor = isManual
+        ? Theme.of(context).colorScheme.primary
+        : Colors.green;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         color: badgeColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: badgeColor.withValues(alpha: 0.3),
-          width: 1,
-        ),
+        border: Border.all(color: badgeColor.withValues(alpha: 0.3), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            isManual ? Icons.edit : Icons.sync,
-            size: 12,
-            color: badgeColor,
-          ),
+          Icon(isManual ? Icons.edit : Icons.sync, size: 12, color: badgeColor),
           const SizedBox(width: 4),
           Text(
             isManual ? 'Manual' : 'Google',
@@ -155,23 +140,41 @@ class BlockListTileWidget extends StatelessWidget {
   Color _getCategoryColor(TimeBlockCategory category, bool isDark) {
     switch (category) {
       case TimeBlockCategory.work:
-        return isDark ? AppColors.categoryWorkDark : AppColors.categoryWorkLight;
+        return isDark
+            ? AppColors.categoryWorkDark
+            : AppColors.categoryWorkLight;
       case TimeBlockCategory.study:
-        return isDark ? AppColors.categoryStudyDark : AppColors.categoryStudyLight;
+        return isDark
+            ? AppColors.categoryStudyDark
+            : AppColors.categoryStudyLight;
       case TimeBlockCategory.commute:
-        return isDark ? AppColors.categoryCommuteDark : AppColors.categoryCommuteLight;
+        return isDark
+            ? AppColors.categoryCommuteDark
+            : AppColors.categoryCommuteLight;
       case TimeBlockCategory.exercise:
-        return isDark ? AppColors.categoryExerciseDark : AppColors.categoryExerciseLight;
+        return isDark
+            ? AppColors.categoryExerciseDark
+            : AppColors.categoryExerciseLight;
       case TimeBlockCategory.social:
-        return isDark ? AppColors.categorySocialDark : AppColors.categorySocialLight;
+        return isDark
+            ? AppColors.categorySocialDark
+            : AppColors.categorySocialLight;
       case TimeBlockCategory.meals:
-        return isDark ? AppColors.categoryMealsDark : AppColors.categoryMealsLight;
+        return isDark
+            ? AppColors.categoryMealsDark
+            : AppColors.categoryMealsLight;
       case TimeBlockCategory.sleep:
-        return isDark ? AppColors.categorySleepDark : AppColors.categorySleepLight;
+        return isDark
+            ? AppColors.categorySleepDark
+            : AppColors.categorySleepLight;
       case TimeBlockCategory.personal:
-        return isDark ? AppColors.categoryPersonalDark : AppColors.categoryPersonalLight;
+        return isDark
+            ? AppColors.categoryPersonalDark
+            : AppColors.categoryPersonalLight;
       case TimeBlockCategory.other:
-        return isDark ? AppColors.categoryOtherDark : AppColors.categoryOtherLight;
+        return isDark
+            ? AppColors.categoryOtherDark
+            : AppColors.categoryOtherLight;
     }
   }
 
@@ -179,13 +182,13 @@ class BlockListTileWidget extends StatelessWidget {
   String _formatTimeRange() {
     final start = block.startDateTime.toLocal();
     final end = block.endDateTime.toLocal();
-    
-    final startStr = '${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}';
-    final endStr = '${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')}';
-    
+
+    final startStr = formatTimeHm(start);
+    final endStr = formatTimeHm(end);
+
     // Check if same day
-    if (start.year == end.year && 
-        start.month == end.month && 
+    if (start.year == end.year &&
+        start.month == end.month &&
         start.day == end.day) {
       return '${_formatDate(start)} • $startStr - $endStr';
     } else {
@@ -193,10 +196,7 @@ class BlockListTileWidget extends StatelessWidget {
     }
   }
 
-  /// Format date as "d MMM"
-  String _formatDate(DateTime dateTime) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return '${dateTime.day} ${months[dateTime.month - 1]}';
-  }
+  /// Locale-aware short date — `d MMM` via [formatMonth].
+  String _formatDate(DateTime dateTime) =>
+      '${dateTime.day} ${formatMonth(dateTime)}';
 }

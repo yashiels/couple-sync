@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
-import 'package:timezone/timezone.dart' as tz;
+import 'package:go_router/go_router.dart';
 import '../../../core/models/overlap_result.dart';
+import '../../../core/overlap/overlap_controller.dart';
+import '../../../core/router/routes.dart';
+import '../../../core/utils/format_utils.dart';
 import '../../../services/providers/couple_providers.dart';
 import '../../../services/providers/auth_state_provider.dart';
 import '../widgets/window_card_widget.dart';
+import '../widgets/window_detail_dialog.dart';
 
 /// Overlap screen displaying mutual free time windows with filtering and sorting.
 ///
@@ -31,8 +34,9 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
 
     // Apply filters
     if (_minDurationMinutes != null) {
-      result =
-          result.where((w) => w.durationMinutes >= _minDurationMinutes!).toList();
+      result = result
+          .where((w) => w.durationMinutes >= _minDurationMinutes!)
+          .toList();
     }
 
     if (_minScore != null) {
@@ -62,7 +66,13 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
 
     final userProfile = ref.watch(currentUserProfileProvider);
     final partnerAsync = ref.watch(partnerProfileProvider);
-    final overlapAsync = ref.watch(overlapWindowsProvider);
+    // Read overlap windows from the device-side controller (async —
+    // AsyncNotifierProvider<OverlapResult>). When there is no couple yet,
+    // emit a null result so the existing empty-state UI is preserved.
+    final coupleId = userProfile?.coupleId;
+    final overlapAsync = coupleId == null
+        ? const AsyncValue<OverlapResult?>.data(null)
+        : ref.watch(overlapControllerProvider(coupleId));
 
     // If the user has no couple yet, show a friendly message
     if (userProfile?.coupleId == null) {
@@ -93,6 +103,12 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                   textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: () => context.go(AppRoutes.pairing),
+                  icon: const Icon(Icons.link),
+                  label: const Text('Pair with partner'),
                 ),
               ],
             ),
@@ -150,7 +166,12 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
                 ),
                 const SizedBox(height: 24),
                 FilledButton.icon(
-                  onPressed: () => ref.invalidate(overlapWindowsProvider),
+                  onPressed: () {
+                    final id = ref.read(currentUserProfileProvider)?.coupleId;
+                    if (id != null) {
+                      ref.invalidate(overlapControllerProvider(id));
+                    }
+                  },
                   icon: const Icon(Icons.refresh),
                   label: const Text('Retry'),
                 ),
@@ -177,35 +198,68 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
           body: allWindows.isEmpty
               ? _buildNoOverlapsState(theme)
               : windows.isEmpty
-                  ? _buildEmptyState(theme)
-                  : Column(
-                      children: [
-                        // Filter summary bar
-                        _buildFilterSummary(theme),
+              ? _buildEmptyState(theme)
+              : Column(
+                  children: [
+                    // Filter summary bar
+                    _buildFilterSummary(theme),
 
-                        // Windows list
-                        Expanded(
-                          child: ListView.builder(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: windows.length,
-                            itemBuilder: (context, index) {
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: WindowCardWidget(
-                                  window: windows[index],
-                                  userTimezone: userTimezone,
-                                  partnerTimezone: partnerTimezone,
-                                  onTap: () => _showWindowDetails(
-                                      windows[index], userTimezone, partnerTimezone),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
+                    // Hint when the 10-window cap is active
+                    if (windows.length == 10) _buildCapHint(theme),
+
+                    // Windows list
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: windows.length,
+                        itemBuilder: (context, index) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: WindowCardWidget(
+                              window: windows[index],
+                              userTimezone: userTimezone,
+                              partnerTimezone: partnerTimezone,
+                              onTap: () => _showWindowDetails(
+                                windows[index],
+                                userTimezone,
+                                partnerTimezone,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
+                  ],
+                ),
         );
       },
+    );
+  }
+
+  /// Hint shown when the visible list is capped at 10 windows.
+  Widget _buildCapHint(ThemeData theme) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline,
+            size: 18,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Showing top 10 — refine filters for more',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -296,9 +350,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
         border: Border(
-          bottom: BorderSide(
-            color: theme.colorScheme.outlineVariant,
-          ),
+          bottom: BorderSide(color: theme.colorScheme.outlineVariant),
         ),
       ),
       child: Row(
@@ -315,46 +367,19 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
               runSpacing: 4,
               children: [
                 if (_minDurationMinutes != null)
-                  _buildFilterChip(
-                    'Min ${_formatDuration(_minDurationMinutes!)}',
-                    () => setState(() => _minDurationMinutes = null),
+                  FilterChip(
+                    label: Text('Min ${formatDurationMinutes(_minDurationMinutes!)}'),
+                    selected: true,
+                    onSelected: (_) =>
+                        setState(() => _minDurationMinutes = null),
                   ),
                 if (_minScore != null)
-                  _buildFilterChip(
-                    'Min score ${_minScore!.round()}',
-                    () => setState(() => _minScore = null),
+                  FilterChip(
+                    label: Text('Min score ${_minScore!.round()}'),
+                    selected: true,
+                    onSelected: (_) => setState(() => _minScore = null),
                   ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterChip(String label, VoidCallback onRemove) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
-                ),
-          ),
-          const SizedBox(width: 4),
-          InkWell(
-            onTap: onRemove,
-            child: Icon(
-              Icons.close,
-              size: 14,
-              color: Theme.of(context).colorScheme.onPrimaryContainer,
             ),
           ),
         ],
@@ -410,10 +435,7 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
                 const SizedBox(height: 24),
 
                 // Sort By
-                Text(
-                  'Sort By',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
+                Text('Sort By', style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -436,6 +458,9 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
               FilledButton(
                 onPressed: () {
                   Navigator.of(context).pop();
+                  setState(
+                    () {},
+                  ); // refresh filter summary + list with new filters
                 },
                 child: const Text('Apply'),
               ),
@@ -447,33 +472,40 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
   }
 
   Widget _buildDurationChoice(
-      int? minutes, String label, StateSetter setDialogState) {
+    int? minutes,
+    String label,
+    StateSetter setDialogState,
+  ) {
     final isSelected = _minDurationMinutes == minutes;
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
       onSelected: (selected) {
         setDialogState(() => _minDurationMinutes = selected ? minutes : null);
-        setState(() => _minDurationMinutes = selected ? minutes : null);
       },
     );
   }
 
   Widget _buildScoreChoice(
-      double? score, String label, StateSetter setDialogState) {
+    double? score,
+    String label,
+    StateSetter setDialogState,
+  ) {
     final isSelected = _minScore == score;
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
       onSelected: (selected) {
         setDialogState(() => _minScore = selected ? score : null);
-        setState(() => _minScore = selected ? score : null);
       },
     );
   }
 
   Widget _buildSortChoice(
-      String sortBy, String label, StateSetter setDialogState) {
+    String sortBy,
+    String label,
+    StateSetter setDialogState,
+  ) {
     final isSelected = _sortBy == sortBy;
     return ChoiceChip(
       label: Text(label),
@@ -483,170 +515,22 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
       onSelected: (selected) {
         if (!selected) return;
         setDialogState(() => _sortBy = sortBy);
-        setState(() => _sortBy = sortBy);
       },
     );
   }
 
-  void _showWindowDetails(OverlapWindow window, String userTimezone,
-      String partnerTimezone) {
+  void _showWindowDetails(
+    OverlapWindow window,
+    String userTimezone,
+    String partnerTimezone,
+  ) {
     showDialog(
       context: context,
-      builder: (context) {
-        final theme = Theme.of(context);
-        final dateFormat = DateFormat('EEEE, MMMM d, yyyy');
-        final timeFormat = DateFormat('h:mm a');
-
-        // Convert UTC start/end to user's timezone
-        final userLocation = tz.getLocation(userTimezone);
-        final userStart = tz.TZDateTime.from(window.startDateTime, userLocation);
-        final userEnd = tz.TZDateTime.from(window.endDateTime, userLocation);
-
-        // Convert UTC start/end to partner's timezone
-        final partnerLocation = tz.getLocation(partnerTimezone);
-        final partnerStart =
-            tz.TZDateTime.from(window.startDateTime, partnerLocation);
-        final partnerEnd =
-            tz.TZDateTime.from(window.endDateTime, partnerLocation);
-
-        return AlertDialog(
-          title: const Text('Window Details'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Date
-              Text(
-                dateFormat.format(userStart),
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Time ranges
-              _buildDetailRow(
-                'Your Time',
-                '${timeFormat.format(userStart)} - ${timeFormat.format(userEnd)}',
-                theme,
-              ),
-              const SizedBox(height: 8),
-              _buildDetailRow(
-                'Partner\'s Time',
-                '${timeFormat.format(partnerStart)} - ${timeFormat.format(partnerEnd)}',
-                theme,
-              ),
-
-              const Divider(height: 32),
-
-              // Duration
-              _buildDetailRow(
-                'Duration',
-                _formatDuration(window.durationMinutes),
-                theme,
-              ),
-              const SizedBox(height: 8),
-
-              // Score
-              Text(
-                'Score',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              _buildScoreRow('Match Score', window.score, theme),
-
-              const SizedBox(height: 16),
-
-              // Reasonable hours
-              Row(
-                children: [
-                  Icon(
-                    window.reasonableBoth ? Icons.check_circle : Icons.cancel,
-                    size: 20,
-                    color: window.reasonableBoth ? Colors.green : Colors.orange,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    window.reasonableBoth
-                        ? 'Reasonable hours for both'
-                        : 'Outside typical hours',
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value, ThemeData theme) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 100,
-          child: Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildScoreRow(String label, double score, ThemeData theme) {
-    final scoreDisplay = score.round();
-    final color = _getScoreColor(score);
-
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: theme.textTheme.bodySmall,
-              ),
-              const SizedBox(height: 4),
-              LinearProgressIndicator(
-                value: (score / 60).clamp(0.0, 1.0),
-                backgroundColor: color.withValues(alpha: 0.2),
-                valueColor: AlwaysStoppedAnimation(color),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 12),
-        Text(
-          '$scoreDisplay',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-      ],
+      builder: (context) => WindowDetailDialog(
+        window: window,
+        userTimezone: userTimezone,
+        partnerTimezone: partnerTimezone,
+      ),
     );
   }
 
@@ -655,24 +539,5 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
       _minDurationMinutes = null;
       _minScore = null;
     });
-  }
-
-  String _formatDuration(int minutes) {
-    if (minutes < 60) {
-      return '$minutes min';
-    }
-    final hours = minutes ~/ 60;
-    final mins = minutes.remainder(60);
-    if (mins == 0) {
-      return '$hours hr';
-    }
-    return '$hours hr $mins min';
-  }
-
-  Color _getScoreColor(double score) {
-    if (score >= 40) return Colors.green;
-    if (score >= 25) return Colors.lightGreen;
-    if (score >= 15) return Colors.orange;
-    return Colors.red;
   }
 }

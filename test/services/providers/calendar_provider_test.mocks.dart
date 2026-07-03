@@ -5,7 +5,7 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i3;
 
-import 'package:couple_sync/core/models/time_block.dart' as _i5;
+import 'package:couple_sync/core/models/time_block.dart' as _i4;
 import 'package:couple_sync/services/calendar_service.dart' as _i2;
 import 'package:mockito/mockito.dart' as _i1;
 
@@ -49,6 +49,21 @@ class MockCalendarService extends _i1.Mock implements _i2.CalendarService {
           as _i3.Future<bool>);
 
   @override
+  _i3.Future<void> notifyConnectionStateChanged() =>
+      (super.noSuchMethod(
+            Invocation.method(#notifyConnectionStateChanged, []),
+            returnValue: _i3.Future<void>.value(),
+            returnValueForMissingStub: _i3.Future<void>.value(),
+          )
+          as _i3.Future<void>);
+
+  @override
+  void dispose() => super.noSuchMethod(
+    Invocation.method(#dispose, []),
+    returnValueForMissingStub: null,
+  );
+
+  @override
   _i3.Future<bool> connect() =>
       (super.noSuchMethod(
             Invocation.method(#connect, []),
@@ -85,7 +100,7 @@ class MockCalendarService extends _i1.Mock implements _i2.CalendarService {
           as _i3.Future<List<({DateTime end, DateTime start})>>);
 
   @override
-  List<_i5.TimeBlock> convertToTimeBlocks(
+  List<_i4.TimeBlock> convertToTimeBlocks(
     List<({DateTime end, DateTime start})>? busyIntervals, {
     required String? userId,
     required String? timezone,
@@ -96,9 +111,9 @@ class MockCalendarService extends _i1.Mock implements _i2.CalendarService {
               [busyIntervals],
               {#userId: userId, #timezone: timezone},
             ),
-            returnValue: <_i5.TimeBlock>[],
+            returnValue: <_i4.TimeBlock>[],
           )
-          as List<_i5.TimeBlock>);
+          as List<_i4.TimeBlock>);
 
   @override
   _i3.Future<DateTime?> getLastSyncTime() =>

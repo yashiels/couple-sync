@@ -25,6 +25,11 @@ class _WeekViewScreenState extends ConsumerState<WeekViewScreen> {
   // Current week being displayed
   late DateTime _currentWeekStart;
 
+  /// Drives the embedded WeekViewWidget's PageController from the parent
+  /// (used by the Today button).
+  final GlobalKey<WeekViewWidgetState> _weekViewKey =
+      GlobalKey<WeekViewWidgetState>();
+
   @override
   void initState() {
     super.initState();
@@ -34,8 +39,11 @@ class _WeekViewScreenState extends ConsumerState<WeekViewScreen> {
   /// Get the start of the week (Monday) for a given date
   DateTime _getWeekStart(DateTime date) {
     final weekday = date.weekday;
-    return DateTime(date.year, date.month, date.day)
-        .subtract(Duration(days: weekday - 1));
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+    ).subtract(Duration(days: weekday - 1));
   }
 
   @override
@@ -49,9 +57,7 @@ class _WeekViewScreenState extends ConsumerState<WeekViewScreen> {
     if (currentUserId == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Calendar')),
-        body: const Center(
-          child: Text('Not authenticated. Please sign in.'),
-        ),
+        body: const Center(child: Text('Not authenticated. Please sign in.')),
       );
     }
 
@@ -138,15 +144,15 @@ class _WeekViewScreenState extends ConsumerState<WeekViewScreen> {
             Text(
               'No blocks yet',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
               'Tap + to create your first time block',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -154,6 +160,7 @@ class _WeekViewScreenState extends ConsumerState<WeekViewScreen> {
     }
 
     return WeekViewWidget(
+      key: _weekViewKey,
       initialWeek: _currentWeekStart,
       userBlocks: userBlocks,
       partnerBlocks: partnerBlocks,
@@ -164,30 +171,34 @@ class _WeekViewScreenState extends ConsumerState<WeekViewScreen> {
   }
 
   Widget _buildErrorState(String message, Object? error, VoidCallback onRetry) {
+    final theme = Theme.of(context);
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+          Icon(
+            Icons.error_outline,
+            size: 64,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
           const SizedBox(height: 16),
           Text(
             message,
-            style: const TextStyle(color: Colors.grey),
+            style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
             textAlign: TextAlign.center,
           ),
           if (error != null) ...[
             const SizedBox(height: 8),
             Text(
               error.toString(),
-              style: const TextStyle(color: Colors.grey, fontSize: 12),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
           ],
           const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: onRetry,
-            child: const Text('Retry'),
-          ),
+          ElevatedButton(onPressed: onRetry, child: const Text('Retry')),
         ],
       ),
     );
@@ -195,6 +206,7 @@ class _WeekViewScreenState extends ConsumerState<WeekViewScreen> {
 
   /// Navigate to today's week
   void _goToToday() {
+    _weekViewKey.currentState?.jumpToToday();
     setState(() {
       _currentWeekStart = _getWeekStart(DateTime.now());
     });
@@ -209,8 +221,9 @@ class _WeekViewScreenState extends ConsumerState<WeekViewScreen> {
 
   /// Navigate to block form to add new block
   void _addNewBlock() {
-    context.push(AppRoutes.blockForm, extra: BlockFormArgs(
-      initialDate: DateTime.now(),
-    ));
+    context.push(
+      AppRoutes.blockForm,
+      extra: BlockFormArgs(initialDate: DateTime.now()),
+    );
   }
 }

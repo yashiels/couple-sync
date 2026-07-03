@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 /// User document model for users/{uid}
 class UserModel {
   final String email;
@@ -29,13 +27,12 @@ class UserModel {
       photoUrl: json['photoUrl'] as String?,
       timezone: json['timezone'] as String,
       coupleId: json['coupleId'] as String?,
-      fcmTokens: (json['fcmTokens'] as List<dynamic>?)
+      fcmTokens:
+          (json['fcmTokens'] as List<dynamic>?)
               ?.map((e) => e as String)
               .toList() ??
           [],
-      createdAt: json['createdAt'] is Timestamp
-          ? (json['createdAt'] as Timestamp).toDate()
-          : DateTime.now(),
+      createdAt: _parseDateTime(json['createdAt']),
       showLateNightWindows: json['showLateNightWindows'] as bool? ?? false,
     );
   }
@@ -48,7 +45,7 @@ class UserModel {
       'timezone': timezone,
       'coupleId': coupleId,
       'fcmTokens': fcmTokens,
-      'createdAt': Timestamp.fromDate(createdAt),
+      'createdAt': createdAt.millisecondsSinceEpoch,
       'showLateNightWindows': showLateNightWindows,
     };
   }
@@ -73,8 +70,7 @@ class UserModel {
       coupleId: clearCoupleId ? null : (coupleId ?? this.coupleId),
       fcmTokens: fcmTokens ?? List.from(this.fcmTokens),
       createdAt: createdAt ?? this.createdAt,
-      showLateNightWindows:
-          showLateNightWindows ?? this.showLateNightWindows,
+      showLateNightWindows: showLateNightWindows ?? this.showLateNightWindows,
     );
   }
 
@@ -94,15 +90,15 @@ class UserModel {
 
   @override
   int get hashCode => Object.hash(
-        email,
-        displayName,
-        photoUrl,
-        timezone,
-        coupleId,
-        Object.hashAll(fcmTokens),
-        createdAt,
-        showLateNightWindows,
-      );
+    email,
+    displayName,
+    photoUrl,
+    timezone,
+    coupleId,
+    Object.hashAll(fcmTokens),
+    createdAt,
+    showLateNightWindows,
+  );
 
   @override
   String toString() =>
@@ -115,4 +111,19 @@ class UserModel {
     }
     return true;
   }
+}
+
+/// Parse a DateTime from int ms since epoch, an ISO-8601 string, or a DateTime.
+/// Firestore Timestamps are no longer used (V7 dropped cloud_firestore); the
+/// backend stores all timestamps as bigint ms.
+DateTime _parseDateTime(dynamic value) {
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value, isUtc: true);
+  }
+  if (value is DateTime) return value.toUtc();
+  if (value is String) {
+    final parsed = DateTime.tryParse(value);
+    if (parsed != null) return parsed.toUtc();
+  }
+  return DateTime.now().toUtc();
 }

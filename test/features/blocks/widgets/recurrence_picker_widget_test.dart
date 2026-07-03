@@ -26,22 +26,25 @@ void main() {
       expect(find.text('Recurrence'), findsOneWidget);
     });
 
-    testWidgets('renders frequency dropdown with default "Does not repeat"',
-        (tester) async {
+    testWidgets('renders frequency dropdown with default "Does not repeat"', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildSubject());
 
       expect(find.text('Does not repeat'), findsOneWidget);
     });
 
-    testWidgets('does not show interval picker when frequency is none',
-        (tester) async {
+    testWidgets('does not show interval picker when frequency is none', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildSubject());
 
       expect(find.text('Repeat every '), findsNothing);
     });
 
-    testWidgets('shows interval picker when frequency is daily',
-        (tester) async {
+    testWidgets('shows interval picker when frequency is daily', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildSubject());
 
       // Open dropdown and select Daily
@@ -54,8 +57,7 @@ void main() {
       expect(find.text('day'), findsOneWidget);
     });
 
-    testWidgets('shows weekday chips when frequency is weekly',
-        (tester) async {
+    testWidgets('shows weekday chips when frequency is weekly', (tester) async {
       await tester.pumpWidget(_buildSubject());
 
       // Open dropdown and select Weekly
@@ -74,8 +76,9 @@ void main() {
       expect(find.text('Sun'), findsOneWidget);
     });
 
-    testWidgets('does not show weekday chips for daily frequency',
-        (tester) async {
+    testWidgets('does not show weekday chips for daily frequency', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildSubject());
 
       await tester.tap(find.text('Does not repeat'));
@@ -164,9 +167,7 @@ void main() {
     group('parses initial RRULE', () {
       testWidgets('parses FREQ=WEEKLY with BYDAY', (tester) async {
         await tester.pumpWidget(
-          _buildSubject(
-            initialRecurrenceRule: 'FREQ=WEEKLY;BYDAY=MO,WE,FR',
-          ),
+          _buildSubject(initialRecurrenceRule: 'FREQ=WEEKLY;BYDAY=MO,WE,FR'),
         );
 
         // Should show Weekly selected
@@ -177,9 +178,7 @@ void main() {
 
       testWidgets('parses FREQ=DAILY with INTERVAL', (tester) async {
         await tester.pumpWidget(
-          _buildSubject(
-            initialRecurrenceRule: 'FREQ=DAILY;INTERVAL=3',
-          ),
+          _buildSubject(initialRecurrenceRule: 'FREQ=DAILY;INTERVAL=3'),
         );
 
         expect(find.text('Daily'), findsOneWidget);
@@ -188,9 +187,7 @@ void main() {
 
       testWidgets('parses FREQ=MONTHLY', (tester) async {
         await tester.pumpWidget(
-          _buildSubject(
-            initialRecurrenceRule: 'FREQ=MONTHLY',
-          ),
+          _buildSubject(initialRecurrenceRule: 'FREQ=MONTHLY'),
         );
 
         expect(find.text('Monthly'), findsOneWidget);
@@ -233,8 +230,9 @@ void main() {
     });
 
     group('weekday selection', () {
-      testWidgets('tapping a weekday chip emits BYDAY in RRULE',
-          (tester) async {
+      testWidgets('tapping a weekday chip emits BYDAY in RRULE', (
+        tester,
+      ) async {
         String? emitted;
         await tester.pumpWidget(
           _buildSubject(onChanged: (value) => emitted = value),
@@ -253,8 +251,9 @@ void main() {
         expect(emitted, equals('FREQ=WEEKLY;BYDAY=MO'));
       });
 
-      testWidgets('tapping multiple weekdays emits sorted BYDAY',
-          (tester) async {
+      testWidgets('tapping multiple weekdays emits sorted BYDAY', (
+        tester,
+      ) async {
         String? emitted;
         await tester.pumpWidget(
           _buildSubject(onChanged: (value) => emitted = value),

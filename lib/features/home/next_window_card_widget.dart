@@ -6,6 +6,7 @@ import 'package:timezone/timezone.dart' as tz;
 import '../../../core/models/overlap_result.dart';
 import '../../../core/utils/timezone_helper.dart';
 import '../../../core/router/routes.dart';
+import '../../../core/utils/format_utils.dart';
 
 /// Card displaying the next free window with countdown.
 /// Shows date, time (both timezones), duration, and quality score.
@@ -13,10 +14,10 @@ import '../../../core/router/routes.dart';
 class NextWindowCard extends StatefulWidget {
   /// The next overlap window to display
   final OverlapWindow? window;
-  
+
   /// User's timezone IANA ID
   final String userTimezone;
-  
+
   /// Partner's timezone IANA ID
   final String partnerTimezone;
 
@@ -40,7 +41,10 @@ class _NextWindowCardState extends State<NextWindowCard> {
     super.initState();
     _updateCountdown();
     // Update countdown every minute
-    _timer = Timer.periodic(const Duration(minutes: 1), (_) => _updateCountdown());
+    _timer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _updateCountdown(),
+    );
   }
 
   @override
@@ -54,21 +58,24 @@ class _NextWindowCardState extends State<NextWindowCard> {
       setState(() => _countdown = '');
       return;
     }
-    
+
     final now = DateTime.now().toUtc();
     final start = widget.window!.startDateTime;
     final diff = start.difference(now);
-    
+
     if (diff.isNegative) {
       setState(() => _countdown = 'Now');
     } else {
       final hours = diff.inHours;
       final minutes = diff.inMinutes.remainder(60);
-      
+
       if (hours > 24) {
         final days = diff.inDays;
         final remainingHours = hours.remainder(24);
-        setState(() => _countdown = '$days day${days != 1 ? 's' : ''} ${remainingHours}h');
+        setState(
+          () => _countdown =
+              '$days day${days != 1 ? 's' : ''} ${remainingHours}h',
+        );
       } else {
         setState(() => _countdown = '${hours}h ${minutes}m');
       }
@@ -78,11 +85,11 @@ class _NextWindowCardState extends State<NextWindowCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     if (widget.window == null) {
       return _buildEmptyState(theme);
     }
-    
+
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -122,20 +129,20 @@ class _NextWindowCardState extends State<NextWindowCard> {
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 16),
-              
+
               // Date and times
               _buildDateTimeRow(theme),
-              
+
               const SizedBox(height: 12),
-              
+
               // Duration and score row
               Row(
                 children: [
                   _buildInfoChip(
                     icon: Icons.schedule,
-                    label: _formatDuration(widget.window!.durationMinutes),
+                    label: formatDurationMinutes(widget.window!.durationMinutes),
                   ),
                   const SizedBox(width: 12),
                   _buildInfoChip(
@@ -144,9 +151,9 @@ class _NextWindowCardState extends State<NextWindowCard> {
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 8),
-              
+
               // Tap hint
               Center(
                 child: Text(
@@ -162,7 +169,7 @@ class _NextWindowCardState extends State<NextWindowCard> {
       ),
     );
   }
-  
+
   Widget _buildEmptyState(ThemeData theme) {
     return Card(
       child: Padding(
@@ -192,23 +199,26 @@ class _NextWindowCardState extends State<NextWindowCard> {
       ),
     );
   }
-  
+
   Widget _buildDateTimeRow(ThemeData theme) {
     final window = widget.window!;
     final userTz = TimezoneHelper.getCurrentOffset(widget.userTimezone);
     final partnerTz = TimezoneHelper.getCurrentOffset(widget.partnerTimezone);
-    
+
     final dateFormat = DateFormat('EEE, MMM d');
     final timeFormat = DateFormat('h:mm a');
-    
+
     // Convert to each user's timezone using TZDateTime
     final userLocation = tz.getLocation(widget.userTimezone);
     final partnerLocation = tz.getLocation(widget.partnerTimezone);
     final userStart = tz.TZDateTime.from(window.startDateTime, userLocation);
     final userEnd = tz.TZDateTime.from(window.endDateTime, userLocation);
-    final partnerStart = tz.TZDateTime.from(window.startDateTime, partnerLocation);
+    final partnerStart = tz.TZDateTime.from(
+      window.startDateTime,
+      partnerLocation,
+    );
     final partnerEnd = tz.TZDateTime.from(window.endDateTime, partnerLocation);
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -223,11 +233,7 @@ class _NextWindowCardState extends State<NextWindowCard> {
         // User's time
         Row(
           children: [
-            Icon(
-              Icons.person,
-              size: 16,
-              color: theme.colorScheme.primary,
-            ),
+            Icon(Icons.person, size: 16, color: theme.colorScheme.primary),
             const SizedBox(width: 4),
             Text(
               '${timeFormat.format(userStart)} - ${timeFormat.format(userEnd)} ($userTz)',
@@ -239,11 +245,7 @@ class _NextWindowCardState extends State<NextWindowCard> {
         // Partner's time
         Row(
           children: [
-            Icon(
-              Icons.favorite,
-              size: 16,
-              color: theme.colorScheme.secondary,
-            ),
+            Icon(Icons.favorite, size: 16, color: theme.colorScheme.secondary),
             const SizedBox(width: 4),
             Text(
               '${timeFormat.format(partnerStart)} - ${timeFormat.format(partnerEnd)} ($partnerTz)',
@@ -254,18 +256,14 @@ class _NextWindowCardState extends State<NextWindowCard> {
       ],
     );
   }
-  
+
   Widget _buildInfoChip({required IconData icon, required String label}) {
     final theme = Theme.of(context);
-    
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          icon,
-          size: 16,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
+        Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
         const SizedBox(width: 4),
         Text(
           label,
@@ -276,16 +274,5 @@ class _NextWindowCardState extends State<NextWindowCard> {
       ],
     );
   }
-  
-  String _formatDuration(int minutes) {
-    if (minutes < 60) {
-      return '$minutes min';
-    }
-    final hours = minutes ~/ 60;
-    final mins = minutes.remainder(60);
-    if (mins == 0) {
-      return '$hours hr';
-    }
-    return '$hours hr $mins min';
-  }
+
 }
