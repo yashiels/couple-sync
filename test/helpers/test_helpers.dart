@@ -6,9 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 Widget createTestWidget(Widget child, {List<Override>? overrides}) {
   return ProviderScope(
     overrides: overrides ?? [],
-    child: MaterialApp(
-      home: Scaffold(body: child),
-    ),
+    child: MaterialApp(home: Scaffold(body: child)),
   );
 }
 

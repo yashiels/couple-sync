@@ -5,11 +5,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
-@GenerateMocks([
-  GoogleSignIn,
-  GoogleSignInAccount,
-  GoogleSignInAuthentication,
-])
+@GenerateMocks([GoogleSignIn, GoogleSignInAccount, GoogleSignInAuthentication])
 import 'calendar_service_test.mocks.dart';
 
 /// In-memory fake for FlutterSecureStorage to avoid complex mock parameter matching.
@@ -100,17 +96,16 @@ void main() {
         final mockAccount = MockGoogleSignInAccount();
         final mockAuth = MockGoogleSignInAuthentication();
 
-        when(mockGoogleSignIn.signOut()).thenAnswer((_) async => null);
-        when(mockGoogleSignIn.signIn())
-            .thenAnswer((_) async => mockAccount);
-        when(mockAccount.authentication)
-            .thenAnswer((_) async => mockAuth);
+        // C6: connect() no longer calls signOut() first — it signs in directly
+        // to preserve silent refresh and avoid a forced consent sheet.
+        when(mockGoogleSignIn.signIn()).thenAnswer((_) async => mockAccount);
+        when(mockAccount.authentication).thenAnswer((_) async => mockAuth);
         when(mockAuth.accessToken).thenReturn('test-access-token');
 
         final result = await calendarService.connect();
 
         expect(result, isTrue);
-        verify(mockGoogleSignIn.signOut()).called(1);
+        verifyNever(mockGoogleSignIn.signOut());
         verify(mockGoogleSignIn.signIn()).called(1);
         expect(
           fakeSecureStorage._store['google_calendar_access_token'],
@@ -128,11 +123,13 @@ void main() {
 
         expect(
           () => calendarService.connect(),
-          throwsA(isA<CalendarException>().having(
-            (e) => e.code,
-            'code',
-            'sign-in-cancelled',
-          )),
+          throwsA(
+            isA<CalendarException>().having(
+              (e) => e.code,
+              'code',
+              'sign-in-cancelled',
+            ),
+          ),
         );
       });
 
@@ -141,99 +138,114 @@ void main() {
         final mockAuth = MockGoogleSignInAuthentication();
 
         when(mockGoogleSignIn.signOut()).thenAnswer((_) async => null);
-        when(mockGoogleSignIn.signIn())
-            .thenAnswer((_) async => mockAccount);
-        when(mockAccount.authentication)
-            .thenAnswer((_) async => mockAuth);
+        when(mockGoogleSignIn.signIn()).thenAnswer((_) async => mockAccount);
+        when(mockAccount.authentication).thenAnswer((_) async => mockAuth);
         when(mockAuth.accessToken).thenReturn(null);
 
         expect(
           () => calendarService.connect(),
-          throwsA(isA<CalendarException>().having(
-            (e) => e.code,
-            'code',
-            'no-access-token',
-          )),
+          throwsA(
+            isA<CalendarException>().having(
+              (e) => e.code,
+              'code',
+              'no-access-token',
+            ),
+          ),
         );
       });
 
       test('throws CalendarException with network error message', () async {
         when(mockGoogleSignIn.signOut()).thenAnswer((_) async => null);
-        when(mockGoogleSignIn.signIn())
-            .thenThrow(Exception('network error occurred'));
+        when(
+          mockGoogleSignIn.signIn(),
+        ).thenThrow(Exception('network error occurred'));
 
         expect(
           () => calendarService.connect(),
-          throwsA(isA<CalendarException>().having(
-            (e) => e.code,
-            'code',
-            'connection-failed',
-          ).having(
-            (e) => e.message,
-            'message',
-            contains('Network error'),
-          )),
+          throwsA(
+            isA<CalendarException>()
+                .having((e) => e.code, 'code', 'connection-failed')
+                .having((e) => e.message, 'message', contains('Network error')),
+          ),
         );
       });
 
       test('throws CalendarException with cancelled error message', () async {
         when(mockGoogleSignIn.signOut()).thenAnswer((_) async => null);
-        when(mockGoogleSignIn.signIn())
-            .thenThrow(Exception('user cancelled'));
+        when(mockGoogleSignIn.signIn()).thenThrow(Exception('user cancelled'));
 
         expect(
           () => calendarService.connect(),
-          throwsA(isA<CalendarException>().having(
-            (e) => e.message,
-            'message',
-            contains('cancelled'),
-          )),
+          throwsA(
+            isA<CalendarException>().having(
+              (e) => e.message,
+              'message',
+              contains('cancelled'),
+            ),
+          ),
         );
       });
 
       test('throws CalendarException with permission error message', () async {
         when(mockGoogleSignIn.signOut()).thenAnswer((_) async => null);
-        when(mockGoogleSignIn.signIn())
-            .thenThrow(Exception('permission denied'));
+        when(
+          mockGoogleSignIn.signIn(),
+        ).thenThrow(Exception('permission denied'));
 
         expect(
           () => calendarService.connect(),
-          throwsA(isA<CalendarException>().having(
-            (e) => e.message,
-            'message',
-            contains('Permission denied'),
-          )),
+          throwsA(
+            isA<CalendarException>().having(
+              (e) => e.message,
+              'message',
+              contains('Permission denied'),
+            ),
+          ),
         );
       });
 
-      test('throws CalendarException with generic error for unknown errors',
-          () async {
-        when(mockGoogleSignIn.signOut()).thenAnswer((_) async => null);
-        when(mockGoogleSignIn.signIn())
-            .thenThrow(Exception('something weird'));
+      test(
+        'throws CalendarException with generic error for unknown errors',
+        () async {
+          when(mockGoogleSignIn.signOut()).thenAnswer((_) async => null);
+          when(
+            mockGoogleSignIn.signIn(),
+          ).thenThrow(Exception('something weird'));
 
-        expect(
-          () => calendarService.connect(),
-          throwsA(isA<CalendarException>().having(
-            (e) => e.message,
-            'message',
-            contains('unexpected error'),
-          )),
-        );
-      });
+          expect(
+            () => calendarService.connect(),
+            throwsA(
+              isA<CalendarException>().having(
+                (e) => e.message,
+                'message',
+                contains('unexpected error'),
+              ),
+            ),
+          );
+        },
+      );
     });
 
     group('disconnect', () {
       test('clears tokens and signs out', () async {
         fakeSecureStorage._store['google_calendar_access_token'] = 'token';
-        fakeSecureStorage._store['google_calendar_refresh_token'] = 'refresh';
         fakeSecureStorage._store['google_calendar_token_expiry'] = 'expiry';
 
         when(mockGoogleSignIn.signOut()).thenAnswer((_) async => null);
 
         await calendarService.disconnect();
 
-        expect(fakeSecureStorage._store, isEmpty);
+        // C6: disconnect() clears the access token + expiry and signs out.
+        // The old _refreshTokenKey was removed in C6, so disconnect() no
+        // longer deletes a refresh-token key.
+        expect(
+          fakeSecureStorage._store.containsKey('google_calendar_access_token'),
+          isFalse,
+        );
+        expect(
+          fakeSecureStorage._store.containsKey('google_calendar_token_expiry'),
+          isFalse,
+        );
         verify(mockGoogleSignIn.signOut()).called(1);
       });
 
@@ -242,11 +254,13 @@ void main() {
 
         expect(
           () => calendarService.disconnect(),
-          throwsA(isA<CalendarException>().having(
-            (e) => e.code,
-            'code',
-            'disconnect-failed',
-          )),
+          throwsA(
+            isA<CalendarException>().having(
+              (e) => e.code,
+              'code',
+              'disconnect-failed',
+            ),
+          ),
         );
       });
 
@@ -258,11 +272,13 @@ void main() {
         // But delete succeeds (shouldThrow is false), so we get to signOut.
         expect(
           () => calendarService.disconnect(),
-          throwsA(isA<CalendarException>().having(
-            (e) => e.code,
-            'code',
-            'disconnect-failed',
-          )),
+          throwsA(
+            isA<CalendarException>().having(
+              (e) => e.code,
+              'code',
+              'disconnect-failed',
+            ),
+          ),
         );
       });
     });
@@ -279,7 +295,8 @@ void main() {
       });
 
       test('returns token when not expired', () async {
-        fakeSecureStorage._store['google_calendar_access_token'] = 'valid-token';
+        fakeSecureStorage._store['google_calendar_access_token'] =
+            'valid-token';
         fakeSecureStorage._store['google_calendar_token_expiry'] =
             DateTime.now().add(const Duration(hours: 1)).toIso8601String();
 
@@ -287,23 +304,25 @@ void main() {
       });
 
       test('returns token when no expiry stored', () async {
-        fakeSecureStorage._store['google_calendar_access_token'] = 'valid-token';
+        fakeSecureStorage._store['google_calendar_access_token'] =
+            'valid-token';
 
         expect(await calendarService.getAccessToken(), 'valid-token');
       });
 
       test('refreshes token when expired and returns new token', () async {
-        fakeSecureStorage._store['google_calendar_access_token'] = 'expired-token';
+        fakeSecureStorage._store['google_calendar_access_token'] =
+            'expired-token';
         fakeSecureStorage._store['google_calendar_token_expiry'] =
             DateTime.now().subtract(const Duration(hours: 1)).toIso8601String();
 
         // Mock successful silent sign-in for refresh
         final mockAccount = MockGoogleSignInAccount();
         final mockAuth = MockGoogleSignInAuthentication();
-        when(mockGoogleSignIn.signInSilently())
-            .thenAnswer((_) async => mockAccount);
-        when(mockAccount.authentication)
-            .thenAnswer((_) async => mockAuth);
+        when(
+          mockGoogleSignIn.signInSilently(),
+        ).thenAnswer((_) async => mockAccount);
+        when(mockAccount.authentication).thenAnswer((_) async => mockAuth);
         when(mockAuth.accessToken).thenReturn('refreshed-token');
 
         final result = await calendarService.getAccessToken();
@@ -317,44 +336,56 @@ void main() {
         verify(mockGoogleSignIn.signInSilently()).called(1);
       });
 
-      test('returns null when token expired and silent sign-in fails', () async {
-        fakeSecureStorage._store['google_calendar_access_token'] = 'expired-token';
-        fakeSecureStorage._store['google_calendar_token_expiry'] =
-            DateTime.now().subtract(const Duration(hours: 1)).toIso8601String();
+      test(
+        'returns null when token expired and silent sign-in fails',
+        () async {
+          fakeSecureStorage._store['google_calendar_access_token'] =
+              'expired-token';
+          fakeSecureStorage._store['google_calendar_token_expiry'] =
+              DateTime.now()
+                  .subtract(const Duration(hours: 1))
+                  .toIso8601String();
 
-        // Silent sign-in returns null
-        when(mockGoogleSignIn.signInSilently())
-            .thenAnswer((_) async => null);
-        // disconnect is called internally, which needs signOut
-        when(mockGoogleSignIn.signOut()).thenAnswer((_) async => null);
+          // Silent sign-in returns null
+          when(mockGoogleSignIn.signInSilently()).thenAnswer((_) async => null);
+          // disconnect is called internally, which needs signOut
+          when(mockGoogleSignIn.signOut()).thenAnswer((_) async => null);
 
-        expect(await calendarService.getAccessToken(), isNull);
-      });
+          expect(await calendarService.getAccessToken(), isNull);
+        },
+      );
 
-      test('returns null when token expired and refresh has null access token',
-          () async {
-        fakeSecureStorage._store['google_calendar_access_token'] = 'expired-token';
-        fakeSecureStorage._store['google_calendar_token_expiry'] =
-            DateTime.now().subtract(const Duration(hours: 1)).toIso8601String();
+      test(
+        'returns null when token expired and refresh has null access token',
+        () async {
+          fakeSecureStorage._store['google_calendar_access_token'] =
+              'expired-token';
+          fakeSecureStorage._store['google_calendar_token_expiry'] =
+              DateTime.now()
+                  .subtract(const Duration(hours: 1))
+                  .toIso8601String();
 
-        final mockAccount = MockGoogleSignInAccount();
-        final mockAuth = MockGoogleSignInAuthentication();
-        when(mockGoogleSignIn.signInSilently())
-            .thenAnswer((_) async => mockAccount);
-        when(mockAccount.authentication)
-            .thenAnswer((_) async => mockAuth);
-        when(mockAuth.accessToken).thenReturn(null);
+          final mockAccount = MockGoogleSignInAccount();
+          final mockAuth = MockGoogleSignInAuthentication();
+          when(
+            mockGoogleSignIn.signInSilently(),
+          ).thenAnswer((_) async => mockAccount);
+          when(mockAccount.authentication).thenAnswer((_) async => mockAuth);
+          when(mockAuth.accessToken).thenReturn(null);
 
-        expect(await calendarService.getAccessToken(), isNull);
-      });
+          expect(await calendarService.getAccessToken(), isNull);
+        },
+      );
 
       test('returns null when refresh throws exception', () async {
-        fakeSecureStorage._store['google_calendar_access_token'] = 'expired-token';
+        fakeSecureStorage._store['google_calendar_access_token'] =
+            'expired-token';
         fakeSecureStorage._store['google_calendar_token_expiry'] =
             DateTime.now().subtract(const Duration(hours: 1)).toIso8601String();
 
-        when(mockGoogleSignIn.signInSilently())
-            .thenThrow(Exception('refresh error'));
+        when(
+          mockGoogleSignIn.signInSilently(),
+        ).thenThrow(Exception('refresh error'));
 
         expect(await calendarService.getAccessToken(), isNull);
       });
@@ -406,40 +437,49 @@ void main() {
         expect(blocks, isEmpty);
       });
 
-      test('converts intervals to TimeBlocks with correct STORY-019 properties', () {
-        final now = DateTime.now().toUtc();
-        final end = now.add(const Duration(hours: 1));
-        final intervals = [(start: now, end: end)];
+      test(
+        'converts intervals to TimeBlocks with correct STORY-019 properties',
+        () {
+          final now = DateTime.now().toUtc();
+          final end = now.add(const Duration(hours: 1));
+          final intervals = [(start: now, end: end)];
 
-        final blocks = calendarService.convertToTimeBlocks(
-          intervals,
-          userId: 'user-1',
-          timezone: 'America/New_York',
-        );
+          final blocks = calendarService.convertToTimeBlocks(
+            intervals,
+            userId: 'user-1',
+            timezone: 'America/New_York',
+          );
 
-        expect(blocks, hasLength(1));
-        final block = blocks.first;
+          expect(blocks, hasLength(1));
+          final block = blocks.first;
 
-        // STORY-019 requirements: type=busy, source=google, visibility=bothPartners
-        expect(block.type.name, 'busy');
-        expect(block.source.name, 'google');
-        expect(block.visibility.name, 'bothPartners');
+          // STORY-019 requirements: type=busy, source=google, visibility=bothPartners
+          expect(block.type.name, 'busy');
+          expect(block.source.name, 'google');
+          expect(block.visibility.name, 'bothPartners');
 
-        // Privacy-first: generic title, never event details
-        expect(block.title, 'Busy');
+          // Privacy-first: generic title, never event details
+          expect(block.title, 'Busy');
 
-        expect(block.userId, 'user-1');
-        expect(block.timezone, 'America/New_York');
-        expect(block.startUtc, now.millisecondsSinceEpoch);
-        expect(block.endUtc, end.millisecondsSinceEpoch);
-      });
+          expect(block.userId, 'user-1');
+          expect(block.timezone, 'America/New_York');
+          expect(block.startUtc, now.millisecondsSinceEpoch);
+          expect(block.endUtc, end.millisecondsSinceEpoch);
+        },
+      );
 
       test('converts multiple intervals preserving order', () {
         final base = DateTime.utc(2026, 4, 8, 9);
         final intervals = [
           (start: base, end: base.add(const Duration(hours: 1))),
-          (start: base.add(const Duration(hours: 2)), end: base.add(const Duration(hours: 3))),
-          (start: base.add(const Duration(hours: 4)), end: base.add(const Duration(hours: 5))),
+          (
+            start: base.add(const Duration(hours: 2)),
+            end: base.add(const Duration(hours: 3)),
+          ),
+          (
+            start: base.add(const Duration(hours: 4)),
+            end: base.add(const Duration(hours: 5)),
+          ),
         ];
 
         final blocks = calendarService.convertToTimeBlocks(
@@ -492,15 +532,17 @@ void main() {
       });
 
       test('returns true when last sync was more than 1 hour ago', () async {
-        fakeSecureStorage._store['google_calendar_last_sync'] =
-            DateTime.now().subtract(const Duration(hours: 2)).toIso8601String();
+        fakeSecureStorage._store['google_calendar_last_sync'] = DateTime.now()
+            .subtract(const Duration(hours: 2))
+            .toIso8601String();
 
         expect(await calendarService.shouldAutoSync(), isTrue);
       });
 
       test('returns false when last sync was less than 1 hour ago', () async {
-        fakeSecureStorage._store['google_calendar_last_sync'] =
-            DateTime.now().subtract(const Duration(minutes: 30)).toIso8601String();
+        fakeSecureStorage._store['google_calendar_last_sync'] = DateTime.now()
+            .subtract(const Duration(minutes: 30))
+            .toIso8601String();
 
         expect(await calendarService.shouldAutoSync(), isFalse);
       });
@@ -509,8 +551,9 @@ void main() {
         // Store a time that is exactly 1 hour in the past. By the time the
         // shouldAutoSync check runs, the clock has advanced slightly, making
         // the stored time fall before the new oneHourAgo threshold.
-        fakeSecureStorage._store['google_calendar_last_sync'] =
-            DateTime.now().subtract(const Duration(hours: 1)).toIso8601String();
+        fakeSecureStorage._store['google_calendar_last_sync'] = DateTime.now()
+            .subtract(const Duration(hours: 1))
+            .toIso8601String();
 
         expect(await calendarService.shouldAutoSync(), isTrue);
       });
@@ -540,6 +583,61 @@ void main() {
         expect(result.isSuccess, isFalse);
         expect(result.error, 'Something went wrong');
       });
+    });
+  });
+
+  // Test the retry policy via a fake callback that fails N times then succeeds.
+  // `withBackoff` is a top-level generic helper extracted from `CalendarService`
+  // so the retry policy is unit-testable without a live Google Calendar API.
+  group('withBackoff', () {
+    test('retries on 429 then succeeds', () async {
+      int calls = 0;
+      Future<String> query() async {
+        calls++;
+        if (calls < 3) throw Exception('429 rate limit');
+        return 'ok';
+      }
+
+      final result = await withBackoff(query);
+
+      expect(result, 'ok');
+      expect(calls, 3);
+    });
+
+    test('retries on 503 then succeeds', () async {
+      int calls = 0;
+      Future<String> query() async {
+        calls++;
+        if (calls < 2) throw Exception('503 service unavailable');
+        return 'ok';
+      }
+
+      final result = await withBackoff(query);
+
+      expect(result, 'ok');
+      expect(calls, 2);
+    });
+
+    test('does NOT retry non-retriable errors (404)', () async {
+      int calls = 0;
+      Future<String> query() async {
+        calls++;
+        throw Exception('not found 404');
+      }
+
+      await expectLater(withBackoff(query), throwsException);
+      expect(calls, 1);
+    });
+
+    test('gives up after maxAttempts (4) on persistent 429', () async {
+      int calls = 0;
+      Future<String> query() async {
+        calls++;
+        throw Exception('429 rate limit');
+      }
+
+      await expectLater(withBackoff(query), throwsException);
+      expect(calls, 4); // 1 initial + 3 retries
     });
   });
 }

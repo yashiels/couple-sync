@@ -5,10 +5,22 @@ void main() {
   final computedAt = DateTime.utc(2026, 4, 7, 12, 0, 0);
 
   // Fixed epoch values for predictable tests
-  final windowStartUtc =
-      DateTime.utc(2026, 4, 8, 9, 0, 0).millisecondsSinceEpoch;
-  final windowEndUtc =
-      DateTime.utc(2026, 4, 8, 10, 0, 0).millisecondsSinceEpoch;
+  final windowStartUtc = DateTime.utc(
+    2026,
+    4,
+    8,
+    9,
+    0,
+    0,
+  ).millisecondsSinceEpoch;
+  final windowEndUtc = DateTime.utc(
+    2026,
+    4,
+    8,
+    10,
+    0,
+    0,
+  ).millisecondsSinceEpoch;
 
   OverlapWindow createTestWindow({
     int? startUtc,
@@ -28,14 +40,14 @@ void main() {
 
   OverlapResult createTestResult({
     List<OverlapWindow>? windows,
-    String blockHashA = 'hash-a-111',
-    String blockHashB = 'hash-b-222',
+    String inputHash = 'hash-a-111',
+    String? computedBy,
   }) {
     return OverlapResult(
       windows: windows ?? [createTestWindow()],
       computedAt: computedAt,
-      blockHashA: blockHashA,
-      blockHashB: blockHashB,
+      inputHash: inputHash,
+      computedBy: computedBy,
     );
   }
 
@@ -151,8 +163,8 @@ void main() {
         expect(restored.windows.length, 1);
         expect(restored.windows.first, result.windows.first);
         expect(restored.computedAt.toUtc(), result.computedAt.toUtc());
-        expect(restored.blockHashA, result.blockHashA);
-        expect(restored.blockHashB, result.blockHashB);
+        expect(restored.inputHash, result.inputHash);
+        expect(restored.computedBy, result.computedBy);
       });
 
       test('handles empty windows list', () {
@@ -173,8 +185,7 @@ void main() {
       test('serializes multiple windows correctly', () {
         final w1 = createTestWindow(score: 0.9);
         final w2 = createTestWindow(
-          startUtc:
-              DateTime.utc(2026, 4, 9, 14, 0, 0).millisecondsSinceEpoch,
+          startUtc: DateTime.utc(2026, 4, 9, 14, 0, 0).millisecondsSinceEpoch,
           endUtc: DateTime.utc(2026, 4, 9, 15, 0, 0).millisecondsSinceEpoch,
           score: 0.6,
         );
@@ -189,11 +200,11 @@ void main() {
     });
 
     group('copyWith', () {
-      test('copies with new blockHashA', () {
+      test('copies with new inputHash', () {
         final result = createTestResult();
-        final copy = result.copyWith(blockHashA: 'new-hash-a');
-        expect(copy.blockHashA, 'new-hash-a');
-        expect(copy.blockHashB, result.blockHashB);
+        final copy = result.copyWith(inputHash: 'new-hash-a');
+        expect(copy.inputHash, 'new-hash-a');
+        expect(copy.computedBy, result.computedBy);
       });
 
       test('copies with new windows list', () {
@@ -205,9 +216,10 @@ void main() {
       });
 
       test('preserves windows when not updating', () {
-        final result =
-            createTestResult(windows: [createTestWindow(), createTestWindow()]);
-        final copy = result.copyWith(blockHashA: 'updated');
+        final result = createTestResult(
+          windows: [createTestWindow(), createTestWindow()],
+        );
+        final copy = result.copyWith(inputHash: 'updated');
         expect(copy.windows.length, 2);
       });
     });
@@ -220,9 +232,9 @@ void main() {
         expect(a.hashCode, equals(b.hashCode));
       });
 
-      test('different blockHashA is not equal', () {
-        final a = createTestResult(blockHashA: 'hash-a');
-        final b = createTestResult(blockHashA: 'hash-b');
+      test('different inputHash is not equal', () {
+        final a = createTestResult(inputHash: 'hash-a');
+        final b = createTestResult(inputHash: 'hash-b');
         expect(a, isNot(equals(b)));
       });
 
@@ -236,10 +248,14 @@ void main() {
     group('computed properties', () {
       test('nextWindow returns first window starting after now', () {
         final futureWindow = createTestWindow(
-          startUtc:
-              DateTime.now().toUtc().add(const Duration(hours: 1)).millisecondsSinceEpoch,
-          endUtc:
-              DateTime.now().toUtc().add(const Duration(hours: 2)).millisecondsSinceEpoch,
+          startUtc: DateTime.now()
+              .toUtc()
+              .add(const Duration(hours: 1))
+              .millisecondsSinceEpoch,
+          endUtc: DateTime.now()
+              .toUtc()
+              .add(const Duration(hours: 2))
+              .millisecondsSinceEpoch,
         );
         final result = createTestResult(windows: [futureWindow]);
         expect(result.nextWindow, equals(futureWindow));
@@ -247,8 +263,7 @@ void main() {
 
       test('nextWindow returns null when all windows are in the past', () {
         final pastWindow = createTestWindow(
-          startUtc:
-              DateTime.utc(2025, 1, 1, 9, 0, 0).millisecondsSinceEpoch,
+          startUtc: DateTime.utc(2025, 1, 1, 9, 0, 0).millisecondsSinceEpoch,
           endUtc: DateTime.utc(2025, 1, 1, 10, 0, 0).millisecondsSinceEpoch,
         );
         final result = createTestResult(windows: [pastWindow]);
@@ -263,8 +278,7 @@ void main() {
       test('windowsByScore sorts descending', () {
         final low = createTestWindow(score: 0.3);
         final high = createTestWindow(
-          startUtc:
-              DateTime.utc(2026, 4, 9, 9, 0, 0).millisecondsSinceEpoch,
+          startUtc: DateTime.utc(2026, 4, 9, 9, 0, 0).millisecondsSinceEpoch,
           endUtc: DateTime.utc(2026, 4, 9, 10, 0, 0).millisecondsSinceEpoch,
           score: 0.9,
         );
@@ -276,8 +290,7 @@ void main() {
 
       test('windowsByTime sorts ascending by startUtc', () {
         final later = createTestWindow(
-          startUtc:
-              DateTime.utc(2026, 4, 9, 14, 0, 0).millisecondsSinceEpoch,
+          startUtc: DateTime.utc(2026, 4, 9, 14, 0, 0).millisecondsSinceEpoch,
           endUtc: DateTime.utc(2026, 4, 9, 15, 0, 0).millisecondsSinceEpoch,
         );
         final earlier = createTestWindow(
@@ -293,8 +306,7 @@ void main() {
       test('windowsByScore does not mutate original list', () {
         final w1 = createTestWindow(score: 0.3);
         final w2 = createTestWindow(
-          startUtc:
-              DateTime.utc(2026, 4, 9, 9, 0, 0).millisecondsSinceEpoch,
+          startUtc: DateTime.utc(2026, 4, 9, 9, 0, 0).millisecondsSinceEpoch,
           endUtc: DateTime.utc(2026, 4, 9, 10, 0, 0).millisecondsSinceEpoch,
           score: 0.9,
         );

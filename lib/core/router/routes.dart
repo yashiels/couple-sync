@@ -44,9 +44,9 @@ class BlockFormArgs {
   const BlockFormArgs({this.blockId, this.initialDate});
 
   Map<String, dynamic> toMap() => {
-        'blockId': blockId,
-        'initialDate': initialDate?.toIso8601String(),
-      };
+    'blockId': blockId,
+    'initialDate': initialDate?.toIso8601String(),
+  };
 
   factory BlockFormArgs.fromMap(Map<String, dynamic> map) {
     return BlockFormArgs(
@@ -67,11 +67,12 @@ extension GoRouterNavigation on GoRouter {
   void goToCalendar() => go(AppRoutes.calendar);
   void goToBlocks() => go(AppRoutes.blocks);
   void goToBlockForm({String? blockId, DateTime? initialDate}) {
-    go(AppRoutes.blockForm, extra: BlockFormArgs(
-      blockId: blockId,
-      initialDate: initialDate,
-    ));
+    go(
+      AppRoutes.blockForm,
+      extra: BlockFormArgs(blockId: blockId, initialDate: initialDate),
+    );
   }
+
   void goToOverlap() => go(AppRoutes.overlap);
   void goToSettings() => go(AppRoutes.settings);
 }

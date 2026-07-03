@@ -11,19 +11,11 @@ Widget _buildSubject() {
   return ProviderScope(
     overrides: [
       currentUserIdProvider.overrideWithValue('test-user-123'),
-      userBlocksProvider.overrideWith(
-        (ref) => Stream.value(<TimeBlock>[]),
-      ),
-      partnerBlocksProvider.overrideWith(
-        (ref) => Stream.value(<TimeBlock>[]),
-      ),
-      overlapWindowsProvider.overrideWith(
-        (ref) => Stream.value(null),
-      ),
+      userBlocksProvider.overrideWith((ref) => Stream.value(<TimeBlock>[])),
+      partnerBlocksProvider.overrideWith((ref) => Stream.value(<TimeBlock>[])),
+      overlapWindowsProvider.overrideWith((ref) => Stream.value(null)),
     ],
-    child: const MaterialApp(
-      home: CalendarScreen(),
-    ),
+    child: const MaterialApp(home: CalendarScreen()),
   );
 }
 

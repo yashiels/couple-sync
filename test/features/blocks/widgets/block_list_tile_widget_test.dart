@@ -1,4 +1,5 @@
 import 'package:couple_sync/core/models/time_block.dart';
+import 'package:couple_sync/core/utils/format_utils.dart';
 import 'package:couple_sync/features/blocks/widgets/block_list_tile_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -71,8 +72,9 @@ void main() {
       expect(find.text('Partner'), findsNothing);
     });
 
-    testWidgets('displays "Partner" when isCurrentUser is false',
-        (tester) async {
+    testWidgets('displays "Partner" when isCurrentUser is false', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _buildSubject(block: _makeBlock(), isCurrentUser: false),
       );
@@ -83,9 +85,7 @@ void main() {
 
     testWidgets('displays Manual badge for manual source', (tester) async {
       await tester.pumpWidget(
-        _buildSubject(
-          block: _makeBlock(source: TimeBlockSource.manual),
-        ),
+        _buildSubject(block: _makeBlock(source: TimeBlockSource.manual)),
       );
 
       expect(find.text('Manual'), findsOneWidget);
@@ -94,9 +94,7 @@ void main() {
 
     testWidgets('displays Google badge for google source', (tester) async {
       await tester.pumpWidget(
-        _buildSubject(
-          block: _makeBlock(source: TimeBlockSource.google),
-        ),
+        _buildSubject(block: _makeBlock(source: TimeBlockSource.google)),
       );
 
       expect(find.text('Google'), findsOneWidget);
@@ -112,10 +110,7 @@ void main() {
     testWidgets('calls onTap when tapped', (tester) async {
       var tapped = false;
       await tester.pumpWidget(
-        _buildSubject(
-          block: _makeBlock(),
-          onTap: () => tapped = true,
-        ),
+        _buildSubject(block: _makeBlock(), onTap: () => tapped = true),
       );
 
       await tester.tap(find.byType(InkWell));
@@ -133,9 +128,14 @@ void main() {
         ),
       );
 
-      // Same day: "15 Jun • 09:00 - 10:30"
+      // C3: same day uses locale-aware 12h time (formatTimeHm = DateFormat.jm()).
+      // Note: jm() emits a NARROW NO-BREAK SPACE (U+202F) before the am/pm
+      // marker, so compare against the formatter output rather than a literal.
+      final startDt = DateTime(2024, 6, 15, 9, 0);
+      final endDt = DateTime(2024, 6, 15, 10, 30);
       expect(find.textContaining('15 Jun'), findsOneWidget);
-      expect(find.textContaining('09:00 - 10:30'), findsOneWidget);
+      expect(find.textContaining(formatTimeHm(startDt)), findsOneWidget);
+      expect(find.textContaining(formatTimeHm(endDt)), findsOneWidget);
     });
 
     testWidgets('formats cross-day time range correctly', (tester) async {

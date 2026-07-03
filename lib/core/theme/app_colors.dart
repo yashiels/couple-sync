@@ -45,12 +45,6 @@ class AppColors {
   /// On surface variant
   static const Color onSurfaceVariantLight = Color(0xFF49454F);
 
-  /// Background color
-  static const Color backgroundLight = Color(0xFFFFFBFE);
-
-  /// On background
-  static const Color onBackgroundLight = Color(0xFF1C1B1F);
-
   /// Error color
   static const Color errorLight = Color(0xFFB3261E);
 
@@ -118,12 +112,6 @@ class AppColors {
 
   /// On surface variant
   static const Color onSurfaceVariantDark = Color(0xFFCAC4D0);
-
-  /// Background color
-  static const Color backgroundDark = Color(0xFF1C1B1F);
-
-  /// On background
-  static const Color onBackgroundDark = Color(0xFFE6E1E5);
 
   /// Error color
   static const Color errorDark = Color(0xFFF2B8B5);

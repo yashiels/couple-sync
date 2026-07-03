@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:couple_sync/core/models/user_model.dart';
 import 'package:couple_sync/services/auth_service.dart';
 import 'package:couple_sync/services/providers/auth_state_provider.dart';
@@ -10,22 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
-@GenerateMocks([
-  FirebaseAuth,
-  FirebaseFirestore,
-  AuthService,
-  User,
-], customMocks: [
-  MockSpec<CollectionReference<Map<String, dynamic>>>(
-    as: #MockCollectionReferenceMap,
-  ),
-  MockSpec<DocumentReference<Map<String, dynamic>>>(
-    as: #MockDocumentReferenceMap,
-  ),
-  MockSpec<DocumentSnapshot<Map<String, dynamic>>>(
-    as: #MockDocumentSnapshotMap,
-  ),
-])
+@GenerateMocks([FirebaseAuth, AuthService, User])
 import 'auth_state_provider_test.mocks.dart';
 
 void main() {
@@ -161,26 +145,28 @@ void main() {
 
   group('AuthStateNotifier', () {
     late MockFirebaseAuth mockAuth;
-    late MockFirebaseFirestore mockFirestore;
     late MockAuthService mockAuthService;
-    late MockCollectionReferenceMap mockUsersCollection;
-    late MockDocumentReferenceMap mockUserDoc;
-    late MockDocumentSnapshotMap mockDocSnapshot;
     late StreamController<User?> authStreamController;
+
+    /// Fetch calls recorded by the injected [fetchProfile]. Each entry is the
+    /// uid passed to the callback.
+    final List<String> fetchCalls = [];
+
+    /// Controls what the next [fetchProfile] call returns.
+    UserModel? nextProfile;
+    Object? nextError;
 
     setUp(() {
       mockAuth = MockFirebaseAuth();
-      mockFirestore = MockFirebaseFirestore();
       mockAuthService = MockAuthService();
-      mockUsersCollection = MockCollectionReferenceMap();
-      mockUserDoc = MockDocumentReferenceMap();
-      mockDocSnapshot = MockDocumentSnapshotMap();
       authStreamController = StreamController<User?>();
+      fetchCalls.clear();
+      nextProfile = null;
+      nextError = null;
 
-      when(mockAuth.authStateChanges())
-          .thenAnswer((_) => authStreamController.stream);
-      when(mockFirestore.collection('users'))
-          .thenReturn(mockUsersCollection);
+      when(
+        mockAuth.authStateChanges(),
+      ).thenAnswer((_) => authStreamController.stream);
     });
 
     tearDown(() {
@@ -190,14 +176,16 @@ void main() {
     AuthStateNotifier createNotifier() {
       return AuthStateNotifier(
         auth: mockAuth,
-        firestore: mockFirestore,
         authService: mockAuthService,
+        profileRetryDelay: Duration.zero,
+        fetchProfile: (uid) async {
+          fetchCalls.add(uid);
+          if (nextError != null) {
+            throw nextError!;
+          }
+          return nextProfile;
+        },
       );
-    }
-
-    void stubUserDoc(String uid) {
-      when(mockUsersCollection.doc(uid)).thenReturn(mockUserDoc);
-      when(mockUserDoc.get()).thenAnswer((_) async => mockDocSnapshot);
     }
 
     test('initial state is loading with no user', () {
@@ -218,26 +206,18 @@ void main() {
       expect(notifier.state.isLoading, isFalse);
     });
 
-    test('fetches profile when user signs in with existing doc', () async {
+    test('fetches profile when user signs in with existing profile', () async {
       final mockUser = MockUser();
       when(mockUser.uid).thenReturn('uid-123');
-      stubUserDoc('uid-123');
-      when(mockDocSnapshot.exists).thenReturn(true);
-      when(mockDocSnapshot.data()).thenReturn({
-        'email': 'test@example.com',
-        'displayName': 'Test User',
-        'photoUrl': null,
-        'timezone': 'America/New_York',
-        'coupleId': 'couple-abc',
-        'fcmTokens': <String>[],
-        'createdAt': Timestamp.fromDate(DateTime(2024, 1, 1)),
-      });
+      nextProfile = _createUserModel(
+        timezone: 'America/New_York',
+        coupleId: 'couple-abc',
+      );
 
       final notifier = createNotifier();
 
       authStreamController.add(mockUser);
       await Future.delayed(Duration.zero);
-      // Wait for async _fetchUserProfile to complete
       await Future.delayed(const Duration(milliseconds: 50));
 
       expect(notifier.state.isAuthenticated, isTrue);
@@ -247,50 +227,32 @@ void main() {
       expect(notifier.state.userProfile!.timezone, 'America/New_York');
       expect(notifier.state.userProfile!.coupleId, 'couple-abc');
       expect(notifier.state.isLoading, isFalse);
+      expect(fetchCalls, contains('uid-123'));
     });
 
-    test('sets null profile when user doc does not exist', () async {
+    test('sets null profile when backend returns null after retry', () async {
       final mockUser = MockUser();
       when(mockUser.uid).thenReturn('uid-new');
-      stubUserDoc('uid-new');
-      when(mockDocSnapshot.exists).thenReturn(false);
+      // fetchProfile returns null by default → triggers one retry then null.
+      nextProfile = null;
 
       final notifier = createNotifier();
 
       authStreamController.add(mockUser);
-      // Wait for retry delay (1.5s) + buffer
-      await Future.delayed(const Duration(milliseconds: 2000));
+      // Retry delay is Duration.zero; two fetch calls resolve within a couple
+      // of microtasks.
+      await Future.delayed(const Duration(milliseconds: 50));
 
       expect(notifier.state.isAuthenticated, isTrue);
       expect(notifier.state.userProfile, isNull);
       expect(notifier.state.isLoading, isFalse);
+      expect(fetchCalls, contains('uid-new'));
     });
 
-    test('sets null profile when doc exists but data is null', () async {
-      final mockUser = MockUser();
-      when(mockUser.uid).thenReturn('uid-null');
-      stubUserDoc('uid-null');
-      when(mockDocSnapshot.exists).thenReturn(true);
-      when(mockDocSnapshot.data()).thenReturn(null);
-
-      final notifier = createNotifier();
-
-      authStreamController.add(mockUser);
-      await Future.delayed(const Duration(milliseconds: 2000));
-
-      expect(notifier.state.isAuthenticated, isTrue);
-      expect(notifier.state.userProfile, isNull);
-      expect(notifier.state.isLoading, isFalse);
-    });
-
-    test('handles Firestore fetch error gracefully', () async {
+    test('handles fetch error gracefully', () async {
       final mockUser = MockUser();
       when(mockUser.uid).thenReturn('uid-err');
-      when(mockUsersCollection.doc('uid-err')).thenReturn(mockUserDoc);
-      when(mockUserDoc.get()).thenThrow(FirebaseException(
-        plugin: 'firestore',
-        message: 'Permission denied',
-      ));
+      nextError = Exception('Permission denied');
 
       final notifier = createNotifier();
 
@@ -303,53 +265,41 @@ void main() {
     });
 
     group('refreshProfile', () {
-      test('refetches profile from Firestore', () async {
+      test('refetches profile from the backend', () async {
         final mockUser = MockUser();
         when(mockUser.uid).thenReturn('uid-refresh');
-        stubUserDoc('uid-refresh');
-        when(mockDocSnapshot.exists).thenReturn(true);
-        when(mockDocSnapshot.data()).thenReturn({
-          'email': 'test@example.com',
-          'displayName': 'Test User',
-          'photoUrl': null,
-          'timezone': 'Europe/London',
-          'coupleId': null,
-          'fcmTokens': <String>[],
-          'createdAt': Timestamp.fromDate(DateTime(2024, 1, 1)),
-        });
+        nextProfile = _createUserModel(timezone: 'Europe/London');
 
         final notifier = createNotifier();
 
-        // First, sign in
         authStreamController.add(mockUser);
         await Future.delayed(const Duration(milliseconds: 50));
 
-        // Then refresh
+        fetchCalls.clear();
         await notifier.refreshProfile();
 
         expect(notifier.state.userProfile!.timezone, 'Europe/London');
         expect(notifier.state.isLoading, isFalse);
-        // get() called twice: once from auth stream, once from refresh
-        verify(mockUserDoc.get()).called(2);
+        expect(fetchCalls, contains('uid-refresh'));
       });
 
       test('does nothing when not authenticated', () async {
         final notifier = createNotifier();
 
-        // Sign out first
         authStreamController.add(null);
         await Future.delayed(Duration.zero);
 
         await notifier.refreshProfile();
 
-        verifyNever(mockUserDoc.get());
+        expect(fetchCalls, isEmpty);
       });
     });
 
     group('signInWithGoogle', () {
       test('returns true on success', () async {
-        when(mockAuthService.signInWithGoogle())
-            .thenAnswer((_) async => MockUser());
+        when(
+          mockAuthService.signInWithGoogle(),
+        ).thenAnswer((_) async => MockUser());
 
         final notifier = createNotifier();
         final result = await notifier.signInWithGoogle();
@@ -373,8 +323,9 @@ void main() {
 
     group('signInWithApple', () {
       test('returns true on success', () async {
-        when(mockAuthService.signInWithApple())
-            .thenAnswer((_) async => MockUser());
+        when(
+          mockAuthService.signInWithApple(),
+        ).thenAnswer((_) async => MockUser());
 
         final notifier = createNotifier();
         final result = await notifier.signInWithApple();
@@ -426,9 +377,9 @@ void main() {
       });
 
       test('clearError resets lastError to null', () async {
-        when(mockAuthService.signInWithGoogle()).thenThrow(
-          const AuthException(code: 'err', message: 'Error'),
-        );
+        when(
+          mockAuthService.signInWithGoogle(),
+        ).thenThrow(const AuthException(code: 'err', message: 'Error'));
 
         final notifier = createNotifier();
         await notifier.signInWithGoogle();
@@ -439,17 +390,18 @@ void main() {
       });
 
       test('signInWithGoogle clears previous error on new attempt', () async {
-        when(mockAuthService.signInWithGoogle()).thenThrow(
-          const AuthException(code: 'err', message: 'First error'),
-        );
+        when(
+          mockAuthService.signInWithGoogle(),
+        ).thenThrow(const AuthException(code: 'err', message: 'First error'));
 
         final notifier = createNotifier();
         await notifier.signInWithGoogle();
         expect(notifier.lastError, 'First error');
 
         // Second attempt succeeds
-        when(mockAuthService.signInWithGoogle())
-            .thenAnswer((_) async => MockUser());
+        when(
+          mockAuthService.signInWithGoogle(),
+        ).thenAnswer((_) async => MockUser());
         await notifier.signInWithGoogle();
         expect(notifier.lastError, isNull);
       });
@@ -490,9 +442,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           authStateProvider.overrideWith(
-            (ref) => _FakeAuthStateNotifier(
-              const AuthState(isLoading: false),
-            ),
+            (ref) => _FakeAuthStateNotifier(const AuthState(isLoading: false)),
           ),
         ],
       );
@@ -521,9 +471,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           authStateProvider.overrideWith(
-            (ref) => _FakeAuthStateNotifier(
-              const AuthState(isLoading: false),
-            ),
+            (ref) => _FakeAuthStateNotifier(const AuthState(isLoading: false)),
           ),
         ],
       );
@@ -533,11 +481,6 @@ void main() {
     });
 
     test('authServiceProvider returns an AuthService instance', () {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-
-      // This will throw because FirebaseAuth.instance requires initialization,
-      // but we can verify the provider type exists and is configured correctly
       expect(authServiceProvider, isA<Provider<AuthService>>());
     });
   });
@@ -593,6 +536,9 @@ class _FakeAuthStateNotifier extends StateNotifier<AuthState>
 
   @override
   Future<bool> signInWithApple() async => false;
+
+  @override
+  Future<bool> signInWithEmail(String email, String password) async => false;
 
   @override
   Future<void> signOut() async {}

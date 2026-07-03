@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:couple_sync/core/models/overlap_result.dart';
 import 'package:couple_sync/core/models/user_model.dart';
+import 'package:couple_sync/core/overlap/overlap_controller.dart';
 import 'package:couple_sync/features/overlap/screens/overlap_screen.dart';
 import 'package:couple_sync/features/overlap/widgets/window_card_widget.dart';
 import 'package:couple_sync/services/providers/auth_state_provider.dart';
@@ -36,14 +39,18 @@ List<OverlapWindow> _generateMockWindows() {
     final start = now.add(Duration(hours: startHour));
     final duration = [30, 60, 90, 120, 180][i % 5];
 
-    windows.add(OverlapWindow(
-      startUtc: start.toUtc().millisecondsSinceEpoch,
-      endUtc:
-          start.add(Duration(minutes: duration)).toUtc().millisecondsSinceEpoch,
-      durationMinutes: duration,
-      score: [10, 20, 30, 40, 50, 55][i % 6].toDouble(),
-      reasonableBoth: i % 2 == 0,
-    ));
+    windows.add(
+      OverlapWindow(
+        startUtc: start.toUtc().millisecondsSinceEpoch,
+        endUtc: start
+            .add(Duration(minutes: duration))
+            .toUtc()
+            .millisecondsSinceEpoch,
+        durationMinutes: duration,
+        score: [10, 20, 30, 40, 50, 55][i % 6].toDouble(),
+        reasonableBoth: i % 2 == 0,
+      ),
+    );
   }
 
   return windows;
@@ -57,45 +64,68 @@ Widget _buildSubject({
   bool overlapLoading = false,
   Object? overlapError,
 }) {
-  final user = userProfile ??
+  final user =
+      userProfile ??
       _makeUser(timezone: 'Africa/Johannesburg', coupleId: 'couple-1');
-  final partner = partnerProfile ??
+  final partner =
+      partnerProfile ??
       _makeUser(
         timezone: 'America/New_York',
         email: 'partner@test.com',
         displayName: 'Partner',
       );
-  final overlap = overlapResult ??
+  final overlap =
+      overlapResult ??
       OverlapResult(
         windows: _generateMockWindows(),
         computedAt: DateTime.now(),
-        blockHashA: 'hash_a',
-        blockHashB: 'hash_b',
+        inputHash: 'hash',
       );
 
   return ProviderScope(
     overrides: [
       currentUserProfileProvider.overrideWithValue(user),
-      partnerProfileProvider.overrideWith(
-        (ref) => Future.value(partner),
-      ),
-      if (overlapError != null)
-        overlapWindowsProvider.overrideWith(
-          (ref) => Stream.error(overlapError),
-        )
-      else if (overlapLoading)
-        overlapWindowsProvider.overrideWith(
-          (ref) => const Stream<OverlapResult?>.empty(),
-        )
-      else
-        overlapWindowsProvider.overrideWith(
-          (ref) => Stream.value(overlap),
+      partnerProfileProvider.overrideWith((ref) => Future.value(partner)),
+      // overlap_screen now reads overlapControllerProvider(coupleId) (the
+      // device-side AsyncNotifier), not overlapWindowsProvider. Override the
+      // family with a stub controller that returns the test OverlapResult.
+      overlapControllerProvider.overrideWith(
+        () => _StubOverlapController(
+          result: overlap,
+          error: overlapError,
+          loading: overlapLoading,
         ),
+      ),
     ],
-    child: const MaterialApp(
-      home: OverlapScreen(),
-    ),
+    child: const MaterialApp(home: OverlapScreen()),
   );
+}
+
+/// Test-only [OverlapController] that short-circuits [build] to return a fixed
+/// [OverlapResult] (or throw / hang) instead of wiring up Firestore streams.
+class _StubOverlapController extends OverlapController {
+  final OverlapResult? result;
+  final Object? error;
+  final bool loading;
+
+  _StubOverlapController({this.result, this.error, this.loading = false});
+
+  @override
+  Future<OverlapResult> build(String coupleId) {
+    if (error != null) throw error!;
+    if (loading) {
+      // Never-completing future keeps the provider in the loading state.
+      return Completer<OverlapResult>().future;
+    }
+    return Future.value(
+      result ??
+          OverlapResult(
+            windows: const [],
+            computedAt: DateTime.now(),
+            inputHash: '',
+          ),
+    );
+  }
 }
 
 void main() {
@@ -104,8 +134,9 @@ void main() {
   });
 
   group('OverlapScreen rendering', () {
-    testWidgets('displays app bar with "Mutual Free Time" title',
-        (tester) async {
+    testWidgets('displays app bar with "Mutual Free Time" title', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildSubject());
       await tester.pumpAndSettle();
       expect(find.text('Mutual Free Time'), findsOneWidget);
@@ -130,8 +161,9 @@ void main() {
       expect(cards.length, lessThanOrEqualTo(10));
     });
 
-    testWidgets('has a ListView.builder for scrollable content',
-        (tester) async {
+    testWidgets('has a ListView.builder for scrollable content', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildSubject());
       await tester.pumpAndSettle();
       expect(find.byType(ListView), findsOneWidget);
@@ -145,34 +177,42 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
 
-    testWidgets('shows error state with retry button on error',
-        (tester) async {
+    testWidgets('shows error state with retry button on error', (tester) async {
       await tester.pumpWidget(
-          _buildSubject(overlapError: Exception('Network error')));
+        _buildSubject(overlapError: Exception('Network error')),
+      );
       await tester.pumpAndSettle();
       expect(find.text('Something went wrong.'), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
     });
 
-    testWidgets('shows no couple message when user has no coupleId',
-        (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        userProfile: _makeUser(timezone: 'Africa/Johannesburg', coupleId: null),
-      ));
+    testWidgets('shows no couple message when user has no coupleId', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _buildSubject(
+          userProfile: _makeUser(
+            timezone: 'Africa/Johannesburg',
+            coupleId: null,
+          ),
+        ),
+      );
       await tester.pumpAndSettle();
       expect(find.text('No couple paired yet.'), findsOneWidget);
     });
 
-    testWidgets('shows no overlaps message when result has empty windows',
-        (tester) async {
-      await tester.pumpWidget(_buildSubject(
-        overlapResult: OverlapResult(
-          windows: const [],
-          computedAt: DateTime.now(),
-          blockHashA: 'a',
-          blockHashB: 'b',
+    testWidgets('shows no overlaps message when result has empty windows', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _buildSubject(
+          overlapResult: OverlapResult(
+            windows: const [],
+            computedAt: DateTime.now(),
+            inputHash: 'a',
+          ),
         ),
-      ));
+      );
       await tester.pumpAndSettle();
       expect(find.text('No overlap windows found.'), findsOneWidget);
     });
@@ -229,8 +269,9 @@ void main() {
       expect(find.text('Score'), findsOneWidget);
     });
 
-    testWidgets('filter dialog has Clear All and Apply buttons',
-        (tester) async {
+    testWidgets('filter dialog has Clear All and Apply buttons', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildSubject());
       await tester.pumpAndSettle();
 
@@ -254,8 +295,9 @@ void main() {
       expect(find.text('Filter & Sort'), findsNothing);
     });
 
-    testWidgets('selecting a duration filter shows filter summary bar',
-        (tester) async {
+    testWidgets('selecting a duration filter shows filter summary bar', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildSubject());
       await tester.pumpAndSettle();
 
@@ -273,8 +315,9 @@ void main() {
       expect(find.text('Min 1 hr'), findsOneWidget);
     });
 
-    testWidgets('selecting a score filter shows filter summary bar',
-        (tester) async {
+    testWidgets('selecting a score filter shows filter summary bar', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildSubject());
       await tester.pumpAndSettle();
 
@@ -352,8 +395,9 @@ void main() {
       expect(find.text('Window Details'), findsNothing);
     });
 
-    testWidgets('details dialog shows reasonable hours indicator',
-        (tester) async {
+    testWidgets('details dialog shows reasonable hours indicator', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildSubject());
       await tester.pumpAndSettle();
 
@@ -361,10 +405,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // First mock window has reasonableBoth = true (index 0, i % 2 == 0)
-      expect(
-        find.text('Reasonable hours for both'),
-        findsOneWidget,
-      );
+      expect(find.text('Reasonable hours for both'), findsOneWidget);
     });
   });
 }

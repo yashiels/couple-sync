@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/providers/auth_state_provider.dart';
@@ -14,7 +15,24 @@ class AuthScreen extends ConsumerStatefulWidget {
 class _AuthScreenState extends ConsumerState<AuthScreen> {
   bool _isGoogleLoading = false;
   bool _isAppleLoading = false;
+  bool _isEmailLoading = false;
   String? _errorMessage;
+
+  // ponytail: dev-only email controllers; only allocated when running against
+  // the Firebase emulators (USE_FIREBASE_EMULATOR dart-define). The prefilled
+  // credentials are guarded to debug+emulator builds so they can never leak
+  // into a release artifact.
+  static const _useEmulator = bool.fromEnvironment(
+    'USE_FIREBASE_EMULATOR',
+    defaultValue: false,
+  );
+  static const bool _allowDevCreds = kDebugMode && _useEmulator;
+  final TextEditingController _emailController = TextEditingController(
+    text: _allowDevCreds ? 'partnerA@example.com' : '',
+  );
+  final TextEditingController _passwordController = TextEditingController(
+    text: _allowDevCreds ? 'password123' : '',
+  );
 
   @override
   void initState() {
@@ -25,6 +43,35 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleEmailSignIn() async {
+    if (_isEmailLoading) return;
+    setState(() {
+      _isEmailLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final success = await ref
+          .read(authStateProvider.notifier)
+          .signInWithEmail(_emailController.text, _passwordController.text);
+      if (!success) {
+        _errorMessage = ref.read(authStateProvider.notifier).lastError;
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isEmailLoading = false;
+        });
+      }
+    }
+  }
+
   Future<void> _handleGoogleSignIn() async {
     if (_isGoogleLoading || _isAppleLoading) return;
 
@@ -33,7 +80,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       _errorMessage = null;
     });
 
-    final success = await ref.read(authStateProvider.notifier).signInWithGoogle();
+    final success = await ref
+        .read(authStateProvider.notifier)
+        .signInWithGoogle();
 
     if (mounted) {
       setState(() {
@@ -53,7 +102,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       _errorMessage = null;
     });
 
-    final success = await ref.read(authStateProvider.notifier).signInWithApple();
+    final success = await ref
+        .read(authStateProvider.notifier)
+        .signInWithApple();
 
     if (mounted) {
       setState(() {
@@ -170,7 +221,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   button: true,
                   enabled: !_isGoogleLoading && !_isAppleLoading,
                   label: 'Continue with Google',
-                  hint: _isGoogleLoading ? 'Signing in with Google' : 'Sign in using your Google account',
+                  hint: _isGoogleLoading
+                      ? 'Signing in with Google'
+                      : 'Sign in using your Google account',
                   child: _SignInButton(
                     text: 'Continue with Google',
                     icon: _buildGoogleIcon(),
@@ -185,7 +238,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   button: true,
                   enabled: !_isGoogleLoading && !_isAppleLoading,
                   label: 'Continue with Apple',
-                  hint: _isAppleLoading ? 'Signing in with Apple' : 'Sign in using your Apple ID',
+                  hint: _isAppleLoading
+                      ? 'Signing in with Apple'
+                      : 'Sign in using your Apple ID',
                   child: _SignInButton(
                     text: 'Continue with Apple',
                     icon: _buildAppleIcon(),
@@ -195,6 +250,50 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
+
+                // ponytail: dev-only email sign-in. Renders only against the
+                // Firebase emulators so prod auth stays Google/Apple-only.
+                if (_useEmulator) ...[
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'DEV — Emulator mode',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: colorScheme.error,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Password',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: _isEmailLoading ? null : _handleEmailSignIn,
+                    child: _isEmailLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Continue with Email (dev)'),
+                  ),
+                  const SizedBox(height: 32),
+                ],
 
                 // Terms and privacy
                 Text(
@@ -217,11 +316,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   }
 
   Widget _buildAppleIcon() {
-    return const Icon(
-      Icons.apple,
-      size: 20,
-      color: Colors.white,
-    );
+    return const Icon(Icons.apple, size: 20, color: Colors.white);
   }
 }
 
@@ -243,8 +338,6 @@ class _SignInButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Theme.of(context);
-
     // Apple button uses black background, Google uses white/outline
     final backgroundColor = isAppleButton ? Colors.black : Colors.white;
     final foregroundColor = isAppleButton ? Colors.white : Colors.black87;
@@ -301,7 +394,8 @@ class _SignInButton extends StatelessWidget {
   }
 }
 
-/// Google logo widget.
+/// Google logo widget — renders the official `assets/icons/google_g.png`
+/// asset instead of a hand-painted CustomPainter.
 class _GoogleLogo extends StatelessWidget {
   final double size;
 
@@ -312,86 +406,11 @@ class _GoogleLogo extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: CustomPaint(
-        painter: _GoogleLogoPainter(),
+      child: Image.asset(
+        'assets/icons/google_g.png',
+        fit: BoxFit.contain,
+        semanticLabel: 'Google logo',
       ),
     );
   }
-}
-
-/// Custom painter for the Google "G" logo.
-class _GoogleLogoPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..style = PaintingStyle.fill;
-
-    final width = size.width;
-    final height = size.height;
-    final strokeWidth = width * 0.12;
-
-    // Draw a simplified "G" using colored segments
-    final center = Offset(width / 2, height / 2);
-    final radius = width / 2 - strokeWidth / 2;
-
-    // Blue segment (right side and top right)
-    paint.color = const Color(0xFF4285F4);
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -1.5708, // Start at top
-      2.7489, // ~157 degrees
-      false,
-      paint..strokeWidth = strokeWidth..style = PaintingStyle.stroke..strokeCap = StrokeCap.round,
-    );
-
-    // Red segment (top left)
-    paint.color = const Color(0xFFEA4335);
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      1.1781, // ~67.5 degrees
-      0.7854, // ~45 degrees
-      false,
-      paint,
-    );
-
-    // Yellow segment (left side)
-    paint.color = const Color(0xFFFBBC05);
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      1.9635, // ~112.5 degrees
-      0.7854, // ~45 degrees
-      false,
-      paint,
-    );
-
-    // Green segment (bottom left)
-    paint.color = const Color(0xFF34A853);
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      2.7489, // ~157.5 degrees
-      0.7854, // ~45 degrees
-      false,
-      paint,
-    );
-
-    // Draw horizontal bar in center (part of "G")
-    paint.color = const Color(0xFF4285F4);
-    paint.style = PaintingStyle.fill;
-    final barWidth = width * 0.35;
-    final barHeight = strokeWidth;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          center.dx - barWidth * 0.3,
-          center.dy - barHeight / 2,
-          barWidth,
-          barHeight,
-        ),
-        Radius.circular(barHeight / 2),
-      ),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

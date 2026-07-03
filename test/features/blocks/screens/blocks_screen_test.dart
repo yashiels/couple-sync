@@ -5,9 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('BlocksScreen', () {
     Widget buildSubject() {
-      return const MaterialApp(
-        home: BlocksScreen(),
-      );
+      return const MaterialApp(home: BlocksScreen());
     }
 
     testWidgets('renders scaffold with app bar title', (tester) async {

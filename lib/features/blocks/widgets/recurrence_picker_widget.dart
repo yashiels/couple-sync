@@ -1,13 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// Recurrence frequency options
-enum RecurrenceFrequency {
-  none,
-  daily,
-  weekly,
-  monthly,
-  yearly,
-}
+enum RecurrenceFrequency { none, daily, weekly, monthly, yearly }
 
 /// Widget for picking recurrence patterns and generating RRULE strings.
 /// Supports daily, weekly, monthly, and yearly frequencies.
@@ -43,14 +37,14 @@ class _RecurrencePickerWidgetState extends State<RecurrencePickerWidget> {
   /// Parse an RRULE string and populate the state
   void _parseRRULE(String rrule) {
     final parts = rrule.split(';');
-    
+
     for (final part in parts) {
       final keyValue = part.split('=');
       if (keyValue.length != 2) continue;
-      
+
       final key = keyValue[0];
       final value = keyValue[1];
-      
+
       switch (key) {
         case 'FREQ':
           switch (value) {
@@ -198,7 +192,8 @@ class _RecurrencePickerWidgetState extends State<RecurrencePickerWidget> {
     }
 
     // Add weekdays for weekly frequency
-    if (_frequency == RecurrenceFrequency.weekly && _selectedWeekdays.isNotEmpty) {
+    if (_frequency == RecurrenceFrequency.weekly &&
+        _selectedWeekdays.isNotEmpty) {
       final days = _selectedWeekdays.toList()..sort();
       final dayStrings = days.map(_weekdayToString).join(',');
       parts.add('BYDAY=$dayStrings');
@@ -225,12 +220,9 @@ class _RecurrencePickerWidgetState extends State<RecurrencePickerWidget> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Recurrence',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
+        Text('Recurrence', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 12),
-        
+
         // Frequency dropdown
         DropdownButtonFormField<RecurrenceFrequency>(
           initialValue: _frequency,
@@ -271,10 +263,7 @@ class _RecurrencePickerWidgetState extends State<RecurrencePickerWidget> {
         // Weekday picker (only for weekly frequency)
         if (_frequency == RecurrenceFrequency.weekly) ...[
           const SizedBox(height: 16),
-          Text(
-            'Repeat on',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
+          Text('Repeat on', style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -313,10 +302,12 @@ class _RecurrencePickerWidgetState extends State<RecurrencePickerWidget> {
                     contentPadding: EdgeInsets.symmetric(horizontal: 12),
                   ),
                   items: List.generate(30, (index) => index + 1)
-                      .map((value) => DropdownMenuItem(
-                            value: value,
-                            child: Text('$value'),
-                          ))
+                      .map(
+                        (value) => DropdownMenuItem(
+                          value: value,
+                          child: Text('$value'),
+                        ),
+                      )
                       .toList(),
                   onChanged: (value) {
                     setState(() {

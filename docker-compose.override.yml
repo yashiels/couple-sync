@@ -1,0 +1,35 @@
+# Local-dev override — auto-merged by `docker compose up` (not used by Coolify,
+# which reads only docker-compose.yml). Adds a bundled Postgres + a localhost
+# port mapping + dev credentials so you can run the full stack locally without
+# a platform proxy.
+#
+# `docker compose up`           → merges this file (api + postgres, localhost:3000)
+# `docker compose -f docker-compose.yml up`  → production layout (api only, env-driven)
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: couple
+      POSTGRES_PASSWORD: couple
+      POSTGRES_DB: couplesync
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U couple -d couplesync"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  api:
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Literal dev DATABASE_URL — overrides the base compose's empty default.
+      DATABASE_URL: postgres://couple:couple@postgres:5432/couplesync
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:

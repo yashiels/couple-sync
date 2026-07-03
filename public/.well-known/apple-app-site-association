@@ -1,0 +1,14 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["TEAMID.BUNDLE"],
+        "components": [
+          { "/": "/invite/*", "comment": "Pairing deep link" },
+          { "/": "/*", "comment": "Catch-all open" }
+        ]
+      }
+    ]
+  }
+}

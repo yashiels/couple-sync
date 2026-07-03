@@ -1,10 +1,9 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../services/providers/auth_state_provider.dart';
-import '../../../services/providers/firestore_provider.dart';
+import '../../../services/providers/sync_provider.dart';
 
 /// Tab for sharing invite codes with partner.
 /// Generates a 6-character alphanumeric uppercase code that can be copied or shared.
@@ -28,11 +27,7 @@ class _ShareCodeTabState extends ConsumerState<ShareCodeTab> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.people_outline,
-            size: 64,
-            color: Colors.grey,
-          ),
+          const Icon(Icons.people_outline, size: 64, color: Colors.grey),
           const SizedBox(height: 24),
           Text(
             'Share Your Code',
@@ -75,10 +70,7 @@ class _ShareCodeTabState extends ConsumerState<ShareCodeTab> {
           // Display Code
           if (_inviteCode != null) ...[
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 32,
-                vertical: 24,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.primaryContainer,
                 borderRadius: BorderRadius.circular(12),
@@ -137,14 +129,8 @@ class _ShareCodeTabState extends ConsumerState<ShareCodeTab> {
     );
   }
 
-  /// Generates a random 6-character alphanumeric uppercase code.
-  String _generateRandomCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    final random = Random.secure();
-    return List.generate(6, (_) => chars[random.nextInt(chars.length)]).join();
-  }
-
-  /// Generates an invite code and stores it in Firestore.
+  /// Generates an invite code via the backend (POST /invites). The server
+  /// mintss the 6-char code and stores it with a 48h expiry.
   Future<void> _generateCode() async {
     setState(() {
       _isLoading = true;
@@ -157,16 +143,8 @@ class _ShareCodeTabState extends ConsumerState<ShareCodeTab> {
         throw Exception('Not authenticated');
       }
 
-      final code = _generateRandomCode();
-      final firestore = ref.read(firestoreServiceProvider);
-
-      // Create invite document with 7-day expiration
-      await firestore.createInvite(code, {
-        'code': code,
-        'createdByUid': uid,
-        'expiresAt': DateTime.now().add(const Duration(days: 7)).millisecondsSinceEpoch,
-        'status': 'pending',
-      });
+      final syncService = ref.read(syncServiceProvider);
+      final code = await syncService.createInvite(uid);
 
       setState(() {
         _inviteCode = code;
@@ -185,7 +163,7 @@ class _ShareCodeTabState extends ConsumerState<ShareCodeTab> {
     if (_inviteCode == null) return;
 
     await Clipboard.setData(ClipboardData(text: _inviteCode!));
-    
+
     setState(() {
       _showCopyConfirmation = true;
     });
