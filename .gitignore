@@ -14,6 +14,10 @@ plan-grill-report.md
 .pub/
 build/
 
+# Node
+node_modules/
+**/node_modules/
+
 # Android
 **/android/**/gradle-wrapper.jar
 **/android/.gradle
