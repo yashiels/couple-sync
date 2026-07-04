@@ -368,7 +368,9 @@ class _OverlapScreenState extends ConsumerState<OverlapScreen> {
               children: [
                 if (_minDurationMinutes != null)
                   FilterChip(
-                    label: Text('Min ${formatDurationMinutes(_minDurationMinutes!)}'),
+                    label: Text(
+                      'Min ${formatDurationMinutes(_minDurationMinutes!)}',
+                    ),
                     selected: true,
                     onSelected: (_) =>
                         setState(() => _minDurationMinutes = null),
