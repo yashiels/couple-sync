@@ -142,7 +142,9 @@ class _NextWindowCardState extends State<NextWindowCard> {
                 children: [
                   _buildInfoChip(
                     icon: Icons.schedule,
-                    label: formatDurationMinutes(widget.window!.durationMinutes),
+                    label: formatDurationMinutes(
+                      widget.window!.durationMinutes,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   _buildInfoChip(
@@ -274,5 +276,4 @@ class _NextWindowCardState extends State<NextWindowCard> {
       ],
     );
   }
-
 }
