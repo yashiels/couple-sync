@@ -9,7 +9,7 @@
 # - All runtime config is injected via environment — no committed .env.
 #
 # Coolify: set DATABASE_URL, FIREBASE_PROJECT_ID, FIREBASE_SERVICE_ACCOUNT_JSON,
-# (optional ADMIN_TOKEN) in the service's Environment panel.
+# and optionally ADMIN_TOKEN/CORS_ORIGINS in the service's Environment panel.
 services:
   api:
     build: ./backend
@@ -22,6 +22,7 @@ services:
       FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
       PORT: 3000
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
     expose:
       - "3000"
     labels:

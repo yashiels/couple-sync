@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
 import pino from 'pino';
 import { getConfig } from './config.js';
@@ -34,6 +35,12 @@ async function bootstrap() {
   initFirebaseAdmin();
 
   const app = Fastify({ logger: log });
+
+  await app.register(cors, {
+    origin: config.corsOrigins,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Authorization', 'Content-Type'],
+  });
 
   await app.register(websocket);
 
