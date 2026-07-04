@@ -46,21 +46,21 @@ void main() async {
     return;
   }
 
-  // Activate Firebase App Check. Debug providers are used in debug builds
-  // (incl. emulator sessions) so local dev stays frictionless; release builds
-  // use the platform-native attestation providers (DeviceCheck on iOS, Play
-  // Integrity on Android). Enforcement on Firestore writes + callables is
-  // configured in the Firebase Console (see docs/MANUAL_STEPS.md).
-  if (kDebugMode) {
-    await FirebaseAppCheck.instance.activate(
-      androidProvider: AndroidProvider.debug,
-      appleProvider: AppleProvider.debug,
-    );
-  } else {
-    await FirebaseAppCheck.instance.activate(
-      androidProvider: AndroidProvider.playIntegrity,
-      appleProvider: AppleProvider.deviceCheck,
-    );
+  // Activate Firebase App Check. Web requires a configured reCAPTCHA provider
+  // and site key; skip it until the Firebase console setup exists so the web
+  // shell can still boot behind Firebase Auth + the backend API.
+  if (!kIsWeb) {
+    if (kDebugMode) {
+      await FirebaseAppCheck.instance.activate(
+        androidProvider: AndroidProvider.debug,
+        appleProvider: AppleProvider.debug,
+      );
+    } else {
+      await FirebaseAppCheck.instance.activate(
+        androidProvider: AndroidProvider.playIntegrity,
+        appleProvider: AppleProvider.deviceCheck,
+      );
+    }
   }
 
   // ponytail: point Firebase Auth at the local emulator when the
