@@ -25,12 +25,27 @@ function parseIntOrDefault(name: string, fallback: number): number {
   return parsed;
 }
 
+function parseCorsOrigins(raw: string): true | string[] {
+  const value = raw.trim();
+  if (value === '*' || value.toLowerCase() === 'true') {
+    return true;
+  }
+
+  const origins = value
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+
+  return origins.length > 0 ? origins : true;
+}
+
 export interface Config {
   databaseUrl: string;
   firebaseProjectId: string;
   firebaseServiceAccountJson: string;
   port: number;
   adminToken: string | null;
+  corsOrigins: true | string[];
 }
 
 let cached: Config | null = null;
@@ -46,6 +61,10 @@ export function loadConfig(): Config {
     // admin routes are disabled (respond 503). Not the same as Firebase auth
     // — this is a simple ops escape hatch for manual cron triggers.
     adminToken: optional('ADMIN_TOKEN', ''),
+    // Browser clients use Authorization headers rather than ambient cookies.
+    // `*` is safe as a default, while Coolify prod can pin this to the web app
+    // domain with a comma-separated allowlist.
+    corsOrigins: parseCorsOrigins(optional('CORS_ORIGINS', '*')),
   };
   return cached;
 }

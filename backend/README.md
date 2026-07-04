@@ -7,6 +7,7 @@ See `docs/superpowers/specs/2026-07-02-vps-self-host-design.md` for the full des
 ## Stack
 
 - **Fastify** (HTTP REST) + `@fastify/websocket` (WS sync)
+- **@fastify/cors** (browser REST access for Flutter web)
 - **pg** → Postgres 16
 - **firebase-admin** (verify ID tokens, send FCM)
 - **node-cron** (invite cleanup)
@@ -55,6 +56,7 @@ The backend ships as a plain container app: the platform reverse proxy (Traefik 
    - `DATABASE_URL` — the managed Postgres connection string.
    - `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON`.
    - `ADMIN_TOKEN` (optional).
+   - `CORS_ORIGINS` (optional, defaults to `*`; set to the deployed web origin for prod hardening).
 4. **Add a domain** in the platform (Coolify: Settings → Domains). The proxy issues the TLS cert automatically.
 5. Push to the branch (`./deploy.sh` or `git push`) — the platform builds + rolls the container. **Migrations run automatically on start** (the image CMD runs `node dist/migrate.js` before `node dist/index.js`).
 6. Health: `curl https://<your-api-domain>/health`.
@@ -83,6 +85,7 @@ Loaded by `src/config.ts` (via `dotenv` locally; injected by the platform in pro
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | yes | — | Stringified JSON of the service-account key. |
 | `PORT` | no | `3000` | Container listen port. The platform proxy routes here. |
 | `ADMIN_TOKEN` | no | `""` | Shared secret for `POST /admin/*` (manual cron triggers). When empty, admin routes respond 503. |
+| `CORS_ORIGINS` | no | `*` | Browser origins allowed to call the REST API. Use a comma-separated allowlist such as `https://couple-sync.bumblebeefoundation.co.za,http://localhost:8080`. |
 
 ## API surface
 
