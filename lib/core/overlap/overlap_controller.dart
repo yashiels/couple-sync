@@ -129,7 +129,24 @@ class OverlapController
     // waiting for the poll. Re-resolves couple + both profiles (pairing/unpair)
     // or the partner profile (userUpdate: tz/prefs changed), then recomputes.
     _sessionEventSub = sync.watchSessionEvents(coupleId).listen((event) {
-      _resolveCoupleAndProfiles(sync, coupleId, myUid);
+      switch (event.type) {
+        // pairing/unpair change the couple's uids (or null the couple), so
+        // the default no-op-short-circuit path correctly re-fetches.
+        case CoupleSessionEventType.pairing:
+        case CoupleSessionEventType.unpair:
+          _resolveCoupleAndProfiles(sync, coupleId, myUid);
+          break;
+        // user:update means a partner's profile changed while couple
+        // membership is unchanged — the uid short-circuit would wrongly
+        // skip the refetch, so force it.
+        case CoupleSessionEventType.userUpdate:
+          _resolveCoupleAndProfiles(
+            sync,
+            coupleId,
+            myUid,
+            forceProfiles: true,
+          );
+      }
     });
 
     // Watch all blocks for the couple; partition by userId before computing.
@@ -158,14 +175,19 @@ class OverlapController
   Future<void> _resolveCoupleAndProfiles(
     SyncService sync,
     String coupleId,
-    String? myUid,
-  ) async {
+    String? myUid, {
+    bool forceProfiles = false,
+  }) async {
     try {
       final couple = await sync.getCouple(coupleId);
       if (couple == null) return;
       final userAUid = couple.userAUid;
       final userBUid = couple.userBUid;
-      if (userAUid == _userAUid && userBUid == _userBUid) return;
+      if (!forceProfiles &&
+          userAUid == _userAUid &&
+          userBUid == _userBUid) {
+        return;
+      }
       _userAUid = userAUid;
       _userBUid = userBUid;
 

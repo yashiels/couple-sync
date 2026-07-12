@@ -137,7 +137,7 @@ The server **does not compute overlap**. It validates, dedups, stores, and fans 
 
 **Bootstrap** (`backend/src/index.ts`): Fastify + `@fastify/cors` + `@fastify/websocket`, registers route plugins, starts the daily cleanup cron, and shuts down gracefully on SIGINT/SIGTERM.
 
-**Auth** (`backend/src/auth.ts`): `authenticate()` verifies the Firebase ID token from either the `Authorization: Bearer <token>` header (REST) or the `?token=` query param (WS handshake). `authPreHandler` is the Fastify preHandler that attaches the decoded token to `request.user`.
+**Auth** (`backend/src/auth.ts`): `authenticate()` verifies the Firebase ID token from either the `Authorization: Bearer <token>` header (REST) or the `?token=` query param (WS handshake) and returns the decoded `DecodedIdToken`. Route handlers call `authenticate(request)` directly (often via a local `getUid(request)` helper) to obtain the caller's `uid` — there is no Fastify `preHandler`.
 
 **Couple membership** (`backend/src/couples.ts`): `assertMember(coupleId, uid)` loads the couple row and throws `ForbiddenError` (403) if `uid` is neither `user_a_uid` nor `user_b_uid`. Non-existent couples also surface as 403 to avoid leaking existence. Every couple-scoped REST + WS path calls this.
 
@@ -147,7 +147,7 @@ The server **does not compute overlap**. It validates, dedups, stores, and fans 
 - `handleOverlapMessage()` — validate → dedup (inputHash) → upsert `overlaps_latest` → forward to partner's live socket or FCM-push + prune invalid tokens
 - `filterInvalidFcmTokens()` — only hard-invalid codes (`messaging/invalid-registration-token`, `messaging/registration-token-not-registered`) are pruned; transient errors are logged
 
-**WS sync** (`backend/src/routes/sync.ts`): `/sync` upgrade verifies the token, stashes `uid` on the socket, and authorizes every incoming message. `authorizeOverlapMessage` asserts `computedBy === socketUid`; the outer wrapper additionally calls `assertMember(coupleId, uid)`.
+**WS sync** (`backend/src/routes/sync.ts`): `/sync` upgrade verifies the token via `authenticate()` and captures the `uid` in a closure-scoped variable. A `sockets` Map (`uid` → `WebSocket`) tracks live connections for fan-out. `authorizeOverlapMessage` asserts `computedBy === socketUid`; the outer wrapper additionally calls `assertMember(coupleId, uid)`.
 
 **Cron** (`backend/src/cron.ts`): `node-cron` schedule at `0 3 * * *` UTC flips expired+pending invites to `status='expired'` (row preserved for audit + idempotent-redeem guards). `POST /admin/cleanup-invites` is the manual trigger, guarded by `ADMIN_TOKEN`.
 
@@ -261,7 +261,7 @@ Postgres schema (from `backend/src/migrations/001_init.sql`). All timestamps are
 - Coolify builds the `backend/Dockerfile` image on push (`deploy.sh` triggers the push; Coolify handles build + roll). The platform reverse proxy (Traefik on Coolify) terminates TLS and routes to the container's port 3000. **No Caddy, no host port binding** — `docker-compose.yml` only `expose`s 3000.
 - Postgres is provisioned as a separate managed resource on the platform; `DATABASE_URL` is injected.
 - Migrations run automatically on container start (image CMD: `node dist/migrate.js && node dist/index.js`).
-- GitHub Actions CI (`.github/workflows/ci.yml`) runs `flutter analyze` and `flutter test` on PRs and pushes to `main`. Backend pnpm CI is **not yet wired** — `ci.yml` still carries stale `functions/` jobs (`functions-lint-test`, `integration-test`) that target a directory which no longer exists; replacing them with a real backend pnpm job is tracked separately for a later task.
+- GitHub Actions CI (`.github/workflows/ci.yml`) runs `flutter analyze` + `flutter test` and a `backend-test` job (`cd backend && pnpm install && pnpm build && pnpm test`) on PRs and pushes to `main`.
 - Future: a separate v1-part-2 plan (issue #62) will move backend deploy to a self-hosted GHA runner on a Hetzner CX23. Out of scope here.
 
 **App stores**:
