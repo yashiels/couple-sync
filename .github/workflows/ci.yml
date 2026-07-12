@@ -47,29 +47,34 @@ jobs:
       - run: flutter pub get
       - run: flutter test
 
-  functions-lint-test:
+  backend-test:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
-    name: Functions Lint & Test
+    name: Backend Test
     runs-on: [self-hosted, Linux, X64, cosmos]
     timeout-minutes: 20
     defaults:
       run:
-        working-directory: functions
+        working-directory: backend
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm ci
-      - run: npm run lint
-      - run: npm test
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test
 
   build:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Build
     runs-on: [self-hosted, Linux, X64, android]
     timeout-minutes: 30
-    needs: [analyze, test, functions-lint-test]
+    needs: [analyze, test, backend-test]
     steps:
       - uses: actions/checkout@v6
       - uses: subosito/flutter-action@v2
