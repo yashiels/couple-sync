@@ -20,7 +20,7 @@ jobs:
   analyze:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Analyze
-    runs-on: [self-hosted, Linux, X64, cosmos]
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
@@ -35,7 +35,7 @@ jobs:
   test:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Test
-    runs-on: [self-hosted, Linux, X64, cosmos]
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
@@ -50,7 +50,7 @@ jobs:
   backend-test:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Backend Test
-    runs-on: [self-hosted, Linux, X64, cosmos]
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
       run:
