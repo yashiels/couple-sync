@@ -49,11 +49,3 @@ function extractToken(request: FastifyRequest): string | null {
   if (queryToken && queryToken.trim() !== '') return queryToken.trim();
   return null;
 }
-
-/**
- * Fastify preHandler that attaches the decoded token to `request.user`.
- * Use on REST routes that require auth.
- */
-export async function authPreHandler(request: FastifyRequest): Promise<void> {
-  (request as any).user = await authenticate(request);
-}

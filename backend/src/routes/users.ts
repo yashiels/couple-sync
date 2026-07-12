@@ -180,11 +180,13 @@ export const userRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: 'not_found', message: 'User not found' });
     }
     const row = res.rows[0];
-    const json = rowToJson(row, true);
+    // The PATCH response goes to the caller themself (self path) and may
+    // include fcmTokens. The user:update broadcast goes to the partner over
+    // the socket and MUST NOT leak fcmTokens — pass includeFcm=false there.
     if (row.couple_id) {
-      sendToCouple(row.couple_id, { t: 'user:update', user: json }, callerUid);
+      sendToCouple(row.couple_id, { t: 'user:update', user: rowToJson(row, false) }, callerUid);
     }
-    return reply.code(200).send(json);
+    return reply.code(200).send(rowToJson(row, true));
   });
 };
 

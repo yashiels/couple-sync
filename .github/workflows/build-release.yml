@@ -2,7 +2,7 @@
 # Triggers when a version tag (v*) is pushed.
 # Produces release APK and iOS build artifacts for store deployment.
 
-name: Build Release
+name: "Build: Release"
 
 on:
   push:
@@ -12,7 +12,7 @@ on:
 jobs:
   build-android:
     name: Build Android Release
-    runs-on: [self-hosted, Linux, X64, android]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 

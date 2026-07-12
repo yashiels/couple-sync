@@ -10,7 +10,7 @@
 #
 # NOTE: Fastlane is not yet set up. The upload steps contain TODO placeholders.
 
-name: Deploy to Stores
+name: "Deploy: Stores (manual)"
 
 on:
   workflow_dispatch:
@@ -23,7 +23,7 @@ on:
 jobs:
   deploy-play-store:
     name: Deploy to Play Store
-    runs-on: [self-hosted, Linux, X64, cosmos]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 

@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
+import { timingSafeEqual } from 'node:crypto';
 import cron from 'node-cron';
 import type { ScheduledTask } from 'node-cron';
 import type { Logger } from 'pino';
@@ -26,14 +27,18 @@ export async function cleanupExpiredInvites(): Promise<number> {
  * can stop it on shutdown.
  */
 export function startCleanupCron(log?: Logger): ScheduledTask {
-  const task = cron.schedule('0 3 * * *', async () => {
-    try {
-      const count = await cleanupExpiredInvites();
-      log?.info({ expired: count }, 'cleanupExpiredInvites tick');
-    } catch (err) {
-      log?.error({ err }, 'cleanupExpiredInvites failed');
-    }
-  });
+  const task = cron.schedule(
+    '0 3 * * *',
+    async () => {
+      try {
+        const count = await cleanupExpiredInvites();
+        log?.info({ expired: count }, 'cleanupExpiredInvites tick');
+      } catch (err) {
+        log?.error({ err }, 'cleanupExpiredInvites failed');
+      }
+    },
+    { timezone: 'UTC' }
+  );
   task.start();
   return task;
 }
@@ -51,7 +56,13 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     }
     const header = request.headers.authorization ?? '';
     const token = header.replace(/^Bearer\s+/i, '').trim();
-    if (!token || token !== expected) {
+    // Constant-time compare to avoid leaking the expected token length/value
+    // via an early-return timing delta. Guard the length first —
+    // timingSafeEqual throws on unequal-length Buffers.
+    const a = Buffer.from(token);
+    const b = Buffer.from(expected);
+    const ok = a.length === b.length && timingSafeEqual(a, b);
+    if (!token || !ok) {
       return reply.code(401).send({ error: 'unauthorized', message: 'Invalid admin token' });
     }
     try {

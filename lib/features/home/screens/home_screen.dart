@@ -142,7 +142,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           data: (partner) {
             final partnerTimezone = partner?.timezone ?? 'UTC';
-            final partnerName = partner?.displayName ?? 'Partner';
+            final partnerName = partner?.displayName ?? partner?.email ?? 'Partner';
 
             return overlapAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -282,7 +282,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               subtitle: const Text('Block out time in your schedule'),
               onTap: () {
                 Navigator.pop(context);
-                context.go(AppRoutes.blockForm);
+                context.push(AppRoutes.blockForm);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.view_list_outlined),
+              title: const Text('Manage Blocks'),
+              subtitle: const Text('View, filter, and edit existing blocks'),
+              onTap: () {
+                Navigator.pop(context);
+                context.push(AppRoutes.blocks);
               },
             ),
             ListTile(

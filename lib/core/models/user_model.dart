@@ -1,7 +1,7 @@
 /// User document model for users/{uid}
 class UserModel {
   final String email;
-  final String displayName;
+  final String? displayName;
   final String? photoUrl;
   final String timezone;
   final String? coupleId;
@@ -11,7 +11,7 @@ class UserModel {
 
   const UserModel({
     required this.email,
-    required this.displayName,
+    this.displayName,
     this.photoUrl,
     required this.timezone,
     this.coupleId,
@@ -23,7 +23,7 @@ class UserModel {
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       email: json['email'] as String,
-      displayName: json['displayName'] as String,
+      displayName: json['displayName'] as String?,
       photoUrl: json['photoUrl'] as String?,
       timezone: json['timezone'] as String,
       coupleId: json['coupleId'] as String?,
@@ -59,12 +59,13 @@ class UserModel {
     List<String>? fcmTokens,
     DateTime? createdAt,
     bool? showLateNightWindows,
+    bool clearDisplayName = false,
     bool clearPhotoUrl = false,
     bool clearCoupleId = false,
   }) {
     return UserModel(
       email: email ?? this.email,
-      displayName: displayName ?? this.displayName,
+      displayName: clearDisplayName ? null : (displayName ?? this.displayName),
       photoUrl: clearPhotoUrl ? null : (photoUrl ?? this.photoUrl),
       timezone: timezone ?? this.timezone,
       coupleId: clearCoupleId ? null : (coupleId ?? this.coupleId),

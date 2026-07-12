@@ -226,11 +226,6 @@ final authStateProvider = StateNotifierProvider<AuthStateNotifier, AuthState>((
   );
 });
 
-/// Convenience provider to check if app is loading auth state.
-final isLoadingProvider = Provider<bool>((ref) {
-  return ref.watch(authStateProvider).isLoading;
-});
-
 /// Convenience provider to get current user ID.
 final currentUserIdProvider = Provider<String?>((ref) {
   return ref.watch(authStateProvider).uid;
