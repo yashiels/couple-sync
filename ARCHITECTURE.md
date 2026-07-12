@@ -261,7 +261,7 @@ Postgres schema (from `backend/src/migrations/001_init.sql`). All timestamps are
 - Coolify builds the `backend/Dockerfile` image on push (`deploy.sh` triggers the push; Coolify handles build + roll). The platform reverse proxy (Traefik on Coolify) terminates TLS and routes to the container's port 3000. **No Caddy, no host port binding** — `docker-compose.yml` only `expose`s 3000.
 - Postgres is provisioned as a separate managed resource on the platform; `DATABASE_URL` is injected.
 - Migrations run automatically on container start (image CMD: `node dist/migrate.js && node dist/index.js`).
-- GitHub Actions CI (`.github/workflows/ci.yml`) runs `flutter analyze`, `flutter test`, and `cd backend && pnpm install && pnpm build && pnpm test` on PRs and pushes to `main`.
+- GitHub Actions CI (`.github/workflows/ci.yml`) runs `flutter analyze` and `flutter test` on PRs and pushes to `main`. Backend pnpm CI is **not yet wired** — `ci.yml` still carries stale `functions/` jobs (`functions-lint-test`, `integration-test`) that target a directory which no longer exists; replacing them with a real backend pnpm job is tracked separately for a later task.
 - Future: a separate v1-part-2 plan (issue #62) will move backend deploy to a self-hosted GHA runner on a Hetzner CX23. Out of scope here.
 
 **App stores**:
