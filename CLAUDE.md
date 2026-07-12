@@ -2,17 +2,18 @@
 
 ## Project Description
 
-Couple Schedule v1 — Mobile app (iOS + Android) for long-distance couples to find mutual free time. Google Calendar sync, manual blocks, server-side overlap computation with push notifications. **Rebuild after reset** with lessons from previous implementation.
+Couple Sync v1 — Mobile app (iOS + Android) for long-distance couples to find mutual free time. Google Calendar sync (freebusy only), manual time blocks, and **device-computed overlap windows** synced over WebSocket. **Rebuild after reset** with lessons from the previous implementation.
 
 ## Key Conventions
 
 - **Flutter + Riverpod**: State management via providers, no context dependency
 - **go_router**: Declarative routing with redirect guards for auth/onboarding flow
-- **Firestore subcollections**: TimeBlocks live under `timeblocks/{coupleId}/blocks/{blockId}`
-- **Timestamps**: All stored as UTC milliseconds since epoch (int, not Firestore Timestamp)
+- **Self-hosted backend**: Fastify + Postgres + WebSocket in `backend/` (no Firestore, no Cloud Functions)
+- **Device computes overlap**: the client computes overlap windows and publishes them over WS; the server only validates shape, dedups (`inputHash`), stores (`overlaps_latest`), and fans out (WS forward or FCM push)
+- **Timestamps**: All stored as UTC milliseconds since epoch (`BIGINT` in Postgres, `int` in Dart — never Firestore Timestamp)
 - **Timezone**: IANA timezone IDs stored per user and per block
 - **Privacy-first**: Google Calendar freebusy API only (no event titles)
-- **Free tier focus**: Minimize costs, Blaze plan but stay within free quotas
+- **Free tier focus**: Firebase Spark plan (Auth + FCM + hosting free); Postgres on a managed Docker platform
 
 ## Build / Test / Lint Commands
 
@@ -24,16 +25,18 @@ flutter build apk --debug          # Android debug build
 flutter test                       # Run unit/widget tests
 flutter analyze                    # Static analysis
 
-# Firebase
-firebase use nexion-ai-prod        # Select project
-firebase deploy --only functions   # Deploy Cloud Functions
-firebase deploy --only firestore   # Deploy rules + indexes
-firebase deploy                    # Deploy everything
+# Backend (backend/, self-hosted Fastify + Postgres + WebSocket)
+cd backend && pnpm install         # Install deps (pnpm, not npm)
+pnpm build                         # tsc → dist/
+pnpm test                          # vitest
+# No ESLint config yet — do not run `npm run lint` (it does not exist).
 
-# Cloud Functions (in functions/)
-npm install                        # Install dependencies
-npm run build                      # Compile TypeScript
-npm run lint                       # ESLint
+# Run locally (bundled postgres via docker-compose.override.yml)
+docker compose -f docker-compose.yml -f docker-compose.override.yml up -d --build
+#    api on http://localhost:3000 ; migrations run on container start
+
+# Deploy: Coolify auto-builds the backend/Dockerfile image on push (see deploy.sh).
+# No `firebase deploy --only functions` — there are no Cloud Functions.
 ```
 
 ## File Structure
@@ -59,29 +62,46 @@ lib/
 │   └── settings/          # SettingsScreen
 └── services/
     ├── auth_service.dart
-    ├── firestore_service.dart
+    ├── sync_service.dart        # REST + WS client, block cache, overlap compute + publish
     ├── calendar_service.dart
     └── notification_service.dart
 
-functions/
+backend/
 ├── src/
-│   ├── index.ts           # Export all 6 functions
-│   ├── onBlockWrite.ts    # Overlap computation
-│   ├── onOverlapWrite.ts  # Push notifications
-│   ├── onInviteCreate.ts  # Deep link generation
-│   ├── redeemInvite.ts    # Atomic pairing
-│   └── cleanupExpiredInvites.ts  # Scheduled cleanup
-└── package.json
+│   ├── index.ts            # Fastify + ws + cron bootstrap
+│   ├── config.ts           # env validation (DATABASE_URL, FIREBASE_*, ADMIN_TOKEN, CORS_ORIGINS)
+│   ├── db.ts               # pg.Pool singleton + query helper
+│   ├── firebase.ts         # Admin SDK init (Auth verify + FCM send)
+│   ├── auth.ts             # verifyIdToken (Bearer header or ?token= for WS)
+│   ├── couples.ts          # assertMember + getCoupleOr404 (couple-membership guard)
+│   ├── overlap.ts          # overlap WS handler (validate/dedup/broadcast/push)
+│   ├── cron.ts             # admin routes + daily 03:00 UTC invite cleanup
+│   ├── migrate.ts          # runs migrations/001_init.sql
+│   ├── migrations/
+│   │   └── 001_init.sql    # users, couples, invites, timeblocks, overlaps_latest
+│   └── routes/
+│       ├── auth.ts         # /auth/verify, /auth/fcm-token
+│       ├── sync.ts         # /sync (WS) + authorizeOverlapMessage (computedBy === socketUid)
+│       ├── blocks.ts       # /blocks CRUD + batch + WS broadcast
+│       ├── overlaps.ts     # /overlaps/latest (reconnect fetch)
+│       ├── users.ts        # user profile GET/PATCH
+│       ├── couples.ts      # /couples/:id, /couples/:id/unpair
+│       └── invites.ts      # /invites, /invites/:code/redeem
+├── Dockerfile              # multi-stage Node 22
+├── tsconfig.json
+├── vitest.config.ts
+└── package.json           # pnpm; scripts: build, dev, start, migrate, test
 ```
 
 ## Notes
 
-- **Firebase project**: `nexion-ai-prod` (reuse existing, verify before deploy)
-- **Cost monitoring**: Set GCP budget alert at $1/month
-- **Previous failures**: Auth complexity, calendar bugs, overlap errors — simplified in v1
-- **Security rules**: Couple membership verified via `get()` on parent couple doc (costs 1 read)
-- **Deep links**: Use native App Links / Universal Links (Firebase Dynamic Links deprecated Aug 2025)
-- **Apple Sign-In**: Requires paid Apple Developer account for iOS testing
+- **Firebase project**: `nexion-ai-prod` (Auth + FCM + hosting only — Spark plan, free). No Firestore, no Cloud Functions, no `firestore.rules`, no `firestore.indexes.json`.
+- **Data layer**: Postgres via the Fastify backend (`lib/services/sync_service.dart` is the client). Security enforced server-side via `backend/src/couples.ts assertMember()` on every REST + WS path; WS `overlap` messages additionally require `computedBy === socketUid`. There are no Firestore rules.
+- **Backend package manager**: pnpm (declared `packageManager` in `backend/package.json`). Do not use npm/yarn.
+- **Cost monitoring**: Firebase Spark plan is free for Auth + FCM + hosting; Postgres runs on a managed Docker platform (Coolify). Set a GCP budget alert at $1/month regardless.
+- **Previous failures**: Auth complexity, calendar bugs, overlap errors — simplified in v1 by moving overlap computation to the device and the backend to a thin validate/store/fan-out server.
+- **Deep links**: Native App Links / Universal Links served from Firebase Hosting (`firebase.json` `hosting.rewrites` for `/invite/**` → `/invite.html`); Firebase Dynamic Links deprecated Aug 2025.
+- **Apple Sign-In**: Requires paid Apple Developer account for iOS testing.
 
 ## Architecture
 
