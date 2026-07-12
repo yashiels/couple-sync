@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   email       TEXT NOT NULL,
   display_name TEXT,
   photo_url   TEXT,
-  timezone    TEXT NOT NULL DEFAULT 'UTC',
+  timezone    TEXT NOT NULL DEFAULT '',
   couple_id   TEXT,
   fcm_tokens  TEXT[] NOT NULL DEFAULT '{}',
   show_late_night_windows BOOLEAN NOT NULL DEFAULT FALSE,

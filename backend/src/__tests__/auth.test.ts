@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Auth routes tests.
@@ -225,5 +230,26 @@ describe('upsertUser / addFcmToken units', () => {
     const [sql, params] = mockQuery.mock.calls[0];
     expect(sql).toMatch(/array_remove/);
     expect(params).toEqual([UID, FCM]);
+  });
+});
+
+describe('users.timezone column default', () => {
+  // The DB pool is mocked across this suite, so the SQL column default
+  // can't be exercised through upsertUser + a SELECT here. The fix lives
+  // in the migration file, so this test asserts it directly: the default
+  // must be '' (not 'UTC') so new signups hit the timezone-onboarding
+  // guard (hasTimezone is false on ''). upsertUser's INSERT omits the
+  // timezone column, so the column default is exactly what new rows get.
+  it("defaults new users to '' so the onboarding guard fires (not 'UTC')", () => {
+    const sql = readFileSync(
+      join(__dirname, '..', 'migrations', '001_init.sql'),
+      'utf8',
+    );
+    const usersTzLine = sql
+      .split('\n')
+      .find((l) => /^\s*timezone\s+TEXT\s+NOT\s+NULL\s+DEFAULT/i.test(l));
+    expect(usersTzLine).toBeDefined();
+    expect(usersTzLine!).toMatch(/DEFAULT ''/);
+    expect(usersTzLine!).not.toMatch(/DEFAULT 'UTC'/);
   });
 });
