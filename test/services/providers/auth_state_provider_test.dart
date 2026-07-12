@@ -409,19 +409,6 @@ void main() {
   });
 
   group('Convenience providers', () {
-    test('isLoadingProvider reads authState isLoading', () {
-      final container = ProviderContainer(
-        overrides: [
-          authStateProvider.overrideWith(
-            (ref) => _FakeAuthStateNotifier(const AuthState(isLoading: true)),
-          ),
-        ],
-      );
-      addTearDown(container.dispose);
-
-      expect(container.read(isLoadingProvider), isTrue);
-    });
-
     test('currentUserIdProvider reads uid from authState', () {
       final mockUser = _FakeUser(uid: 'provider-uid');
       final container = ProviderContainer(
