@@ -198,6 +198,23 @@ export const inviteRoutes: FastifyPluginAsync = async (app) => {
         return sendError(reply, new BadRequestError('Cannot redeem your own invite code'));
       } else {
         // Happy path: create the couple, stamp the invite, link both users.
+        // Reject if either party is already in a couple — prevents orphaning an
+        // existing couple (the previous partner would be left pointing at a
+        // now-inactive couple with no notification). Placed in the happy path
+        // only so the idempotent-redeemed branch above still returns the
+        // existing coupleId for the two legitimate parties. The check queries
+        // both uids with IN ($1, $2) and does not indicate which was paired,
+        // so it doesn't leak which party is already taken.
+        const pairedCheck = await client.query<{ couple_id: string | null }>(
+          'SELECT couple_id FROM users WHERE uid IN ($1, $2)',
+          [invite.created_by_uid, uid]
+        );
+        for (const row of pairedCheck.rows) {
+          if (row.couple_id !== null) {
+            await client.query('ROLLBACK');
+            return reply.code(409).send({ error: 'conflict', message: 'User is already paired' });
+          }
+        }
         inviterUid = invite.created_by_uid;
         coupleId = crypto.randomUUID();
         const now = Date.now();
