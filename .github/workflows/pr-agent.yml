@@ -1,4 +1,4 @@
-name: PR Agent
+name: "CI: PR Agent"
 on:
   pull_request:
     types: [opened, reopened, ready_for_review, synchronize]
