@@ -223,6 +223,17 @@ describe('upsertUser / addFcmToken units', () => {
     expect(params[3]).toBe(PICTURE);
   });
 
+  it('upsertUser INSERT omits timezone so the column default applies', async () => {
+    mockQuery.mockResolvedValue({ rows: [makeUserRow()] });
+    await upsertUser(decodedToken);
+    const [sql] = mockQuery.mock.calls[0];
+    expect(sql).toMatch(/INSERT INTO users/);
+    // timezone must not be set explicitly — the DB column default ('') applies,
+    // which keeps new signups in the timezone-onboarding flow. If someone adds
+    // timezone to the INSERT (e.g. 'UTC'), this assertion fails.
+    expect(sql).not.toMatch(/timezone/i);
+  });
+
   it('addFcmToken dedups by removing-then-appending', async () => {
     mockQuery.mockResolvedValue({ rows: [] });
     await addFcmToken(UID, FCM);
