@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/models/time_block.dart';
-import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 
 /// Widget to display a time block event on the calendar.
@@ -20,10 +20,12 @@ class BlockEventWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     // Get category color
-    final categoryColor = _getCategoryColor(block.category, isDark);
+    final categoryColor = AppTheme.getCategoryColor(
+      block.category,
+      theme.brightness,
+    );
 
     // Apply opacity/alpha for visual distinction between user and partner
     final displayColor = isCurrentUser
@@ -83,48 +85,6 @@ class BlockEventWidget extends StatelessWidget {
     );
   }
 
-  /// Get color for block category
-  Color _getCategoryColor(TimeBlockCategory category, bool isDark) {
-    switch (category) {
-      case TimeBlockCategory.work:
-        return isDark
-            ? AppColors.categoryWorkDark
-            : AppColors.categoryWorkLight;
-      case TimeBlockCategory.study:
-        return isDark
-            ? AppColors.categoryStudyDark
-            : AppColors.categoryStudyLight;
-      case TimeBlockCategory.commute:
-        return isDark
-            ? AppColors.categoryCommuteDark
-            : AppColors.categoryCommuteLight;
-      case TimeBlockCategory.exercise:
-        return isDark
-            ? AppColors.categoryExerciseDark
-            : AppColors.categoryExerciseLight;
-      case TimeBlockCategory.social:
-        return isDark
-            ? AppColors.categorySocialDark
-            : AppColors.categorySocialLight;
-      case TimeBlockCategory.meals:
-        return isDark
-            ? AppColors.categoryMealsDark
-            : AppColors.categoryMealsLight;
-      case TimeBlockCategory.sleep:
-        return isDark
-            ? AppColors.categorySleepDark
-            : AppColors.categorySleepLight;
-      case TimeBlockCategory.personal:
-        return isDark
-            ? AppColors.categoryPersonalDark
-            : AppColors.categoryPersonalLight;
-      case TimeBlockCategory.other:
-        return isDark
-            ? AppColors.categoryOtherDark
-            : AppColors.categoryOtherLight;
-    }
-  }
-
   /// Get contrasting text color for background
   Color _getTextColor(Color backgroundColor) {
     // Calculate luminance to determine if text should be light or dark
@@ -154,8 +114,10 @@ class BlockDetailDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final categoryColor = _getCategoryColor(block.category, isDark);
+    final categoryColor = AppTheme.getCategoryColor(
+      block.category,
+      theme.brightness,
+    );
 
     final startTime = _formatTime(block.startDateTime.toLocal());
     final endTime = _formatTime(block.endDateTime.toLocal());
@@ -264,47 +226,6 @@ class BlockDetailDialog extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  Color _getCategoryColor(TimeBlockCategory category, bool isDark) {
-    switch (category) {
-      case TimeBlockCategory.work:
-        return isDark
-            ? AppColors.categoryWorkDark
-            : AppColors.categoryWorkLight;
-      case TimeBlockCategory.study:
-        return isDark
-            ? AppColors.categoryStudyDark
-            : AppColors.categoryStudyLight;
-      case TimeBlockCategory.commute:
-        return isDark
-            ? AppColors.categoryCommuteDark
-            : AppColors.categoryCommuteLight;
-      case TimeBlockCategory.exercise:
-        return isDark
-            ? AppColors.categoryExerciseDark
-            : AppColors.categoryExerciseLight;
-      case TimeBlockCategory.social:
-        return isDark
-            ? AppColors.categorySocialDark
-            : AppColors.categorySocialLight;
-      case TimeBlockCategory.meals:
-        return isDark
-            ? AppColors.categoryMealsDark
-            : AppColors.categoryMealsLight;
-      case TimeBlockCategory.sleep:
-        return isDark
-            ? AppColors.categorySleepDark
-            : AppColors.categorySleepLight;
-      case TimeBlockCategory.personal:
-        return isDark
-            ? AppColors.categoryPersonalDark
-            : AppColors.categoryPersonalLight;
-      case TimeBlockCategory.other:
-        return isDark
-            ? AppColors.categoryOtherDark
-            : AppColors.categoryOtherLight;
-    }
   }
 
   String _formatTime(DateTime dateTime) {

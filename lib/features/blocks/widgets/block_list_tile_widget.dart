@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/time_block.dart';
-import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/format_utils.dart';
 
 /// Widget to display a single time block in the block management list.
@@ -19,8 +19,10 @@ class BlockListTileWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final categoryColor = _getCategoryColor(block.category, isDark);
+    final categoryColor = AppTheme.getCategoryColor(
+      block.category,
+      Theme.of(context).brightness,
+    );
     final timeRange = _formatTimeRange();
 
     return Card(
@@ -134,48 +136,6 @@ class BlockListTileWidget extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  /// Get category color based on category and theme
-  Color _getCategoryColor(TimeBlockCategory category, bool isDark) {
-    switch (category) {
-      case TimeBlockCategory.work:
-        return isDark
-            ? AppColors.categoryWorkDark
-            : AppColors.categoryWorkLight;
-      case TimeBlockCategory.study:
-        return isDark
-            ? AppColors.categoryStudyDark
-            : AppColors.categoryStudyLight;
-      case TimeBlockCategory.commute:
-        return isDark
-            ? AppColors.categoryCommuteDark
-            : AppColors.categoryCommuteLight;
-      case TimeBlockCategory.exercise:
-        return isDark
-            ? AppColors.categoryExerciseDark
-            : AppColors.categoryExerciseLight;
-      case TimeBlockCategory.social:
-        return isDark
-            ? AppColors.categorySocialDark
-            : AppColors.categorySocialLight;
-      case TimeBlockCategory.meals:
-        return isDark
-            ? AppColors.categoryMealsDark
-            : AppColors.categoryMealsLight;
-      case TimeBlockCategory.sleep:
-        return isDark
-            ? AppColors.categorySleepDark
-            : AppColors.categorySleepLight;
-      case TimeBlockCategory.personal:
-        return isDark
-            ? AppColors.categoryPersonalDark
-            : AppColors.categoryPersonalLight;
-      case TimeBlockCategory.other:
-        return isDark
-            ? AppColors.categoryOtherDark
-            : AppColors.categoryOtherLight;
-    }
   }
 
   /// Format time range as "HH:mm - HH:mm"

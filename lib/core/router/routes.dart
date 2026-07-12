@@ -65,13 +65,6 @@ extension GoRouterNavigation on GoRouter {
   void goToPairing() => go(AppRoutes.pairing);
   void goToHome() => go(AppRoutes.home);
   void goToCalendar() => go(AppRoutes.calendar);
-  void goToBlocks() => go(AppRoutes.blocks);
-  void goToBlockForm({String? blockId, DateTime? initialDate}) {
-    go(
-      AppRoutes.blockForm,
-      extra: BlockFormArgs(blockId: blockId, initialDate: initialDate),
-    );
-  }
 
   void goToOverlap() => go(AppRoutes.overlap);
   void goToSettings() => go(AppRoutes.settings);
