@@ -1,4 +1,4 @@
-name: Rebase PRs
+name: "Admin: Rebase PRs"
 
 # Automatically rebases open PRs when main advances, and rebases a single PR
 # on demand when someone comments "/rebase" on it.

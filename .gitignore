@@ -98,3 +98,7 @@ coverage/
 # Local env (never commit secrets)
 .env
 env/*.local.json
+
+# pipeline / baseline artifacts
+.baseline-*
+*.gate.log

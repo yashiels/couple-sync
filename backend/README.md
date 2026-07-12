@@ -111,7 +111,7 @@ Loaded by `src/config.ts` (via `dotenv` locally; injected by the platform in pro
 
 ### WebSocket (`wss://api.../sync?token=<Firebase ID token>`)
 
-Auth: the token is verified on connect; the socket is closed with code `4001` on invalid token. The authed `uid` is stashed on the socket and used to authorize every incoming message.
+Auth: the token is verified on connect via `authenticate()`; the socket is closed with code `4001` on invalid token. The authed `uid` is captured in a closure-scoped variable and used to authorize every incoming message. A `sockets` Map (`uid` → `WebSocket`) tracks live connections for fan-out.
 
 Messages (JSON, tagged by `t`):
 
@@ -122,7 +122,7 @@ Messages (JSON, tagged by `t`):
 | server → client | `block:del` | `{ t, id }` | A block was deleted. |
 | server → client | `overlap` | `{ t, coupleId, windows, inputHash, computedBy }` | Forwarded partner-computed overlap. |
 | server → client | `unpair` | `{ t, coupleId }` | The couple was unpaired. |
-| client → server | `overlap` | `{ t, coupleId, windows, inputHash, computedBy }` | Device-computed overlap. Server asserts `computedBy === socket.uid` (V8), stores `overlaps_latest` (dedup on `inputHash`), and either forwards to the partner's live socket or sends an FCM push if the partner is offline. |
+| client → server | `overlap` | `{ t, coupleId, windows, inputHash, computedBy }` | Device-computed overlap. Server asserts `computedBy === socketUid` (V8, via `authorizeOverlapMessage`), stores `overlaps_latest` (dedup on `inputHash`), and either forwards to the partner's live socket or sends an FCM push if the partner is offline. |
 
 The server does **not** compute overlap — the device does. The server only stores, fans-out, and pushes for offline partners.
 

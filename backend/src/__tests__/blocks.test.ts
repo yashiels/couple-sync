@@ -261,6 +261,44 @@ describe('PUT /blocks/:id', () => {
     expect(res.statusCode).toBe(404);
     await app.close();
   });
+
+  it('returns 400 (not 500) when startUtc is a non-integer', async () => {
+    // existing lookup + assertMember succeed; the push() validator must throw 400.
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ couple_id: COUPLE_ID }] }) // existing lookup
+      .mockResolvedValueOnce({ rows: [makeCoupleRow()] }); // assertMember
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/blocks/blk-1',
+      headers: authHeader(),
+      payload: { startUtc: 'hello' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe('bad_request');
+    // No UPDATE must run and no broadcast must fire on a bad body.
+    const updateCall = mockQuery.mock.calls.find(
+      (c) => typeof c[0] === 'string' && /UPDATE timeblocks/.test(c[0] as string)
+    );
+    expect(updateCall).toBeUndefined();
+    expect(sendToCouple).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('returns 400 when endUtc is a non-integer', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ couple_id: COUPLE_ID }] })
+      .mockResolvedValueOnce({ rows: [makeCoupleRow()] });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/blocks/blk-1',
+      headers: authHeader(),
+      payload: { endUtc: false },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
 });
 
 describe('DELETE /blocks/:id', () => {
@@ -584,6 +622,31 @@ describe('PATCH /users/:uid', () => {
     });
     expect(res.statusCode).toBe(403);
     expect(mockQuery).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('does not leak fcmTokens in the user:update broadcast to the partner', async () => {
+    // The PATCH response goes to the caller themself (self path) and may
+    // include fcmTokens. But the user:update broadcast goes to the partner
+    // over the socket and MUST NOT include fcmTokens.
+    mockQuery.mockResolvedValueOnce({
+      rows: [makeUserRow({ fcm_tokens: ['secret-fcm-1', 'secret-fcm-2'] })],
+    });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/users/${UID}`,
+      headers: authHeader(),
+      payload: { timezone: 'Asia/Kolkata' },
+    });
+    expect(res.statusCode).toBe(200);
+    // Self response still includes the caller's own fcmTokens.
+    expect(res.json().fcmTokens).toEqual(['secret-fcm-1', 'secret-fcm-2']);
+    // Broadcast to partner must omit fcmTokens.
+    expect(sendToCouple).toHaveBeenCalledTimes(1);
+    const [, msg] = sendToCouple.mock.calls[0];
+    expect((msg as { t: string }).t).toBe('user:update');
+    expect((msg as { user: Record<string, unknown> }).user.fcmTokens).toBeUndefined();
     await app.close();
   });
 });

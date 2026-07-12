@@ -225,6 +225,9 @@ describe('POST /invites/:code/redeem', () => {
     mockClientQuery
       .mockResolvedValueOnce({ rows: [] }) // BEGIN
       .mockResolvedValueOnce({ rows: [makeInviteRow({ created_by_uid: UID })] }) // SELECT FOR UPDATE
+      .mockResolvedValueOnce({
+        rows: [{ couple_id: null }, { couple_id: null }],
+      }) // paired check -> both unpaired
       .mockResolvedValueOnce({ rows: [] }) // INSERT couples
       .mockResolvedValueOnce({ rows: [] }) // UPDATE invites
       .mockResolvedValueOnce({ rows: [] }) // UPDATE users inviter
@@ -383,6 +386,75 @@ describe('POST /invites/:code/redeem', () => {
       payload: {},
     });
     expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('rejects redeem when the redeemer is already paired (409, no coupleId leak, existing couple_id unchanged)', async () => {
+    // Inviter (UID) has a pending invite; redeemer (PARTNER) already has a
+    // couple_id. The guard must reject before any INSERT/UPDATE so the
+    // redeemer's existing couple_id is left untouched.
+    mockClientQuery
+      .mockResolvedValueOnce({ rows: [] }) // BEGIN
+      .mockResolvedValueOnce({ rows: [makeInviteRow({ created_by_uid: UID })] }) // SELECT FOR UPDATE -> pending
+      .mockResolvedValueOnce({
+        rows: [
+          { couple_id: null }, // inviter (UID) unpaired
+          { couple_id: COUPLE_ID }, // redeemer (PARTNER) already paired
+        ],
+      }) // paired check -> redeemer paired
+      .mockResolvedValueOnce({ rows: [] }); // ROLLBACK
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/invites/${CODE}/redeem`,
+      headers: authHeader(PARTNER), // PARTNER redeems UID's invite
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(409);
+    const body = res.json();
+    expect(body.coupleId).toBeUndefined();
+    expect(body.error).toBe('conflict');
+
+    const txSqls = mockClientQuery.mock.calls.map((c) => c[0] as string);
+    expect(txSqls.some((s) => /ROLLBACK/.test(s))).toBe(true);
+    // No couple INSERT, no users couple_id UPDATE (existing pairing untouched).
+    expect(txSqls.some((s) => /INSERT INTO couples/.test(s))).toBe(false);
+    expect(txSqls.some((s) => /UPDATE users SET couple_id/.test(s))).toBe(false);
+    expect(sendToUid).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('rejects redeem when the inviter is already paired (409)', async () => {
+    // Inviter (UID) created the invite, then got paired via a second invite,
+    // now someone (PARTNER) tries to redeem the first (stale) invite.
+    mockClientQuery
+      .mockResolvedValueOnce({ rows: [] }) // BEGIN
+      .mockResolvedValueOnce({ rows: [makeInviteRow({ created_by_uid: UID })] }) // SELECT FOR UPDATE -> pending
+      .mockResolvedValueOnce({
+        rows: [
+          { couple_id: COUPLE_ID }, // inviter (UID) already paired
+          { couple_id: null }, // redeemer (PARTNER) unpaired
+        ],
+      }) // paired check -> inviter paired
+      .mockResolvedValueOnce({ rows: [] }); // ROLLBACK
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/invites/${CODE}/redeem`,
+      headers: authHeader(PARTNER),
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().coupleId).toBeUndefined();
+
+    const txSqls = mockClientQuery.mock.calls.map((c) => c[0] as string);
+    expect(txSqls.some((s) => /ROLLBACK/.test(s))).toBe(true);
+    expect(txSqls.some((s) => /INSERT INTO couples/.test(s))).toBe(false);
+    expect(sendToUid).not.toHaveBeenCalled();
     await app.close();
   });
 

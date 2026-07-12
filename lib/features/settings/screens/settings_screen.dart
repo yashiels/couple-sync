@@ -258,7 +258,7 @@ class SettingsScreen extends ConsumerWidget {
               SettingsStatusItem(
                 title: 'Display Name',
                 subtitle: 'Your display name',
-                status: userProfile?.displayName ?? 'Unknown',
+                status: userProfile?.displayName ?? userProfile?.email ?? 'Unknown',
                 statusIcon: Icons.person_outline,
               ),
               const SizedBox(height: 8),
@@ -431,7 +431,7 @@ class SettingsScreen extends ConsumerWidget {
           SettingsStatusItem(
             title: 'Partner Name',
             subtitle: 'Your paired partner',
-            status: partner?.displayName ?? 'Unknown',
+            status: partner?.displayName ?? partner?.email ?? 'Unknown',
             statusIcon: Icons.person,
           ),
           SettingsStatusItem(
