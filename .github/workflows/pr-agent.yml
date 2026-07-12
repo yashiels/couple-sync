@@ -10,6 +10,6 @@ permissions:
   contents: read
 jobs:
   review:
-    uses: skynergroup/.github/.github/workflows/pr-agent.yml@6468ab0a5ca130879c05ef3985957bddcfc0f43f
+    uses: skynergroup/.github/.github/workflows/pr-agent.yml@main
     secrets:
       KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
