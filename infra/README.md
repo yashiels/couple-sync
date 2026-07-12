@@ -36,9 +36,6 @@ cd ..
 
 # 6. Print manual auth setup guide
 ./scripts/enable-auth.sh
-
-# 7. Deploy Cloud Functions + Firestore rules
-./scripts/deploy-all.sh
 ```
 
 ## Manual Steps
@@ -60,9 +57,6 @@ All scripts live in `infra/scripts/` and should be run from the `infra/` directo
 | `setup.sh` | Checks prerequisites, runs `terraform init` + `terraform apply` |
 | `configure-flutter.sh` | Installs FlutterFire CLI if missing, runs `flutterfire configure` to generate Firebase config files |
 | `enable-auth.sh` | Prints a step-by-step guide for manually enabling Google and Apple auth providers |
-| `deploy-all.sh` | Runs `deploy-functions.sh` then `deploy-rules.sh` |
-| `deploy-functions.sh` | Installs dependencies, builds, lints, tests, and deploys Cloud Functions |
-| `deploy-rules.sh` | Deploys Firestore security rules and indexes |
 
 ## Terraform Resources
 
