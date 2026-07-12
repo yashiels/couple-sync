@@ -139,7 +139,6 @@ export const syncRoutes: FastifyPluginAsync = async (app) => {
       // will surface DB errors per-message. Downgrade silently here.
     }
 
-    (socket as WebSocket & { uid?: string }).uid = uid;
     sockets.set(uid, socket);
     if (coupleId) {
       let members = coupleMembers.get(coupleId);

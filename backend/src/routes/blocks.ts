@@ -261,25 +261,31 @@ export const blockRoutes: FastifyPluginAsync = async (app) => {
       return sendError(reply, err);
     }
 
-    // Build a SET clause from the allowed partial fields.
+    // Build a SET clause from the allowed partial fields. Each field is
+    // routed through the same readString/readInt validators POST uses so a
+    // bad-type body surfaces as 400, not a 500 from the DB driver.
     const sets: string[] = [];
     const params: unknown[] = [];
-    const push = (col: string, jsonKey: string, transform: (v: unknown) => unknown = (v) => v) => {
-      if (body[jsonKey] !== undefined) {
-        params.push(transform(body[jsonKey]));
-        sets.push(`${col} = $${params.length}`);
-      }
-    };
-    push('user_id', 'userId');
-    push('title', 'title');
-    push('type', 'type');
-    push('category', 'category');
-    push('start_utc', 'startUtc');
-    push('end_utc', 'endUtc');
-    push('timezone', 'timezone');
-    push('recurrence_rule', 'recurrenceRule');
-    push('source', 'source');
-    push('visibility', 'visibility');
+    try {
+      const push = (col: string, jsonKey: string, transform: (v: unknown) => unknown = (v) => v) => {
+        if (body[jsonKey] !== undefined) {
+          params.push(transform(body[jsonKey]));
+          sets.push(`${col} = $${params.length}`);
+        }
+      };
+      push('user_id', 'userId', (v) => readString(v, 'userId'));
+      push('title', 'title', (v) => readString(v, 'title'));
+      push('type', 'type', (v) => readString(v, 'type'));
+      push('category', 'category', (v) => readOptString(v));
+      push('start_utc', 'startUtc', (v) => readInt(v, 'startUtc'));
+      push('end_utc', 'endUtc', (v) => readInt(v, 'endUtc'));
+      push('timezone', 'timezone', (v) => readString(v, 'timezone'));
+      push('recurrence_rule', 'recurrenceRule', (v) => readOptString(v));
+      push('source', 'source', (v) => readString(v, 'source'));
+      push('visibility', 'visibility', (v) => readString(v, 'visibility'));
+    } catch (err) {
+      return sendError(reply, err);
+    }
 
     if (sets.length === 0) {
       return reply.code(400).send({ error: 'bad_request', message: 'No updatable fields in body' });
