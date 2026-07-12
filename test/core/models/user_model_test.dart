@@ -62,6 +62,22 @@ void main() {
         final restored = UserModel.fromJson(json);
         expect(restored.fcmTokens, isEmpty);
       });
+
+      test('fromJson tolerates null displayName (Apple Sign-In with no name)', () {
+        final json = {
+          'uid': 'u1',
+          'email': 'a@b.com',
+          'displayName': null, // Apple Sign-In with no name captured
+          'photoUrl': null,
+          'timezone': '',
+          'fcmTokens': <String>[],
+          'showLateNightWindows': false,
+          'createdAt': 0,
+        };
+        final user = UserModel.fromJson(json);
+        expect(user.displayName, isNull);
+        expect(user.email, 'a@b.com');
+      });
     });
 
     group('copyWith', () {

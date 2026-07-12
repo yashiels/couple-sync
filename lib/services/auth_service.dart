@@ -270,7 +270,7 @@ class AuthService {
       await _syncService.upsertUser(
         UserModel(
           email: user.email ?? '',
-          displayName: user.displayName ?? '',
+          displayName: user.displayName,
           photoUrl: user.photoURL,
           timezone: '', // preserved on the backend for existing users
           fcmTokens: const [],

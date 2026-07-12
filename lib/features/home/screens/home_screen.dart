@@ -142,7 +142,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           data: (partner) {
             final partnerTimezone = partner?.timezone ?? 'UTC';
-            final partnerName = partner?.displayName ?? 'Partner';
+            final partnerName = partner?.displayName ?? partner?.email ?? 'Partner';
 
             return overlapAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
