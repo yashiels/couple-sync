@@ -179,6 +179,18 @@ Map<String, dynamic> _blockToJson(TimeBlock b) => b.toJson();
 // Per-couple WS session
 // ---------------------------------------------------------------------------
 
+/// Session-level lifecycle event emitted by [_CoupleSession] when the backend
+/// pushes a `pairing`, `unpair`, or `user:update` WS message. These signal
+/// couple- or profile-level changes that consumers (e.g. [OverlapController])
+/// must react to by re-resolving the couple + partner profiles.
+enum CoupleSessionEventType { pairing, unpair, userUpdate }
+
+class CoupleSessionEvent {
+  final CoupleSessionEventType type;
+  final Map<String, dynamic> payload;
+  CoupleSessionEvent(this.type, this.payload);
+}
+
 class _CoupleSession {
   final String coupleId;
   final SyncService _service;
@@ -190,9 +202,12 @@ class _CoupleSession {
       StreamController<List<TimeBlock>>.broadcast();
   final StreamController<OverlapResult?> _overlapController =
       StreamController<OverlapResult?>.broadcast();
+  final StreamController<CoupleSessionEvent> _eventsController =
+      StreamController<CoupleSessionEvent>.broadcast();
 
   Stream<List<TimeBlock>> get blocks => _blocksController.stream;
   Stream<OverlapResult?> get overlap => _overlapController.stream;
+  Stream<CoupleSessionEvent> get events => _eventsController.stream;
 
   WsConnection? _socket;
   Timer? _reconnectTimer;
@@ -276,6 +291,21 @@ class _CoupleSession {
         case 'overlap':
           _onOverlap(msg);
           break;
+        case 'pairing':
+          _eventsController.add(
+            CoupleSessionEvent(CoupleSessionEventType.pairing, msg),
+          );
+          break;
+        case 'unpair':
+          _eventsController.add(
+            CoupleSessionEvent(CoupleSessionEventType.unpair, msg),
+          );
+          break;
+        case 'user:update':
+          _eventsController.add(
+            CoupleSessionEvent(CoupleSessionEventType.userUpdate, msg),
+          );
+          break;
       }
     } catch (_) {
       // Ignore malformed messages; the server is the source of truth and will
@@ -357,6 +387,7 @@ class _CoupleSession {
     _socket?.close();
     await _blocksController.close();
     await _overlapController.close();
+    await _eventsController.close();
   }
 }
 
@@ -550,6 +581,15 @@ class SyncService {
   /// device; the controller recomputes from the block cache).
   Stream<OverlapResult?> watchOverlap(String coupleId) {
     return _ensureSession(coupleId).overlap;
+  }
+
+  /// WS `pairing` / `unpair` / `user:update` messages → emit
+  /// [CoupleSessionEvent]s. Consumers (e.g. [OverlapController]) subscribe to
+  /// re-resolve couple + partner profiles instead of polling. Mirrors
+  /// [watchBlocks]/[watchOverlap] — opens the session via [_ensureSession] and
+  /// returns its event stream.
+  Stream<CoupleSessionEvent> watchSessionEvents(String coupleId) {
+    return _ensureSession(coupleId).events;
   }
 
   /// GET /overlaps/latest?coupleId=X — fetch the stored latest overlap (used on

@@ -80,6 +80,7 @@ class OverlapController
   Timer? _debounce;
   Timer? _profilePoll;
   StreamSubscription<List<TimeBlock>>? _blocksSub;
+  StreamSubscription<CoupleSessionEvent>? _sessionEventSub;
 
   /// Latest blocks + prefs snapshot. Updated by each stream callback; the
   /// debounced compute reads from here so a flurry of events collapses to one
@@ -103,19 +104,33 @@ class OverlapController
       _debounce?.cancel();
       _blocksSub?.cancel();
       _profilePoll?.cancel();
+      _sessionEventSub?.cancel();
     });
 
     final sync = ref.watch(syncServiceProvider);
     final myUid = ref.watch(currentUserIdProvider);
 
     // Resolve the couple doc to learn userAUid/userBUid, then fetch each
-    // partner's profile. Re-run on a short poll so a freshly-paired partner
-    // is picked up without a full restart.
+    // partner's profile.
     _resolveCoupleAndProfiles(sync, coupleId, myUid);
+    // ponytail: WS reconnect re-subscribes (sends `sub` on every connect in
+    // _CoupleSession._connect), so live block/overlap state is re-synced on
+    // reconnect. But pairing/unpair/user:update events fired while this
+    // device was offline are NOT replayed by the server — a missed pairing
+    // would leave the partner profile stale until the next state change.
+    // Keep a 60s (not 10s) safety-net poll to reconcile that offline gap;
+    // reactive events handle the common online case immediately.
     _profilePoll = Timer.periodic(
-      const Duration(seconds: 10),
+      const Duration(seconds: 60),
       (_) => _resolveCoupleAndProfiles(sync, coupleId, myUid),
     );
+
+    // React to pairing/unpair/user:update WS events immediately instead of
+    // waiting for the poll. Re-resolves couple + both profiles (pairing/unpair)
+    // or the partner profile (userUpdate: tz/prefs changed), then recomputes.
+    _sessionEventSub = sync.watchSessionEvents(coupleId).listen((event) {
+      _resolveCoupleAndProfiles(sync, coupleId, myUid);
+    });
 
     // Watch all blocks for the couple; partition by userId before computing.
     _blocksSub = sync.watchBlocks(coupleId).listen((blocks) {

@@ -362,6 +362,85 @@ void main() {
     });
   });
 
+  group('SyncService WS — watchSessionEvents', () {
+    late SyncService service;
+    late _FakeWsFactory wsFactory;
+
+    setUp(() {
+      wsFactory = _FakeWsFactory();
+      service = SyncService(
+        baseUrl: 'https://api.test',
+        wsUrl: 'wss://api.test/sync',
+        tokenProvider: () async => 'tok',
+        httpClient: MockClient((_) async => http.Response('{}', 200)),
+        wsConnect: wsFactory.asFactory(),
+        cache: _FakeBlockCache(),
+        backoffFor: (_) => Duration.zero,
+      );
+    });
+
+    tearDown(() => service.dispose());
+
+    test('emits a pairing event when a pairing WS message arrives', () async {
+      final events = <CoupleSessionEvent>[];
+      final completer = Completer<CoupleSessionEvent>();
+      final sub = service.watchSessionEvents('c1').listen((event) {
+        events.add(event);
+        if (!completer.isCompleted) completer.complete(event);
+      });
+
+      // Wait for the WS to connect.
+      final socket = await wsFactory.onCreate.first;
+      await Future<void>.delayed(Duration.zero);
+
+      // Server pushes a pairing message.
+      socket.inject(jsonEncode({'t': 'pairing', 'coupleId': 'c1'}));
+
+      final event = await completer.future.timeout(
+        const Duration(seconds: 1),
+      );
+      expect(event.type, CoupleSessionEventType.pairing);
+      expect(events.length, greaterThanOrEqualTo(1));
+
+      await sub.cancel();
+    });
+
+    test('emits an unpair event when an unpair WS message arrives', () async {
+      final completer = Completer<CoupleSessionEvent>();
+      final sub = service.watchSessionEvents('c1').listen(completer.complete);
+
+      final socket = await wsFactory.onCreate.first;
+      await Future<void>.delayed(Duration.zero);
+
+      socket.inject(jsonEncode({'t': 'unpair', 'coupleId': 'c1'}));
+
+      final event = await completer.future.timeout(
+        const Duration(seconds: 1),
+      );
+      expect(event.type, CoupleSessionEventType.unpair);
+
+      await sub.cancel();
+    });
+
+    test('emits a userUpdate event when a user:update WS message arrives',
+        () async {
+      final completer = Completer<CoupleSessionEvent>();
+      final sub = service.watchSessionEvents('c1').listen(completer.complete);
+
+      final socket = await wsFactory.onCreate.first;
+      await Future<void>.delayed(Duration.zero);
+
+      socket.inject(jsonEncode({'t': 'user:update', 'uid': 'u2'}));
+
+      final event = await completer.future.timeout(
+        const Duration(seconds: 1),
+      );
+      expect(event.type, CoupleSessionEventType.userUpdate);
+
+      await sub.cancel();
+    });
+  });
+
   group('SyncService WS — publishOverlap', () {
     test(
       'encodes the overlap message with windows, inputHash, computedBy',
