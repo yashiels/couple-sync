@@ -2,5 +2,19 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true
-  }
+  },
+  // Without an explicit include, tsc sweeps backend/src too and fails on pg/fastify/firebase-admin
+  // whenever backend/node_modules is absent — which is always, in the app CI job. Listing
+  // backend/src/wire.ts pulls in exactly the wire contract and its type-only dependency graph
+  // (overlap/types.ts, which imports nothing); no other backend file is compiled here.
+  "include": [
+    "app/**/*",
+    "src/**/*",
+    "*.ts",
+    "*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "backend/src/wire.ts"
+  ],
+  "exclude": ["node_modules", "android", "ios", "dist"]
 }

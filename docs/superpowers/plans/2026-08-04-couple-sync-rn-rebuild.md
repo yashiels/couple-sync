@@ -1495,8 +1495,10 @@ Four things this fixes that a naive store gets wrong:
    `visibleRange` is null (Calendar never opened), skip the refetch entirely — nothing is rendering
    blocks.
 
-The root `tsconfig.json` must add `backend/src/wire.ts` to its `include` so the type-only import
-resolves.
+The root `tsconfig.json` **already has** the needed `include` — it was narrowed during Task 4, because
+without it tsc swept all of `backend/src` and the app typecheck was meaningless whenever
+`backend/node_modules` was absent. Verify it still lists `backend/src/wire.ts` and nothing else from
+`backend/`.
 
 **Verify this with `backend/node_modules` absent**, because the app CI job never installs backend
 dependencies:
