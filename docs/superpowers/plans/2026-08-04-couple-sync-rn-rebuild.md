@@ -495,8 +495,9 @@ git commit -m "feat(backend): add schema, migration runner, and db layer"
   }>
 
   // src/firebase.ts
-  export function verifyIdToken(token: string):
-    Promise<{ uid: string; email?: string; name?: string; picture?: string }>
+  /** Returns firebase-admin's DecodedIdToken — the full claim set, not a narrowed subset.
+   *  req.claims is typed DecodedIdToken, so narrowing here would not assign. */
+  export function verifyIdToken(token: string): Promise<DecodedIdToken>
   export function sendEach(tokens: string[], payload: unknown):
     Promise<{ token: string; errorCode: string | null }[]>
 
@@ -835,10 +836,15 @@ own fixture rather than hard-coding 15 blindly — it depends on the timezone an
 The whole body runs inside one `withTx`, and its **first statement takes a per-couple advisory lock**:
 
 ```ts
-export async function refreshOverlap(coupleId: string, triggeredBy: string | null) {
+export async function refreshOverlap(
+  coupleId: string,
+  triggeredBy: string | null,
+  log: FastifyBaseLogger,     // passed in: this module has no logger of its own, and a failed
+                              // post-commit push must be logged somewhere real
+): Promise<RefreshResult> {
   // NOT `return withTx(...)` — the fan-out must happen AFTER the commit, so the tx result is
   // captured first and the side effects run outside it. See the fan-out section below.
-  const committed = await withTx(async (c) => {
+  const committed: Committed = await withTx(async (c) => {
     // Serializes refreshes for THIS couple only; different couples never block each other.
     // Without it, two concurrent writes can interleave load→compute→upsert and store the
     // older result, and every concurrent first-read after an hour rollover would write,
@@ -852,19 +858,35 @@ export async function refreshOverlap(coupleId: string, triggeredBy: string | nul
     const input: OverlapInput = { blocksA, blocksB, timezoneA, timezoneB, prefsA, prefsB, now }
 
     const hash = computeInputHash(input)
-    if (hash === stored?.input_hash) return { windows: stored.windows, computedAt: stored.computed_at, changed: false }
+    if (hash === stored?.input_hash) {
+      return { windows: stored.windows, computedAt: stored.computed_at, changed: false,
+               coupleId, recipients: [/* same shape as below */] }
+    }
 
     // ponytail: inline on the request thread. ~100ms for 500 recurring blocks/partner
     // against a 500ms budget. A job queue is the upgrade path only if p99 write latency matters.
     const windows = computeOverlap(input)
-    // upsert and RETURN — no WS, no FCM, no network call inside the transaction
-    return { windows, computedAt: now, changed: true }
+    // upsert, then RETURN a COMPLETE Committed — no WS, no FCM, no network call in the tx.
+    // recipients carries what fanOut needs and what a post-commit re-read could not safely observe.
+    return {
+      windows, computedAt: now, changed: true,
+      coupleId,
+      recipients: [userA, userB].map((u) => ({
+        uid: u.uid, timezone: u.timezone!, tokens: u.fcm_tokens,
+        notificationsEnabled: u.notifications_enabled,
+      })),
+    }
   })
 
   if (committed.changed) await fanOut(committed, triggeredBy, log)
-  return { windows: committed.windows, computedAt: committed.computedAt, changed: true }
+  // preserve the real value — hardcoding `changed: true` here erases the dedup result the
+  // early-return path just computed, and every "unchanged hash" test would silently pass.
+  return { windows: committed.windows, computedAt: committed.computedAt, changed: committed.changed }
 }
 ```
+
+The early-return branch must also produce a complete `Committed` (with `changed: false` and the same
+`recipients`), so the function has one return shape.
 
 Load in one round trip inside the lock: the couple row, both user rows (`timezone`,
 `show_late_night_windows`, `notifications_enabled`, `fcm_tokens`), and every `timeblocks` row for the
@@ -925,7 +947,7 @@ against each other. That is harmless (a spurious wait, never a wrong result) —
 - [ ] **Step 3: Verify**
 
 ```bash
-cd backend && pnpm test
+cd backend && pnpm build && pnpm test    # build too: this task's types are easy to get subtly wrong
 ```
 
 - [ ] **Step 4: Commit**
@@ -1100,7 +1122,27 @@ it('PUT /blocks/google with an empty interval list still broadcasts blocks:chang
 
 That second-to-last test is a hard privacy boundary from §5: even if a client tried to send an event title, the server must refuse it.
 
-- [ ] **Step 2: Implement `blocks.ts`**
+- [ ] **Step 2: Implement `blocks.ts` — every write takes the couple's advisory lock**
+
+A block write racing an unpair is a real corruption path: unpair deletes the couple's blocks and its
+`overlaps_latest`, then the in-flight write inserts a block and its `refreshOverlap` recreates the
+overlap row — for a couple that no longer exists. So every write handler (`POST`, `PATCH`, `DELETE`,
+`PUT /blocks/google`) runs in a transaction whose first statement is
+`SELECT pg_advisory_xact_lock(hashtext($coupleId))`, and which then **re-reads the couple and refuses
+when `status !== 'active'`** — `assertMember` ran before the lock was held, so its answer is stale by
+the time the write happens.
+
+Belt and braces: `refreshOverlap` itself re-checks `status = 'active'` under its own lock and returns
+without upserting when the couple is inactive. Either check alone leaves a window; both together
+close it.
+
+```ts
+// src/__tests__/blocks.test.ts
+it('a block create that starts before an unpair commits does not survive it')
+it('an unpair that starts before a block create still leaves no blocks behind')
+it('PUT /blocks/google racing an unpair does not repopulate blocks')
+it('refreshOverlap refuses to upsert for an inactive couple')
+```
 
 Validate the body explicitly (Fastify JSON schema or hand-rolled — no new dependency). Validate the body's `recurrence_rule` field (snake_case, like every other field) by attempting to parse it with `rrulestr` and rejecting anything whose `FREQ` is outside the supported set, so an unparseable rule fails at write time rather than silently producing zero occurrences later.
 
@@ -1367,7 +1409,7 @@ Expected: `/health` returns 200, and the logs show migrations running before the
 
 - [ ] **Step 5: Prove the fail-fast paths**
 
-Start the api with `CORS_ORIGINS` unset, and again with a garbage service-account value. Both must exit non-zero. A container that boots healthy in either case is a Task 3 regression — fix it there.
+Start the api with `CORS_ORIGINS` unset, and again with a garbage service-account value, and again with a *structurally valid but unusable* service account. All three must exit non-zero. This step needs a real service account and outbound Google access — see Human prerequisites. A container that boots healthy in either case is a Task 3 regression — fix it there.
 
 - [ ] **Step 6: Write `backend/README.md`**
 
@@ -1488,7 +1530,14 @@ While `hydrated` is false, render a splash — never a screen. A wrong-route fla
 
 `couplesync://invite/:code` must call `setPendingInvite(code)` and survive sign-in. Once authenticated and unpaired, `/pairing` opens on the Enter tab with the code pre-filled, and `setPendingInvite(null)` runs after it is consumed. Handle both cold start (`Linking.getInitialURL`) and warm (`Linking.addEventListener`).
 
-- [ ] **Step 4: Write the root `vitest.config.ts` now, not in Task 17**
+- [ ] **Step 4: Create `google-services.placeholder.json`**
+
+Task 17's CI copies this file, and Task 10's own prebuild check needs it, but no task has created it
+until now. Write a minimal, clearly-labelled stub with the structure the plugin copies (it never
+parses it) and a `"_comment"` field stating that it is a CI placeholder and not real credentials. Add
+`google-services.json` (the real one) to `.gitignore` in the same step.
+
+- [ ] **Step 5: Write the root `vitest.config.ts` now, not in Task 17**
 
 Vitest's default `include` is `**/*.{test,spec}.?(c|m)[jt]s?(x)`, so without this the app's `npm test`
 walks into `backend/src/**/*.test.ts` and fails — the app job never installs backend dependencies.
@@ -1501,11 +1550,11 @@ export default defineConfig({ test: { include: ['src/**/*.test.ts'], environment
 
 Verify: `npm test` reports 0 app tests and does **not** mention the 135 engine tests.
 
-- [ ] **Step 5: Write `src/theme.ts` and `src/store.ts`**
+- [ ] **Step 6: Write `src/theme.ts` and `src/store.ts`**
 
 Theme: colors (light + dark), spacing scale, type scale. Plain objects, no styling library. Store: exactly the interface above, no persistence yet.
 
-- [ ] **Step 6: Create every screen as a one-line stub**
+- [ ] **Step 7: Create every screen as a one-line stub**
 
 Literally `export default () => <Text>auth</Text>` per screen — six files, one line each. Do **not**
 lay out the screens here: Tasks 12–16 rewrite every one of them, and laying them out twice is a
@@ -1513,7 +1562,7 @@ wasted pass. The only files with real content in this task are `_layout.tsx` (th
 `(tabs)/_layout.tsx` (the **three**-tab bar: Free time, Calendar, Settings), because those are what
 you are actually verifying.
 
-- [ ] **Step 7: Verify**
+- [ ] **Step 8: Verify**
 
 ```bash
 npx tsc --noEmit && npx expo-doctor
@@ -1557,10 +1606,10 @@ the scaffold, rather than discovering it in Task 12 when a screen refuses to loa
 (`google-services.json`) does not exist yet, so `prebuild` succeeding while `run:android` cannot yet
 launch is the expected state — say so in your report. **Android only** — do not prebuild iOS.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add app app.config.ts vitest.config.ts src tsconfig.json package.json .env.example google-services.placeholder.json
+git add app app.config.ts vitest.config.ts src tsconfig.json package.json .env.example .gitignore google-services.placeholder.json
 git commit -m "feat(app): scaffold expo-router tree, guard chain, store and theme"
 ```
 
@@ -1683,9 +1732,27 @@ reach their guard:
 all need exactly the same work, so write it once:
 
 ```ts
-/** Idempotent. Safe to call on cold start, on every WS hello, and after redeeming an invite.
- *  Returns the couple_id it settled on, so callers can detect a transition. */
-export async function hydrateFromServer(): Promise<string | null> {
+/** Idempotent AND single-flight. Safe to call from cold start, every WS hello, and invite redeem —
+ *  including concurrently. Returns the couple_id it settled on.
+ *
+ *  Two hazards this must close:
+ *   (a) concurrent signals. A `pairing` message and a `hello` can arrive together, both observe
+ *       local couple_id === null, and both fire the forced first-pair sync. So share one in-flight
+ *       promise: if a hydration is already running, await THAT one instead of starting another.
+ *   (b) a cold start for an ALREADY-paired couple looks identical to a fresh pairing, because local
+ *       state starts null either way. So the transition is judged against an explicit
+ *       `authoritativeStateInitialized` sentinel, not against `couple === null`. The very first
+ *       hydration only initializes; it never counts as a transition.
+ */
+let inFlight: Promise<string | null> | null = null
+let authoritativeStateInitialized = false
+
+export function hydrateFromServer(): Promise<string | null> {
+  inFlight ??= doHydrate().finally(() => { inFlight = null })
+  return inFlight
+}
+
+async function doHydrate(): Promise<string | null> {
   const me = await api.me()          // authoritative: local user.couple_id may be stale
   setUser(me)
   if (!me.couple_id) { resetCouple(); return null }
@@ -1695,8 +1762,25 @@ export async function hydrateFromServer(): Promise<string | null> {
     api.latestOverlap(me.couple_id),
   ])
   setCouple(couple); setPartner(partner); setWindows(overlap.windows, overlap.computed_at)
+
+  // Exactly-once first-pair sync: only on a real null -> set transition, and never on the
+  // initializing hydration, so an already-paired cold start does not force a sync.
+  const isTransition = authoritativeStateInitialized && previousCoupleId === null
+  authoritativeStateInitialized = true
+  if (isTransition) void calendar.sync(me.couple_id, { force: true })
+
   return me.couple_id
 }
+```
+
+`previousCoupleId` is read from the store *before* `setUser`. Tests:
+
+```ts
+it('does not force a sync on a cold start for an already-paired couple')
+it('forces exactly ONE sync when pairing and hello arrive concurrently')
+it('forces a sync on the first genuine null -> set transition')
+it('does not force a sync on a reconnect reporting the same couple_id')
+it('shares one in-flight hydration when called twice concurrently')
 ```
 
 Cold start:
@@ -1754,23 +1838,39 @@ If any are missing, stop and report which. Do not simulate a device walk or repo
 
 ---
 
-## Human prerequisites before Task 12
+## Human prerequisites
 
-Tasks 1–11 need none of this. Task 12 onward runs on a real device, so a person must supply these
-first — a subagent cannot obtain any of them, and every one fails *silently* when missing:
+A subagent cannot obtain any of these, and nearly all of them fail *silently*. They are needed at two
+different points, so they are listed by the first task that cannot complete without them.
+
+**Needed by Task 9** (the container healthcheck mints a real Google OAuth token at boot — the
+credential probe is not offline):
+
+| Prerequisite | Symptom when absent |
+|---|---|
+| A real Firebase service account in `FIREBASE_SERVICE_ACCOUNT_JSON`, matching `FIREBASE_PROJECT_ID` | the container fails its own boot probe by design |
+| Outbound network access to Google's token endpoint from the container | boot probe times out |
+| `CORS_ORIGINS` set to something other than `*` | boot refuses to start by design |
+
+Tasks 1–8 need none of the above — they mock `firebase.js` — and Tasks 10–11 need none of it either.
+
+**Needed by Task 12** (first task that runs on a device):
 
 | Prerequisite | Why | Symptom when absent |
 |---|---|---|
-| `google-services.json` from the Firebase console | RNFirebase native config | prebuild throws, or Firebase no-ops at runtime |
-| **Web** OAuth client id in `GOOGLE_WEB_CLIENT_ID` | `@react-native-google-signin` needs the Web id, not the Android one | sign-in never resolves |
-| Debug **and** release SHA-1 fingerprints registered in Firebase | Android Google Sign-In verification | sign-in fails with no useful error — the most common setup mistake |
+| The real `google-services.json` | RNFirebase native config | prebuild throws, or Firebase no-ops at runtime |
+| **Google** sign-in provider *enabled* in Firebase Auth | it is off by default | sign-in rejected with an opaque error |
+| OAuth consent screen configured, with test users added while the app is unpublished | Google blocks unlisted testers | consent screen refuses the account |
+| **Web** OAuth client id in `GOOGLE_WEB_CLIENT_ID` | the library needs the Web id, not the Android one | sign-in never resolves |
+| Debug **and** release SHA-1 fingerprints registered in Firebase | Android sign-in verification | fails with no useful error — the most common setup mistake |
 | Google Calendar API enabled in the GCP project | `freeBusy.query` | 403 on every sync |
-| Backend reachable at `API_BASE_URL` with a valid service account | every request | 401 everywhere |
-| Android emulator or device **with Google Play services** | Google Sign-In + FCM | sign-in unavailable |
-| A real Google account with some calendar events | proving sync end to end | an empty but "successful" sync |
-| A **second** account or device | pairing and every two-sided WS path | pairing untestable |
+| Backend reachable at `API_BASE_URL` | every request | 401/timeout everywhere |
+| An emulator or device **with Google Play services** | Google Sign-In + FCM | sign-in unavailable |
+| A real Google account with actual calendar events | proving sync end to end | an empty but "successful" sync |
+| A second Google account **and** a second device/emulator | pairing needs two authenticated sessions at once, and WS fan-out needs two live sockets — one device cannot do it | pairing and every two-sided path untestable |
 
-If any are missing, stop and report which. Do not simulate a device walk or report it as passing.
+If any are missing, stop and report exactly which. Do not simulate a device walk, and do not report a
+step as passing because it "should" work.
 
 ---
 
