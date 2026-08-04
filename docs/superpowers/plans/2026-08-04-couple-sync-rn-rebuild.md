@@ -1690,10 +1690,13 @@ git commit -m "feat(app): scaffold expo-router tree, guard chain, store and them
     redeemInvite(code: string): Promise<{ couple_id: string }>   // snake_case, like every other payload
     /** from/to are REQUIRED — the server needs a range to expand occurrences into. */
     listBlocks(coupleId: string, from: number, to: number): Promise<BlockWithOccurrences[]>
-    createBlock(b: NewBlock): Promise<BlockRow>
-    updateBlock(id: string, patch: Partial<NewBlock>): Promise<BlockRow>
-    deleteBlock(id: string): Promise<void>
-    putGoogleBlocks(coupleId: string, intervals: { start_utc: number; end_utc: number }[]): Promise<BlockRow[]>
+    // coupleId-first, like listBlocks: the server requires it (body on create/patch, query on
+    // delete) and Partial<NewBlock> cannot carry a required field.
+    createBlock(coupleId: string, b: NewBlock): Promise<BlockRow>
+    updateBlock(coupleId: string, id: string, patch: Partial<NewBlock>): Promise<BlockRow>
+    deleteBlock(coupleId: string, id: string): Promise<void>
+    /** Returns the server's `{ count }` — the number of blocks written, not the rows. */
+    putGoogleBlocks(coupleId: string, intervals: { start_utc: number; end_utc: number }[]): Promise<number>
     latestOverlap(coupleId: string): Promise<{ windows: OverlapWindow[]; computed_at: number }>
     registerFcmToken(token: string): Promise<void>
     /** Called on sign-out so a shared handset never keeps a previous user's token. */
@@ -1811,12 +1814,16 @@ async function doHydrate(): Promise<string | null> {
   // Exactly-once first-pair sync: only on a real null -> set transition, and never on the
   // initializing hydration, so an already-paired cold start does not force a sync.
   const isTransition = authoritativeStateInitialized && previousCoupleId === null
-  authoritativeStateInitialized = true
   if (isTransition) void calendar.sync(me.couple_id, { force: true })
 
   return me.couple_id
 }
 ```
+
+**`authoritativeStateInitialized` must be set on BOTH branches** — the unpaired early return as well
+as the paired path. Setting it only after the paired branch means an *unpaired* cold start (the
+inviter — precisely the case the forced first sync exists for) leaves it false, so the pairing that
+follows is misread as the initializing hydration and the sync never fires. Set it in a `finally`.
 
 `previousCoupleId` is read from the store *before* `setUser`. Tests:
 
