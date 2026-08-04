@@ -26,7 +26,9 @@ export async function pushOverlapChanged(
 
   const results = await sendEach(tokens, {
     notification: { title: 'New free time together', body: body(windows, timezone) },
-    // Only a routing hint: no block title, category, or window payload rides along.
+    // Only a routing hint. The payload has no other channel, which is what keeps a block title —
+    // or a category, or the windows themselves — out of a notification the OS may render on a
+    // locked screen. The app fetches the windows over WS or REST once it is opened.
     data: { type: 'overlap' },
   });
 
@@ -46,8 +48,11 @@ export async function pushOverlapChanged(
 }
 
 function body(windows: OverlapWindow[], timezone: string): string {
-  const next = windows[0];
-  if (!next) return 'Your shared free time changed';
+  if (windows.length === 0) return 'Your shared free time changed';
+  // NOT windows[0]: the engine sorts by score descending (overlap/score.ts compareWindows), so the
+  // first element is the best window, not the soonest one. "next" has to mean earliest start.
+  const next = windows.reduce((a, w) => (w.startUtc < a.startUtc ? w : a));
+  // The recipient's own zone — the same window reads as a different day for each partner.
   const when = DateTime.fromMillis(next.startUtc, { zone: timezone }).toFormat('ccc d MMM, HH:mm');
   return `${windows.length} window${windows.length === 1 ? '' : 's'} — next ${when}`;
 }

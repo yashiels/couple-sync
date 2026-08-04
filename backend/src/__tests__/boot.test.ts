@@ -8,6 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 let listen: ReturnType<typeof vi.fn>;
 let routes: Map<string, () => Promise<unknown>>;
 let order: string[];
+// Task 8's three side-effecting attachments. The fake app below is not a real http server, so they
+// are mocked and asserted on by call order instead of run for real.
+let attachSync: ReturnType<typeof vi.fn>;
+let adminRoutes: ReturnType<typeof vi.fn>;
+let startTimer: ReturnType<typeof vi.fn>;
 
 function fakeApp() {
   return {
@@ -36,6 +41,11 @@ async function loadIndex({ db = 'ok', creds = 'ok' }: { db?: 'ok' | 'fail'; cred
       if (creds === 'fail') throw new Error('invalid_grant: account not found');
     }),
   }));
+  vi.doMock('../cron.js', () => ({
+    registerAdminRoutes: adminRoutes,
+    startInviteExpiryTimer: startTimer,
+  }));
+  vi.doMock('../sync.js', () => ({ attachSyncServer: attachSync }));
   vi.doMock('fastify', () => ({ default: vi.fn(() => fakeApp()) }));
   return import('../index.js');
 }
@@ -47,6 +57,9 @@ beforeEach(() => {
   });
   routes = new Map();
   order = [];
+  attachSync = vi.fn();
+  adminRoutes = vi.fn();
+  startTimer = vi.fn();
   vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
 });
@@ -54,7 +67,8 @@ beforeEach(() => {
 afterEach(() => {
   // doMock registrations outlive resetModules, so they have to be dropped explicitly — otherwise
   // the credential-probe suite below would import the mocked firebase.ts instead of the real one.
-  for (const id of ['fastify', '../config.js', '../db.js', '../firebase.js']) vi.doUnmock(id);
+  for (const id of ['fastify', '../config.js', '../db.js', '../firebase.js', '../cron.js', '../sync.js'])
+    vi.doUnmock(id);
   vi.restoreAllMocks();
 });
 
@@ -93,6 +107,27 @@ describe('boot', () => {
     expect(listen).toHaveBeenCalledWith({ port: 0, host: '0.0.0.0' });
     expect(process.exit).not.toHaveBeenCalled();
     await expect(routes.get('/health')?.()).resolves.toMatchObject({ status: 'ok' });
+  });
+
+  it('attaches the WS server before listening and starts the invite timer after', async () => {
+    const { start } = await loadIndex({});
+    await start();
+
+    expect(adminRoutes).toHaveBeenCalledTimes(1);
+    // Attached before listen(), or an upgrade request can arrive while nothing is handling it.
+    expect(attachSync.mock.invocationCallOrder[0]!).toBeLessThan(listen.mock.invocationCallOrder[0]!);
+    // Started after listen(), so a boot that failed a probe leaves no timer behind.
+    expect(startTimer.mock.invocationCallOrder[0]!).toBeGreaterThan(
+      listen.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('starts no invite timer and attaches no WS server when a probe fails', async () => {
+    const { start } = await loadIndex({ db: 'fail' });
+    await expect(start()).rejects.toThrow(/ECONNREFUSED/);
+
+    expect(attachSync).not.toHaveBeenCalled();
+    expect(startTimer).not.toHaveBeenCalled();
   });
 });
 
