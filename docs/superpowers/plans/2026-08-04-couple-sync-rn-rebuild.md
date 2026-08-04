@@ -81,6 +81,7 @@ Verify this before Task 1. `git status` shows 313 staged deletions (the entire F
 | `src/auth.ts` | Extract + verify the bearer/query token; Fastify `preHandler` that sets `req.uid` |
 | `src/http.ts` | `HttpError` + the Fastify error handler that maps it to a response |
 | `src/couples.ts` | `assertMember`, `partnerUid` |
+| `src/tz.ts` | `isValidTimezone` — luxon's `IANAZone.isValidZone` **plus** an offset rejection, because `isValidZone('+02:00')` returns true and a fixed offset carries no DST rules. Used by invite redeem, `PATCH /users/:uid`, and every block write. |
 | `src/wire.ts` | Row interfaces (the wire shape), the `onlyMe` scrub, `fcm_tokens` stripping, the `WsMessage` union. Imported type-only by the app. |
 | `src/sockets.ts` | `uid → WebSocket` registry, `sendTo`, `isOnline` |
 | `src/overlap/**` | **Existing.** Pure engine. §3. |
@@ -1081,9 +1082,22 @@ it('unpair re-checks that the couple is still active under the lock')
 
 - [ ] **Step 6: Verify and commit**
 
+**Conventions fixed by this task — Task 11's `api.ts` must match them:**
+
+- **Envelopes:** `{ user }` for the four user-returning routes, `{ couple }` for `GET /couples/:id`,
+  flat bodies elsewhere (`{ code, expires_at }`, `{ couple_id }`, `{ fcm_tokens }`, `{ ok: true }`).
+- **Error codes:** 404 `unknown_code`; 409 `invite_used`, `invite_expired`, `self_pair`,
+  `already_paired`, `inviter_already_paired`, `timezone_required`, `invalid_timezone`.
+- Invite codes are stored and compared **upper-case**; redeem upper-cases what the client submits.
+- `refreshOverlap` fires when a `PATCH` body *contains* `timezone` or `show_late_night_windows`, not
+  on a value diff — `refreshOverlap` already dedups on `input_hash`, so a no-op patch costs one
+  compute and no write, no WS, no push. A `display_name`-only patch never refreshes.
+- Redeem answers **200 even if the post-commit `refreshOverlap` throws**. The pairing is durable at
+  that point and a 500 would read to the client as "not paired".
+
 ```bash
 cd backend && pnpm build && pnpm test
-git add backend/src/routes backend/src/index.ts backend/src/__tests__
+git add backend/src/routes backend/src/index.ts backend/src/tz.ts backend/src/__tests__
 git commit -m "feat(backend): add auth, users, couples and invites routes"
 ```
 
