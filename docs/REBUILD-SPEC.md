@@ -268,8 +268,12 @@ rule.**
 Sync = delete this user's `source='google'` blocks then batch-insert the fresh set, in one
 transaction, then recompute overlap once.
 Auto-sync on launch only if last sync > 1h ago; manual sync from pull-to-refresh and Settings.
-≤1 freebusy call per user per hour; exponential backoff on 429/503 with a user-visible
-rate-limited state.
+**Quota rule, stated precisely:** at most one *automatic* freebusy call per device per hour.
+Three user-initiated / state-transition syncs additionally bypass the limiter — the Settings "Sync
+now" button, a successful `ensureScope()`, and the moment a couple first pairs. Each corresponds to a
+discrete user action and cannot loop. Exponential backoff on 429/503 with a user-visible rate-limited
+state. (The limiter is per device, not per user: server-side enforcement would need a last-sync
+column on `users` — the recorded upgrade path.)
 
 The client already holds the grant from sign-in, calls `freeBusy.query` itself, and posts the
 resulting busy intervals to `PUT /blocks/google`. **No OAuth refresh token is stored server-side**, so
@@ -291,6 +295,7 @@ forward-compat.
 | `hello` | on connect: `{uid, coupleId}` |
 | `block:set` | block create/update (sent to both partners; `onlyMe` scrubbed for the non-owner) |
 | `block:del` | block delete |
+| `blocks:changed` | a whole-set replacement (`PUT /blocks/google`): one message, not one `block:set` per interval, and the only way to express an *empty* replacement. Receivers refetch their visible range once |
 | `overlap` | server recomputed and the result changed: `{coupleId, windows, computedAt}` |
 | `unpair` | unpair |
 | `pairing` | invite redeemed |
