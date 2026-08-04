@@ -786,7 +786,11 @@ git commit -m "feat(backend): add membership guard, wire scrubbing, and socket r
 - Test: `backend/src/__tests__/overlapService.test.ts`
 
 **Interfaces:**
-- Consumes: `computeOverlap`, `computeInputHash`, `OverlapInput`, `Block`, `OverlapWindow` from `./overlap/index.js`; `query`, `withTx`; `assertMember`, `partnerUid`; `sendTo` from `sockets.ts`; `pushOverlapChanged` from `push.ts`.
+- Consumes: `computeOverlap`, `computeInputHash`, `OverlapInput`, `Block`, `OverlapWindow` from `./overlap/index.js`; `withTx` and the `Querier` it yields; `toEngineBlock` from `wire.ts`; `sendTo` from `sockets.ts`; `pushOverlapChanged` from `push.ts`.
+  **Deliberately NOT `assertMember`/`partnerUid`** — both use the pool-level `query`, so calling them
+  here would run outside the transaction and outside the advisory lock. This module loads the couple
+  row itself with the transaction's `Querier` and re-checks `status = 'active'` there. Routes still
+  call `assertMember` before `refreshOverlap`; that check is about the caller, not about the lock.
   **`push.ts` is delivered in Task 4, not Task 8** — Task 5 imports it, so it must exist first. Task 4 renames the draft's `pushOverlap(partner, windows)` to `pushOverlapChanged(uid, tokens, windows, timezone)` — taking tokens explicitly, since `refreshOverlap` already loaded both user rows — and Task 8 only hardens it (token-pruning tests, body formatting).
 - Produces:
   ```ts
@@ -897,6 +901,11 @@ Load in one round trip inside the lock: the couple row, both user rows (`timezon
 `show_late_night_windows`, `notifications_enabled`, `fcm_tokens`), and every `timeblocks` row for the
 couple. Partition by `couple.user_a_uid`. `onlyMe` blocks go into the engine input unscrubbed —
 scrubbing is a presentation concern.
+
+An **inactive couple, or either partner missing a timezone**, returns
+`{ windows: [], computedAt: now, changed: false }` with no upsert and no fan-out. Pairing is gated
+behind timezone onboarding and re-enforced in the redeem transaction, so a null timezone here means
+the couple is simply not computable — do not make a `timezone!` assertion load-bearing.
 
 **Fan-out and push — and the distinction matters.** The WS `overlap` message goes to **both**
 partners including `triggeredBy`: the writer's own window list changed and their store must be
