@@ -2024,7 +2024,10 @@ The **countdown and "next window"** must pick the earliest `startUtc`, not `wind
 score-sorted (see Global Constraints). Sort a copy by time for the countdown; keep score order for the
 list itself, since that is what makes the good windows surface first.
 
-- [ ] **Step 1: Build `WindowCard`** — start/end in both partners' zones, duration, score-derived emphasis, and a late-night marker when `reasonableBoth` is false. The marker is text or an icon, never colour alone.
+- [ ] **Step 1: Build `WindowCard`** — start/end in both partners' zones, duration, score-derived emphasis, and a marker when `reasonableBoth` is false. The marker is text or an icon, never colour alone —
+  and word it carefully: `reasonableBoth` is a **couple-level preference flag**, not a per-window
+  property (§3), so a card carrying it is not necessarily itself late at night. "May run late" is
+  honest; "Late night" is not.
 - [ ] **Step 2: Build the screen** — both partners' live clocks (tick once a **minute**, not once a second), a countdown to the next window, then the full window list with an any/30m/1h/2h filter (display-only per §0.7). **Drop any window whose `endUtc` is already past** before rendering — §9 notes the stored row can lag the clock.
 - [ ] **Step 3: Build the three empty states, which are the whole UX of this screen** — (a) `sync` returned `'scope-missing'` → an inline "Allow calendar access" row calling `ensureScope()`, above the list rather than replacing it, since manual blocks may still produce windows; (b) no windows → "you two have no shared free time in the next 14 days", with a link to the Calendar tab to review blocks; (c) loading → a skeleton, never a bare spinner over an empty list.
 - [ ] **Step 4: Pull-to-refresh runs both** `calendar.sync(coupleId)` and `api.latestOverlap(coupleId)`, in that order. Refreshing windows without re-syncing the calendar is the bug a user will report as "it's out of date".
@@ -2044,7 +2047,9 @@ edits it; the FAB creates one.
 
 - [ ] **Step 1: Build `WeekGrid`** — 7 day columns × 24 hour rows in the viewer's timezone. Render from each block's **server-supplied `occurrences`** array (Task 7 Step 3), never from `recurrence_rule`; the client cannot expand recurrence and must not try. Overlap windows layer underneath the blocks.
 - [ ] **Step 2: Fetch the visible range** — `GET /blocks?coupleId=X&from=<weekStart>&to=<weekEnd>` on every week change, so occurrences always cover what is on screen. Anchor page 0 to a fixed epoch Monday so paging is deterministic; add a "today" jump.
-- [ ] **Step 3: Wire the taps** — own block → `block-form` prefilled; google-sourced block → a read-only sheet with no edit affordance; partner's `onlyMe` block → "Busy", no title (the server already nulled it, so there is nothing to hide client-side); window → the same detail sheet as Task 14; FAB → empty `block-form`.
+- [ ] **Step 3: Wire the taps** — own block → `block-form` prefilled; google-sourced block → a read-only sheet with no edit affordance; partner's `onlyMe` block → "Busy", no title (the server already nulled it, so there is nothing to hide client-side); window → a detail sheet showing both partners' zones, the duration, and the score/late-night
+  markers. **Task 14 deliberately built no detail sheet** — its `WindowCard` is not tappable, so this
+  task owns the sheet. Reuse `WindowCard` inside it rather than duplicating the formatting.
 - [ ] **Step 4: Build `RecurrencePicker`** — none / daily / weekly (with weekday selection) / monthly, emitting an RRULE string. Emit **only** rules the backend accepts (§3.2), since Task 7 rejects anything else at write time.
 - [ ] **Step 5: Build `block-form`** — title, type, category, start/end pickers in the user's zone, the recurrence picker, and a visibility toggle whose helper text says plainly that `onlyMe` hides the title from your partner but still blocks out the time. Validate non-empty title and `end > start` locally; surface the server's 400 when it rejects anyway. Delete lives here, behind a confirm.
 - [ ] **Step 6: Verify on Android** — `npx expo run:android`; create a weekly block and confirm it appears on **every** expected day (this is what proves server-side expansion works end to end); confirm a DST week does not visually shift; confirm the free-time list updates over the WS without a manual refresh.
