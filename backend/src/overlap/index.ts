@@ -15,6 +15,11 @@ export { ALGO_VERSION, HORIZON_DAYS, MAX_WINDOWS, MIN_WINDOW_MINUTES, SLEEP_HOUR
 export type { Block, OverlapInput, OverlapWindow, Prefs } from './types.js';
 export { computeInputHash } from './hash.js';
 
+// Needed by GET /blocks, which expands each block's occurrences into the client's visible range so
+// the app can render recurring blocks without an rrule dependency of its own.
+export { expandBlock } from './recurrence.js';
+export type { Interval } from './intervals.js';
+
 /** Free time for one partner inside the horizon: expand → drop `free` → merge → invert. */
 function freeTime(blocks: Block[], windowStart: number, windowEnd: number): Interval[] {
   const busy: Interval[] = [];
