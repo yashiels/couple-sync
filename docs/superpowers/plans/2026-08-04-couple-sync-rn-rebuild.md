@@ -275,26 +275,36 @@ git commit -m "chore(repo): scrap Flutter app, keep overlap engine, fix backend 
 - Consumes: nothing.
 - Produces:
   ```ts
-  // src/db.ts
-  export function getPool(): pg.Pool
-  export function query<T extends pg.QueryResultRow = pg.QueryResultRow>(
-    sql: string, params?: unknown[]
-  ): Promise<pg.QueryResult<T>>
-  /** Runs fn inside BEGIN/COMMIT; ROLLBACK + rethrow on any throw. Always releases the client. */
-  export function withTx<T>(fn: (c: pg.PoolClient) => Promise<T>): Promise<T>
-  /** SELECT 1. Throws on failure — called at boot so a bad DB crashes instead of reporting healthy. */
+  // src/db.ts — the surviving draft is already correct. VERIFY it, keep it, do not rewrite it.
+  export const pool: pg.Pool
+  export type Querier = {
+    query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>
+  }
+  /** Returns ROWS, not a QueryResult — so callers write `const [row] = await query(...)`. */
+  export function query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>
+  /** BEGIN/COMMIT, ROLLBACK + rethrow on throw, always releases. The callback receives a Querier
+   *  bound to the one client, so every statement inside really is in the transaction. */
+  export function withTx<T>(fn: (q: Querier) => Promise<T>): Promise<T>
+  /** SELECT 1. Throws — called at boot so a bad DB crashes instead of reporting healthy. */
   export function assertReachable(): Promise<void>
   ```
-  No `closePool` — nothing in this plan calls it. Add it alongside a graceful-shutdown handler if and
-  when one is needed, not before.
 
-  **`db.ts` must register an int8 parser at module load:**
-  ```ts
-  // pg returns BIGINT as a string by default, which would make every *_utc field a string
-  // and quietly falsify every timestamp type in wire.ts. Epoch ms fits in a double until
-  // year 287396, so Number is lossless here.
-  pg.types.setTypeParser(20, Number)
-  ```
+**`query()` returns `T[]`, deliberately.** The draft already does this and it is the better API: every
+call site reads `const [row] = await query(...)` instead of destructuring `.rows`, and the two
+surviving draft consumers (`couples.ts:9`, `routes/auth.ts:14`) already depend on it. Specifying
+`QueryResult<T>` instead would break both of them and make Task 3's `pnpm build` fail before Tasks 4
+and 6 get a chance to rewrite them.
+
+No `rowCount` is needed anywhere: a `DELETE ... RETURNING id` returns rows, so `.length === 0` is the
+404 signal. One function covers reads, writes and deletes.
+
+No `closePool` and no `getPool()` — nothing in this plan calls either.
+
+**The int8 parser is already in the draft** (`pg.types.setTypeParser(pg.types.builtins.INT8, Number)`)
+— keep it. Without it every `*_utc` column arrives as `"1712345678000"` while `wire.ts` declares it a
+`number`: it type-checks and is wrong. Assert it in a **`db.test.ts` unit test with `config.js`
+mocked**, not in the migration test — `db.ts` imports `config.ts`, which demands Firebase credentials
+and `CORS_ORIGINS`, and the migration test must stay runnable with only a database URL.
 
 - [ ] **Step 1: Write the schema, exactly per §2**
 
@@ -414,11 +424,18 @@ describe.skipIf(!url)('migrations', () => {
   it('cascades timeblocks and overlaps_latest when a couple row is deleted', async () => { /* … */ })
   it('nulls users.couple_id when the couple is deleted', async () => { /* ON DELETE SET NULL */ })
   it('allows a user row with a null timezone', async () => { /* onboarding depends on it */ })
-  it('returns BIGINT columns as numbers, not strings', async () => {
-    // insert created_at: 1712345678000, read it back, expect typeof === 'number'
-    // Without the int8 parser in db.ts this fails, and every timestamp in wire.ts is a lie.
-  })
 })
+```
+
+The int8-parser assertion lives in `src/__tests__/db.test.ts` with `config.js` mocked, **not** here:
+this suite must run with only `TEST_DATABASE_URL`, and importing `db.ts` would pull in `config.ts` and
+its Firebase requirements.
+
+```ts
+// src/__tests__/db.test.ts — vi.mock('../config.js')
+it('parses BIGINT as a number, not a string')   // insert 1712345678000, expect typeof 'number'
+it('withTx rolls back and rethrows when the callback throws')
+it('withTx releases the client on both the success and the error path')
 ```
 
 - [ ] **Step 5: Run it against a real database**
@@ -436,8 +453,18 @@ Expected: all migration tests pass, and the 135 engine tests still pass.
 
 - [ ] **Step 6: Commit**
 
+First prove the whole tree still compiles, so Task 3 does not inherit a broken build:
+
 ```bash
-git add backend/src/migrations backend/src/migrate.ts backend/src/db.ts backend/src/__tests__/migrate.test.ts
+cd backend && pnpm build && pnpm test    # tsc must exit 0 with every draft file still present
+```
+
+If `pnpm build` fails on a draft file, you changed a shared signature — either keep the draft's
+signature (usually correct, as with `query()` returning `T[]`) or fix that draft now. Do not leave a
+red tree for a later task.
+
+```bash
+git add backend/src/migrations backend/src/migrate.ts backend/src/db.ts backend/src/__tests__
 git commit -m "feat(backend): add schema, migration runner, and db layer"
 ```
 
@@ -474,7 +501,9 @@ git commit -m "feat(backend): add schema, migration runner, and db layer"
     Promise<{ token: string; errorCode: string | null }[]>
 
   // src/auth.ts
-  /** Fastify preHandler. 401 on a missing/invalid token. Sets req.uid. */
+  /** Fastify preHandler. 401 on a missing/invalid token.
+   *  Sets BOTH req.uid AND req.claims — Task 6's /auth/verify upsert needs email/name/picture
+   *  from the decoded token, and re-verifying it there would be a second network round trip. */
   export const requireAuth: preHandlerHookHandler
   /** For the WS upgrade: Authorization header first, then ?token=. Throws HttpError(401). */
   export function uidFromRequest(req: IncomingMessage): Promise<string>
@@ -483,7 +512,10 @@ git commit -m "feat(backend): add schema, migration runner, and db layer"
   export class HttpError extends Error { constructor(status: number, code: string, detail?: string) }
   export function registerErrorHandler(app: FastifyInstance): void
   ```
-  `req.uid` is declared on `FastifyRequest` via module augmentation so every route reads it type-safely.
+  Both `req.uid: string` and `req.claims: DecodedIdToken` (from `firebase-admin/auth`) are declared on
+  `FastifyRequest` via module augmentation, so every route reads them type-safely. The surviving draft
+  calls this `req.tokenClaims`; pick one name, declare it, and make the draft match — Task 6 fails to
+  compile if the augmentation is missing.
 
 - [ ] **Step 1: Write the config tests first**
 
@@ -515,6 +547,7 @@ it('401s with no Authorization header')
 it('401s on a malformed Authorization header')      // no "Bearer " prefix
 it('401s when verifyIdToken rejects')
 it('sets req.uid from a valid token')
+it('sets req.claims with email, name and picture from the decoded token')
 it('reads the token from the Authorization header on a WS upgrade')
 it('falls back to ?token= on a WS upgrade when no header is present')
 it('prefers the header over ?token= when both are present')
@@ -676,7 +709,18 @@ git commit -m "feat(backend): add fail-fast config, firebase init, auth, and err
   export function isOnline(uid: string): boolean
   /** false when uid has no live socket. */
   export function sendTo(uid: string, msg: WsMessage): boolean
+
+  // src/push.ts — delivered by THIS task, because Task 5 imports it.
+  /** Sends to every token for uid; prunes only hard-invalid tokens; no-op when tokens is empty.
+   *  Rejects rather than throwing synchronously, so callers can Promise.allSettled it. */
+  export function pushOverlapChanged(
+    uid: string, tokens: string[], windows: OverlapWindow[], timezone: string
+  ): Promise<void>
   ```
+
+`pushOverlapChanged` takes the tokens explicitly rather than re-reading the user row: `refreshOverlap`
+already loaded both rows inside its transaction, and a second query after commit could observe a
+different value.
 
 There is deliberately no `toUserRow`/`toBlockRow` mapper and no contract test. `pg` already returns
 rows in this shape, and the app imports the same declarations, so there is nothing to convert and
@@ -817,8 +861,8 @@ export async function refreshOverlap(coupleId: string, triggeredBy: string | nul
     return { windows, computedAt: now, changed: true }
   })
 
-  if (committed.changed) await fanOut(coupleId, committed, triggeredBy)
-  return committed
+  if (committed.changed) await fanOut(committed, triggeredBy, log)
+  return { windows: committed.windows, computedAt: committed.computedAt, changed: true }
 }
 ```
 
@@ -832,23 +876,37 @@ partners including `triggeredBy`: the writer's own window list changed and their
 updated, otherwise the device that made the edit is the one showing stale windows. Only the **push**
 is suppressed for `triggeredBy` — nobody should get an FCM notification about their own action.
 
-```ts
-async function fanOut(coupleId, committed, triggeredBy) {
-  // 1. BOTH WS sends first, synchronously, before awaiting anything. If an await sat between
-  //    them, a newer refresh's message could overtake an older one and the store would settle
-  //    on stale windows.
-  const delivered = new Map<string, boolean>()
-  for (const uid of [a, b]) delivered.set(uid, sendTo(uid, overlapMsg))
+The transaction must hand out the recipient data it already loaded — `RefreshResult` alone does not
+carry it, and re-querying after commit could observe different rows:
 
-  // 2. Then the pushes. allSettled + log: the mutation is already committed, so a dead FCM
+```ts
+/** Private. What the transaction returns internally. */
+interface Committed extends RefreshResult {
+  coupleId: string
+  recipients: { uid: string; timezone: string; tokens: string[]; notificationsEnabled: boolean }[]
+}
+
+async function fanOut(c: Committed, triggeredBy: string | null, log: FastifyBaseLogger) {
+  const msg: WsMessage = {
+    t: 'overlap', couple_id: c.coupleId, windows: c.windows, computed_at: c.computedAt,
+  }
+
+  // 1. BOTH WS sends first, synchronously, before ANY await. An await between them would let a
+  //    newer refresh's message overtake an older one and leave the store on stale windows.
+  const delivered = new Map(c.recipients.map((r) => [r.uid, sendTo(r.uid, msg)]))
+
+  // 2. Then the pushes. allSettled + log, because the mutation is already committed: a dead FCM
   //    endpoint must not turn a successful write into an HTTP 500.
-  const pushes = [a, b]
-    .filter((uid) => uid !== triggeredBy && !delivered.get(uid))
-    .map((uid) => pushOverlapChanged(uid, committed.windows, tzOf(uid)))
-  const results = await Promise.allSettled(pushes)
-  for (const r of results) if (r.status === 'rejected') logger.warn({ err: r.reason }, 'push failed')
+  const results = await Promise.allSettled(
+    c.recipients
+      .filter((r) => r.uid !== triggeredBy && !delivered.get(r.uid) && r.notificationsEnabled)
+      .map((r) => pushOverlapChanged(r.uid, r.tokens, c.windows, r.timezone)),
+  )
+  for (const r of results) if (r.status === 'rejected') log.warn({ err: r.reason }, 'push failed')
 }
 ```
+
+`refreshOverlap` returns only the public `RefreshResult`; `Committed` never leaves the module.
 
 The WS `overlap` goes to **both** partners including `triggeredBy` — the writer's own window list
 changed and their store must update, or the very device that made the edit shows stale data. Only the
@@ -1194,7 +1252,7 @@ it('closes with 4001 when no token is supplied')
 it('closes with 4001 when verifyIdToken rejects')
 it('accepts a token from the Authorization header on the upgrade')
 it('accepts a token from ?token= when no header is present')
-it('sends hello with uid and coupleId immediately on connect')
+it('sends hello with uid and couple_id immediately on connect')
 it('registers the socket so sendTo reaches it')
 it('unregisters on close, after which isOnline is false')
 it('supports two concurrent sockets for the same uid')       // two devices
@@ -1325,7 +1383,7 @@ git commit -m "feat(backend): containerize with healthcheck and local compose st
 ## Task 10: Expo scaffold, routing, guard chain, and store
 
 **Files:**
-- Create: `app.config.ts`, `app/_layout.tsx`, `app/auth.tsx`, `app/timezone-setup.tsx`, `app/pairing.tsx`, `app/(tabs)/_layout.tsx` + the **three** tab screens (`index`, `calendar`, `settings`), `app/block-form.tsx`, `src/store.ts`, `src/theme.ts`, `.env.example`
+- Create: `app.config.ts`, `vitest.config.ts` (repo root), `app/_layout.tsx`, `app/auth.tsx`, `app/timezone-setup.tsx`, `app/pairing.tsx`, `app/(tabs)/_layout.tsx` + the **three** tab screens (`index`, `calendar`, `settings`), `app/block-form.tsx`, `src/store.ts`, `src/theme.ts`, `.env.example`
 - Modify: `tsconfig.json`, `package.json` (root)
 
 **Interfaces:**
@@ -1428,11 +1486,24 @@ While `hydrated` is false, render a splash — never a screen. A wrong-route fla
 
 `couplesync://invite/:code` must call `setPendingInvite(code)` and survive sign-in. Once authenticated and unpaired, `/pairing` opens on the Enter tab with the code pre-filled, and `setPendingInvite(null)` runs after it is consumed. Handle both cold start (`Linking.getInitialURL`) and warm (`Linking.addEventListener`).
 
-- [ ] **Step 4: Write `src/theme.ts` and `src/store.ts`**
+- [ ] **Step 4: Write the root `vitest.config.ts` now, not in Task 17**
+
+Vitest's default `include` is `**/*.{test,spec}.?(c|m)[jt]s?(x)`, so without this the app's `npm test`
+walks into `backend/src/**/*.test.ts` and fails — the app job never installs backend dependencies.
+Task 11 is the first task to run `npm test`, so the config has to exist before it.
+
+```ts
+import { defineConfig } from 'vitest/config'
+export default defineConfig({ test: { include: ['src/**/*.test.ts'], environment: 'node' } })
+```
+
+Verify: `npm test` reports 0 app tests and does **not** mention the 135 engine tests.
+
+- [ ] **Step 5: Write `src/theme.ts` and `src/store.ts`**
 
 Theme: colors (light + dark), spacing scale, type scale. Plain objects, no styling library. Store: exactly the interface above, no persistence yet.
 
-- [ ] **Step 5: Create every screen as a one-line stub**
+- [ ] **Step 6: Create every screen as a one-line stub**
 
 Literally `export default () => <Text>auth</Text>` per screen — six files, one line each. Do **not**
 lay out the screens here: Tasks 12–16 rewrite every one of them, and laying them out twice is a
@@ -1440,7 +1511,7 @@ wasted pass. The only files with real content in this task are `_layout.tsx` (th
 `(tabs)/_layout.tsx` (the **three**-tab bar: Free time, Calendar, Settings), because those are what
 you are actually verifying.
 
-- [ ] **Step 6: Verify**
+- [ ] **Step 7: Verify**
 
 ```bash
 npx tsc --noEmit && npx expo-doctor
@@ -1450,19 +1521,32 @@ npx expo prebuild --platform android --clean
 
 **`expo prebuild` cannot succeed without `google-services.json` on disk.** The
 `@react-native-firebase/app` config plugin throws when `android.googleServicesFile` is missing or
-points at a nonexistent path (`plugin/build/android/copyGoogleServices.js:18`). So either obtain the
-real file from the Firebase console first, or commit a clearly-labelled placeholder
-`google-services.placeholder.json` and point `android.googleServicesFile` at it so the scaffold
-verifies. The plugin only checks that the file exists and copies it
-(`@react-native-firebase/app/plugin/src/android/copyGoogleServices.ts:14`), so a placeholder is
-enough for a **prebuild-only** check — it will not make Firebase work at runtime. If you take the
-placeholder route, add it to this task's `git add` list; the real `google-services.json` stays
-gitignored. **Do not** claim prebuild passes without having run it. If the real file is unavailable,
-stop at `tsc --noEmit && expo-doctor`, say so explicitly in your report, and list obtaining
-`google-services.json` as a human prerequisite blocking Task 13.
+points at a nonexistent path, and it only *copies* the file — it never parses it
+(`@react-native-firebase/app/plugin/src/android/copyGoogleServices.ts:14`).
 
-Expected when the file exists: tsc clean; `prebuild` generates `android/` without error. Report every
-`expo-doctor` warning honestly rather than suppressing it.
+Separate the two needs, and point `app.config.ts` at the **real** filename:
+
+```ts
+android: { googleServicesFile: './google-services.json' }   // real file, gitignored
+```
+
+- **Locally and in any real build:** the developer drops the real `google-services.json` from the
+  Firebase console at the repo root. It stays gitignored.
+- **In CI**, where no real file exists, the workflow copies the committed placeholder into place
+  immediately before prebuild: `cp google-services.placeholder.json google-services.json`.
+
+Do **not** point the config permanently at the placeholder. CI would go green while `expo run:android`
+silently consumed a fake config, and Google Sign-In would fail at runtime with nothing explaining why
+— blocking Task 12's device walk, not just Task 13's.
+
+A placeholder-driven prebuild proves only that the config plugins *execute*. It is not evidence of a
+working native build and must not be reported as one. **Do not** claim prebuild passes without having
+run it; if no real file is available, stop at `tsc --noEmit && expo-doctor`, say so explicitly, and
+list `google-services.json` under the human prerequisites.
+
+Expected: tsc clean; `prebuild` generates `android/` without error. Report every `expo-doctor` warning
+honestly rather than suppressing it.
+
 
 **`expo prebuild` is the checkpoint, not `expo start`.** `@react-native-firebase/*` ships native
 modules, so this app can never run in Expo Go — every later verification step needs a development
@@ -1471,10 +1555,10 @@ the scaffold, rather than discovering it in Task 12 when a screen refuses to loa
 (`google-services.json`) does not exist yet, so `prebuild` succeeding while `run:android` cannot yet
 launch is the expected state — say so in your report. **Android only** — do not prebuild iOS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add app app.config.ts src tsconfig.json package.json .env.example google-services.placeholder.json
+git add app app.config.ts vitest.config.ts src tsconfig.json package.json .env.example google-services.placeholder.json
 git commit -m "feat(app): scaffold expo-router tree, guard chain, store and theme"
 ```
 
@@ -1579,7 +1663,12 @@ it('applies user:update to the store')
 it('resets the store and routes to /pairing on unpair')
 it('refetches user and couple on pairing')
 it('ignores a message with an unknown t')
+it('calls hydrateFromServer on hello when the server couple_id differs from local')
+it('does NOT rehydrate on hello when the server couple_id matches local')   // no refetch storm
+it('resetCouple()s on hello when the server reports couple_id null')        // unpaired elsewhere
 it('refetches the latest overlap after a reconnect')   // catches anything missed while offline
+it('refetches the visible range on blocks:changed')
+it('does NOT refetch on blocks:changed when visibleRange is null')
 ```
 
 - [ ] **Step 4: Implement `src/auth.ts` and wire the sign-in screen**
@@ -1588,29 +1677,44 @@ Google via `@react-native-google-signin/google-signin` → Firebase credential. 
 couple/blocks/windows fetch throws for a first-time or unpaired user (no `couple_id`) and they never
 reach their guard:
 
+**One idempotent helper, three callers.** Cold start, the WS `hello`, and a successful invite redeem
+all need exactly the same work, so write it once:
+
+```ts
+/** Idempotent. Safe to call on cold start, on every WS hello, and after redeeming an invite.
+ *  Returns the couple_id it settled on, so callers can detect a transition. */
+export async function hydrateFromServer(): Promise<string | null> {
+  const me = await api.me()          // authoritative: local user.couple_id may be stale
+  setUser(me)
+  if (!me.couple_id) { resetCouple(); return null }
+  const couple  = await api.getCouple(me.couple_id)
+  const [partner, overlap] = await Promise.all([
+    api.getUser(partnerUidOf(couple, me.uid)),
+    api.latestOverlap(me.couple_id),
+  ])
+  setCouple(couple); setPartner(partner); setWindows(overlap.windows, overlap.computed_at)
+  return me.couple_id
+}
+```
+
+Cold start:
+
 ```
 uid arrives
-  → api.verify()  → setUser
-  → ws.connect()            // BEFORE the couple_id branch. An unpaired inviter must have a live
-                            // socket or they never receive the `pairing` message and sit on the
-                            // pairing screen after their partner redeems the code.
-  → if (!user.couple_id) { setHydrated(true); return }   // guards route to tz-setup or pairing
-  → try in parallel: getCouple(couple_id), getUser(partnerUid), latestOverlap(couple_id)
-       → setCouple, setPartner, setWindows     // partner is REQUIRED: the Free time tab shows
-                                               // two clocks and both zones in every window
-    catch → setHydrationError(e)               // NEVER leave the splash up forever
-  → setHydrated(true)                          // in a finally, so an error still renders something
+  → ws.connect()          // BEFORE anything couple-related. An unpaired inviter needs a live socket
+                          // or they never receive `pairing` and sit on the pairing screen forever.
+  → try { await api.verify(); await hydrateFromServer() }
+    catch (e) { setHydrationError(e) }     // NEVER leave the splash up forever
+    finally  { setHydrated(true) }          // an error still renders something (a retry screen)
   → then, not blocking hydration: notifications + auto-sync (Task 13)
 ```
 
-`partnerUid` is whichever of `user_a_uid`/`user_b_uid` is not you. Blocks are **not** fetched here —
-they need a `from`/`to` range and only the Calendar tab knows one.
+Blocks are **not** fetched here — they need a `from`/`to` range and only the Calendar tab knows one.
+`partnerUidOf` returns whichever of `user_a_uid`/`user_b_uid` is not you.
 
-The store therefore also needs `hydrationError: string | null` + `setHydrationError`, and the root
-layout renders a retry screen when it is set. A partner row missing from our own database is
-invariant corruption rather than an expected state, but an infinite splash is the worst possible way
-to surface it. (Note: a partner deleting their *Firebase* account leaves our `users` row intact, so
-`getUser(partnerUid)` keeps working — this path is about real failures, not account deletion.)
+The store needs `hydrationError: string | null` + `setHydrationError`, and the root layout renders a
+retry screen when it is set. (A partner deleting their *Firebase* account leaves our `users` row
+intact, so `getUser` keeps working — this path is about real failures, not account deletion.)
 
 On sign-out: `disconnect()`, remove this device's FCM token server-side (see Task 13), then `reset()`.
 
@@ -1625,6 +1729,46 @@ npx tsc --noEmit && npm test
 git add src app tsconfig.json
 git commit -m "feat(app): add api client, websocket client, firebase auth and time helpers"
 ```
+
+---
+
+## Human prerequisites before Task 12
+
+Tasks 1–11 need none of this. Task 12 onward runs on a real device, so a person must supply these
+first — a subagent cannot obtain any of them, and every one of them fails *silently* if missing:
+
+| Prerequisite | Why | Symptom when absent |
+|---|---|---|
+| `google-services.json` from the Firebase console | RNFirebase native config | prebuild throws, or Firebase no-ops at runtime |
+| **Web** OAuth client id in `GOOGLE_WEB_CLIENT_ID` | `@react-native-google-signin` needs the Web id, not the Android one, as `webClientId` | sign-in never resolves |
+| Debug **and** release SHA-1 fingerprints registered in Firebase | Android Google Sign-In verification | sign-in fails with no useful error — the single most common setup mistake |
+| Google Calendar API enabled in the GCP project | `freeBusy.query` | 403 on every sync |
+| Backend reachable at `API_BASE_URL` with valid `FIREBASE_SERVICE_ACCOUNT_JSON` | every request | 401 everywhere |
+| An Android emulator or device with Google Play services | Google Sign-In + FCM | sign-in unavailable |
+| A real Google account with some calendar events | proving the sync end to end | an empty but "successful" sync |
+| A **second** account or device | pairing, and every two-sided WS path | pairing untestable |
+
+If any are missing, stop and report which. Do not simulate a device walk or report it as passing.
+
+---
+
+## Human prerequisites before Task 12
+
+Tasks 1–11 need none of this. Task 12 onward runs on a real device, so a person must supply these
+first — a subagent cannot obtain any of them, and every one fails *silently* when missing:
+
+| Prerequisite | Why | Symptom when absent |
+|---|---|---|
+| `google-services.json` from the Firebase console | RNFirebase native config | prebuild throws, or Firebase no-ops at runtime |
+| **Web** OAuth client id in `GOOGLE_WEB_CLIENT_ID` | `@react-native-google-signin` needs the Web id, not the Android one | sign-in never resolves |
+| Debug **and** release SHA-1 fingerprints registered in Firebase | Android Google Sign-In verification | sign-in fails with no useful error — the most common setup mistake |
+| Google Calendar API enabled in the GCP project | `freeBusy.query` | 403 on every sync |
+| Backend reachable at `API_BASE_URL` with a valid service account | every request | 401 everywhere |
+| Android emulator or device **with Google Play services** | Google Sign-In + FCM | sign-in unavailable |
+| A real Google account with some calendar events | proving sync end to end | an empty but "successful" sync |
+| A **second** account or device | pairing and every two-sided WS path | pairing untestable |
+
+If any are missing, stop and report which. Do not simulate a device walk or report it as passing.
 
 ---
 
@@ -1646,18 +1790,24 @@ gets only an HTTP `{ couple_id }` response — no WS message goes to themselves 
 
 ```
 redeemInvite(code) -> { couple_id }
-  → api.me()                → setUser        // REQUIRED: the local user row still has couple_id
-                                             // null, and the guard reads user.couple_id — without
-                                             // this refetch the redeemer stays on /pairing
-  → getCouple(couple_id)    → setCouple
-  → getUser(partnerUid)     → setPartner
-  → latestOverlap(couple_id)→ setWindows
-  → calendar.sync(couple_id, { force: true })   // a new couple has zero google blocks
+  → await hydrateFromServer()      // the SAME helper cold start uses. api.me() first is essential:
+                                   // the local row still has couple_id null and the guard reads it,
+                                   // so without the refetch the redeemer stays on /pairing.
 ```
+
+The inviter is moved by the WS `pairing` message, and **`hello` is the safety net** for when that
+message is missed — the socket may still be fetching its token when the redemption lands, or the
+inviter may be offline entirely. On every `hello`, compare the server's authoritative `couple_id` to
+local state and call `hydrateFromServer()` when they differ. Without that reconciliation the inviter
+can stay locally unpaired indefinitely, and no amount of correct `pairing` delivery fixes the missed
+case.
 
 **Do not fetch blocks here** — `listBlocks` requires a `from`/`to` range and none exists until the
 Calendar tab opens and sets `visibleRange`. **No polling loop** either way; the old build polled
 every 3 s.
+
+The forced first-pair calendar sync is **not** wired in this task — `src/calendar.ts` does not exist
+until Task 13, which owns adding it to both pairing paths.
 - [ ] **Step 5: Verify** — `npx tsc --noEmit`, then run on a simulator and walk sign-in → timezone → pairing.
 - [ ] **Step 6: Commit** — `git add app src && git commit -m "feat(app): implement auth, timezone setup and pairing screens"`
 
@@ -1665,8 +1815,18 @@ every 3 s.
 
 ## Task 13: Google Calendar connect + sync (the core product loop)
 
-**Files:** `src/calendar.ts`, `src/notifications.ts`, modify `app/_layout.tsx`
-**Test:** `src/__tests__/calendar.test.ts`
+**Files:**
+- Create: `src/calendar.ts`, `src/notifications.ts`
+- Modify: `app/_layout.tsx` (auto-sync + notification wiring), `app/pairing.tsx` (forced sync after
+  redeem), `src/ws.ts` (forced sync when `hello`/`pairing` reports a couple_id **transition**, not on
+  every hello), `src/auth.ts` (delete the FCM token and clear the persisted limiter on sign-out),
+  `src/store.ts` (clear `lastCalendarSyncMs` in both `reset()` and `resetCouple()`), `app/(tabs)/index.tsx`
+  and `app/(tabs)/settings.tsx` (the `ensureScope` prompt row)
+- Test: `src/__tests__/calendar.test.ts`, `src/__tests__/notifications.test.ts`
+
+Every one of those modifications exists because something in this task must be *called* from
+somewhere; an earlier draft of this plan produced the modules and wired none of them up, which is how
+the previous build shipped notifications that existed only as an interface.
 
 This task moved ahead of the screens deliberately. *Connect Gmail → pull free/busy → show free spots*
 **is** the product; a Home screen with no calendar data is a demo. Build the data source first.
@@ -1773,7 +1933,7 @@ as an interface. This task therefore also modifies `app/_layout.tsx` and `app/(t
 | `attachTapHandler()` | `app/_layout.tsx` mount | returns a cleanup, called on unmount |
 | `sync(coupleId)` | `app/_layout.tsx`, after hydration | launch, only if `lastCalendarSyncMs` is over 1 h old (§5 auto-sync) |
 | `ensureScope()` | Free time screen's inline prompt, and Settings | only when `sync` returned `'scope-missing'`; on success sync immediately with `{ force: true }` |
-| `sync(coupleId, { force: true })` | right after a successful pair (both the redeemer's HTTP result and the inviter's `pairing` WS message) | a brand-new couple has zero google blocks; waiting up to an hour to populate them makes the app look broken at the exact moment the user first sees it |
+| `sync(coupleId, { force: true })` | on a couple_id **transition** from null to set — covers the redeemer's HTTP result, the inviter's `pairing` message, and a `hello` that reconciles a missed pairing, without firing again on every reconnect | a brand-new couple has zero google blocks; waiting up to an hour to populate them makes the app look broken at the exact moment the user first sees it |
 
 **Clear the persisted limiter on unpair and on sign-out.** Unpair deletes the couple's blocks, so a
 stale `lastCalendarSyncMs` would suppress the re-sync that repopulates them after re-pairing — the
@@ -1913,6 +2073,7 @@ Two jobs on `ubuntu-latest`, both gating PRs. The previous CI ran static analysi
 #                 with a postgres:16 service container and TEST_DATABASE_URL set,
 #                 so the migration tests actually run
 # job: app      — npm ci; npx tsc --noEmit; npm run lint; npm test;
+#                 cp google-services.placeholder.json google-services.json   <-- CI only
 #                 npx expo prebuild --platform android --no-install
 #                 (the prebuild step is what catches config-plugin breakage; without it a broken
 #                  app.config.ts or a missing googleServicesFile lands with CI fully green)
@@ -1926,12 +2087,9 @@ Two jobs on `ubuntu-latest`, both gating PRs. The previous CI ran static analysi
    import expo from 'eslint-config-expo/flat.js'
    export default [...expo, { ignores: ['backend/**', 'dist/**', 'ios/**', 'android/**'] }]
    ```
-2. `vitest.config.ts` at the repo root — with no `include`, root Vitest walks the whole tree and
-   collects `backend/src/**/*.test.ts`, which fails because the app job never installs backend deps:
-   ```ts
-   import { defineConfig } from 'vitest/config'
-   export default defineConfig({ test: { include: ['src/**/*.test.ts'], environment: 'node' } })
-   ```
+2. The root `vitest.config.ts` already exists — Task 10 Step 4 created it, because Task 11 is the
+   first task to run `npm test` and would otherwise collect the backend suite. Just confirm it is
+   still restricting `include` to `src/**/*.test.ts`.
 
 Run all of it locally before pushing — `npm run lint`, `npm test`, and the Android prebuild must exit
 0, and `npm test` must report only app tests, never the 135 engine tests. Also confirm the app
