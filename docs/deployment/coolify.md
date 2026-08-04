@@ -1,85 +1,57 @@
-# Coolify Deployment
+# Coolify deployment
 
-Couple Sync runs as two independent Coolify apps from the same GitHub repo and
-branch. Keeping them separate lets Coolify rebuild the API and the Flutter web
-bundle independently when `main` changes.
+**One app, not two.** Only the backend is deployed. The client is an Android app installed on a
+device, so there is no web app, no root `Dockerfile`, and nothing that builds from `assets/` or
+`web/`. (An earlier revision of this file described a Flutter web deployable; none of it exists.)
 
-## API App
+## The app
 
 - Name: `couple-sync-api`
-- Build pack: Docker Compose
-- Compose file: `/docker-compose.yml`
+- Build pack: **Docker Compose**
+- Compose file: `/docker-compose.yml` — it builds `./backend/Dockerfile` and carries the Traefik
+  labels, so the container is never published on a host port and Traefik terminates TLS in front.
 - Domain: `https://api-couple-sync.bumblebeefoundation.co.za`
-- Required env:
-  - `DATABASE_URL`
-  - `FIREBASE_PROJECT_ID`
-  - `FIREBASE_SERVICE_ACCOUNT_JSON`
-- Optional env:
-  - `ADMIN_TOKEN`
-  - `CORS_ORIGINS`
+- Repository `yashiels/couple-sync`, branch `main`, auto deploy enabled.
+- Watch paths:
 
-`CORS_ORIGINS` defaults to `*`, which works because the app uses Firebase ID
-tokens in `Authorization` headers rather than ambient cookies. For production
-hardening, set it to a comma-separated allowlist once the web domain is final:
+  ```text
+  backend/**
+  docker-compose.yml
+  ```
 
-```text
-CORS_ORIGINS=https://couple-sync.bumblebeefoundation.co.za,http://localhost:8080
-```
+Do **not** add `docker-compose.override.yml`. It is local-dev only: it publishes port 3000 and starts
+a throwaway trust-auth Postgres with no volume.
 
-## Web App
+## Environment
 
-- Name: `couple-sync-web`
-- Build pack: Dockerfile
-- Dockerfile: `/Dockerfile`
-- Exposed port: `80`
-- Domain: choose the final web domain, for example
-  `https://couple-sync.bumblebeefoundation.co.za`
+Every one of these is required, and **boot is fail-fast on all of them** — a missing or invalid value
+exits the container non-zero rather than serving 401s while reporting healthy.
 
-The web Dockerfile runs:
+| Variable | Notes |
+|---|---|
+| `API_DOMAIN` | Hostname only, no scheme. Consumed by the Traefik router rule in `docker-compose.yml`. |
+| `DATABASE_URL` | Managed Postgres 16. Boot fails if unreachable. |
+| `FIREBASE_PROJECT_ID` | Must equal the service account's `project_id`, or boot fails. |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | The whole service-account key file as one JSON string. Boot mints a real Google OAuth token to prove it works, so the container needs outbound access to Google's token endpoint. |
+| `CORS_ORIGINS` | Comma-separated allowlist. **No default, and `*` is rejected** — `config.ts` refuses to boot on either. This file previously documented the opposite; following it produced a dead container. |
+| `ADMIN_TOKEN` | Optional. Unset means `/admin/cleanup` answers 503 instead of running unauthenticated. |
+
+The Android app talks to this host over HTTPS with a Firebase ID token in the `Authorization` header —
+no cookies — so `CORS_ORIGINS` only needs the origins that actually make browser requests. There is no
+browser client today, so a single placeholder origin is enough; it exists to keep the door shut, not
+open.
+
+## Migrations
+
+`migrations/*.sql` are idempotent DDL and re-run on every boot — the container entrypoint is
+`node dist/migrate.js && node dist/index.js`. There is no version table yet, so a deploy never needs a
+separate migration step.
+
+## Verify a deploy
 
 ```bash
-flutter build web --release --no-wasm-dry-run --dart-define-from-file=env/prod.json
+curl https://api-couple-sync.bumblebeefoundation.co.za/health
 ```
 
-So web builds pick up `API_BASE_URL` and `WS_URL` from `env/prod.json`. Updating
-that file on `main` and pushing will rebuild the web app with the new backend
-URLs.
-
-## Auto-Deploy Behavior
-
-In Coolify, both apps should point at:
-
-- Repository: `yashiels/couple-sync`
-- Branch: `main`
-- Auto deploy: enabled
-- Watch paths configured per app
-
-With that setup:
-
-- API-affecting commits rebuild `couple-sync-api`.
-- Flutter/web-affecting commits rebuild `couple-sync-web`.
-- Shared config changes such as `env/prod.json` rebuild the web app with the
-  new API/WebSocket endpoints.
-
-Recommended watch paths:
-
-```text
-# couple-sync-api
-backend/**
-docker-compose.yml
-
-# couple-sync-web
-assets/**
-env/**
-lib/**
-web/**
-.metadata
-Dockerfile
-pubspec.yaml
-pubspec.lock
-deploy/nginx/**
-```
-
-After the web app domain is created, add that domain to Firebase Authentication
-authorized domains and Google OAuth JavaScript origins if sign-in rejects the
-origin.
+If the container is restarting, read its logs first: a fail-fast boot names the exact variable or the
+unreachable dependency. That is by design and is not a Coolify problem.

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, Text, TextInput } from 'react-native';
 
 import { fontSize, radius, spacing, touchTarget, useColors } from '../theme';
 import { formatClock } from '../time';

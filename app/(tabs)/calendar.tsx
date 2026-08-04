@@ -52,8 +52,11 @@ export default function CalendarScreen() {
   const partnerZone = partner?.timezone ?? zone;
 
   // Page indices are absolute, anchored on a fixed epoch Monday (src/time.ts), so paging is
-  // deterministic instead of relative to whenever the tab happened to open.
-  const todayIndex = useMemo(() => weekIndex(Date.now(), zone), [zone]);
+  // deterministic instead of relative to whenever the tab happened to open. The clock is read once
+  // on mount rather than during render — this screen has no ticking clock, so a stable read is both
+  // correct and pure (react-hooks/purity).
+  const [mountedAt] = useState(() => Date.now());
+  const todayIndex = useMemo(() => weekIndex(mountedAt, zone), [mountedAt, zone]);
   const [index, setIndex] = useState(todayIndex);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +72,9 @@ export default function CalendarScreen() {
     useStore.getState().setVisibleRange(from, to);
 
     let cancelled = false;
+    // A fetch on mount/week-change is what an effect is for, and the spinner has to flip before the
+    // request goes out.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setError(null);
     api
@@ -243,7 +249,7 @@ export default function CalendarScreen() {
         windows={windows}
         viewerUid={viewerUid}
         partnerName={partnerName}
-        today={Date.now()}
+        today={mountedAt}
         onPressBlock={openBlock}
         onPressWindow={(window) => setSheet({ kind: 'window', window })}
       />

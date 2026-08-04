@@ -52,8 +52,13 @@ npm test            # app tests only; the root vitest config excludes backend/
 npx expo run:android
 ```
 
-There is no ESLint config in `backend/` — do not run a lint script there. Deployment is a git push;
-Coolify builds `backend/Dockerfile`.
+`.github/workflows/ci.yml` runs exactly the above on every PR, in two jobs — including both test
+suites, so a locally-skipped test is a red pipeline. `pnpm build` before `pnpm test`, always:
+`boot-esm.test.ts` imports the built output and silently skips when `dist/` is absent. Setting
+`TEST_DATABASE_URL` is what makes the 7 migration tests run instead of skip; CI sets it.
+
+Lint config is `eslint.config.mjs` at the root and it ignores `backend/**` — there is no lint script in
+`backend/`, do not add one. Deployment is a git push; Coolify builds `backend/Dockerfile`.
 
 ## Non-negotiables
 
@@ -94,4 +99,6 @@ get thorough coverage. UI does not get a test per component.
 
 ## Commits
 
-`<type>(<scope>): <message>` — e.g. `feat(backend): add invite redeem transaction`.
+`<type>(<scope>): <message>` — e.g. `feat(backend): add invite redeem transaction`. `.githooks/commit-msg`
+enforces it; there is deliberately no `pre-commit` or `pre-push` hook, because CI gates the same things
+and cannot be `--no-verify`'d.

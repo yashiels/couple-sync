@@ -73,7 +73,9 @@ export default function BlockFormScreen() {
   // A block is authored in the author's zone, and an existing one keeps its own: that zone is what the
   // server anchors recurrence to (§0.3), so re-saving in a different one would move every occurrence.
   const zone = block?.timezone ?? user?.timezone ?? 'UTC';
-  const start = Number(params.start) || Date.now();
+  // Read once on mount: it only seeds the two state values below, and reading the clock during every
+  // render is impure (react-hooks/purity).
+  const [start] = useState(() => Number(params.start) || Date.now());
 
   const [title, setTitle] = useState(block?.title ?? '');
   const [type, setType] = useState<BlockRow['type']>(block?.type ?? 'busy');

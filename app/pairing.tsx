@@ -51,6 +51,9 @@ export default function PairingScreen() {
   // overwrite whatever the user types next.
   useEffect(() => {
     if (!pendingInviteCode) return;
+    // The deep link arrives from outside React (expo-linking, via the store), so syncing it into
+    // local state is what an effect is for.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCode(normalizeInviteCode(pendingInviteCode));
     setTab('enter');
     useStore.getState().setPendingInvite(null);
@@ -60,6 +63,9 @@ export default function PairingScreen() {
   // a deep link does not create a code nobody will ever read. Retried only by the button below.
   useEffect(() => {
     if (tab !== 'share' || invite || creating || createError) return;
+    // Minting the code is a request, and the in-flight flag has to be set before it goes out or the
+    // effect re-enters.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCreating(true);
     api
       .createInvite()

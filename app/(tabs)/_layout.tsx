@@ -6,11 +6,10 @@ import { fontSize, touchTarget, useColors } from '../../src/theme';
 // Three tabs, per REBUILD-SPEC §1. There is no Overlap tab and no Blocks tab: the Calendar tab *is*
 // the block-management surface. No icon library is installed and three glyphs do not justify adding
 // one; each tab keeps its visible label and an accessibilityLabel so the icon is never the only cue.
-const tabIcon =
-  (glyph: string) =>
-  ({ color }: { color: ColorValue }) => (
-    <Text style={{ color, fontSize: fontSize.heading }}>{glyph}</Text>
-  );
+const tabIcon = (glyph: string) =>
+  function TabIcon({ color }: { color: ColorValue }) {
+    return <Text style={{ color, fontSize: fontSize.heading }}>{glyph}</Text>;
+  };
 
 export default function TabsLayout() {
   const colors = useColors();
