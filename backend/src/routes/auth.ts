@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { requireAuth } from '../auth.js';
 import { query } from '../db.js';
-import { toUser, type UserRow } from '../dto.js';
 import { bad } from '../http.js';
+import type { UserRow } from '../wire.js';
 
 export default async function authRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireAuth);
@@ -21,7 +21,8 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
        RETURNING *`,
       [req.uid, c.email ?? '', c.name ?? null, c.picture ?? null, Date.now()],
     );
-    return { user: toUser(row!, true) };
+    // The caller's own row, so fcm_tokens stay on it. Task 6 rewrites this route.
+    return { user: row! };
   });
 
   app.post('/auth/fcm-token', async (req) => {

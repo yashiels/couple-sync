@@ -42,9 +42,3 @@ export async function sendEach(
   const res = await getMessaging(app).sendEach(tokens.map((token) => ({ ...payload, token })));
   return res.responses.map((r, i) => ({ token: tokens[i]!, errorCode: r.error?.code ?? null }));
 }
-
-// Ceiling: raw Messaging handle, kept only because the draft push.ts still calls
-// sendEachForMulticast. Task 8 moves push.ts onto sendEach — delete this export then.
-export function messaging(): ReturnType<typeof getMessaging> {
-  return getMessaging(app);
-}
