@@ -2176,7 +2176,19 @@ behaviour.
 
 - [ ] **Step 2 (executed in Task 13): `src/notifications.ts`**
 
-Request permission, get the FCM token, `api.registerFcmToken`, and re-register on `onTokenRefresh`.
+Permission comes from **`Notifications.requestPermissionsAsync()`**, not
+`messaging().requestPermission()` — the latter is deprecated in RNFirebase 26 and a documented no-op
+on Android that always resolves `AUTHORIZED`, so Android 13+'s `POST_NOTIFICATIONS` would never be
+requested and pushes would silently never arrive. RNFirebase supplies only the token. Then
+`api.registerFcmToken`, and re-register on `onTokenRefresh`.
+
+Convert epoch ms to RFC3339 with `new Date(ms).toISOString()`, not luxon's `.toISO()` — the latter is
+typed `string | null` under `@types/luxon` 3.7 and needs pointless unwrapping for an identical result.
+
+Recorded ceiling worth a device check: `expo-notifications` and `@react-native-firebase/messaging`
+each register an Android `FirebaseMessagingService` and only one wins the merged manifest. If the
+device walk shows a duplicated banner or a dead `onMessage`, the upgrade path is dropping
+`expo-notifications` and displaying with notifee.
 
 **Delete the token server-side on sign-out**, before clearing local auth. Without it, one physical
 device's token stays attached to the previous user's row: sign out, sign in as the partner, and that
