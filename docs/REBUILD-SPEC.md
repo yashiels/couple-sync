@@ -32,9 +32,15 @@ simplifications with a short comment naming the ceiling and the upgrade path.
 6b. **Recurrence is expanded server-side and shipped to the client.** The client has no `rrule`, so
    `GET /blocks` takes a `from`/`to` range and returns per-block `occurrences: {start_utc,end_utc}[]`
    built from the engine's `expandBlock`. A calendar view must never read `recurrence_rule` directly.
-6c. **Google Calendar is the product, not a feature.** *Connect Gmail -> pull free/busy -> show free
-   spots.* Connecting is part of the core flow, reachable from the Free time empty state and
-   Settings — but never a router guard, so declining cannot trap a user.
+6c. **Google Calendar is the product, and Google sign-in is the only door.** Signing in with Google
+   *is* connecting the calendar — `signInWithGoogle()` requests `calendar.readonly` in the same
+   consent flow. There is no connect-calendar screen, no Settings connect/disconnect, and no
+   `connect()`/`disconnect()`/`isConnected()` API. The loop is *sign in with Google -> pull
+   free/busy -> show free spots.*
+6d. **Never assume the calendar scope was granted.** Google lets a user finish sign-in while
+   declining the calendar consent, and a grant can be revoked later. So `sync()` returns
+   `'scope-missing'` and the Free time screen shows one inline "Allow calendar access" row calling
+   `ensureScope()`. One row, never a screen, never a router guard.
 7. **Min window is 30 min, hard-coded.** The Overlap screen's duration filter is display-only.
    No `couples.settings` table.
 8. **Not building** (v1 non-goals): iOS builds, Apple Sign-In, email/password or anonymous auth, a
@@ -59,14 +65,13 @@ partners' free spots*, and the screen count follows that loop and nothing else.
 
 | Screen | User does | Data |
 |---|---|---|
-| Auth | One Google sign-in button, requesting the `calendar.readonly` scope at the same time | -> Firebase ID token, uid, email, name, photo |
+| Auth | One Google sign-in button, requesting `calendar.readonly` in the same consent. States plainly that only busy/free is read, never event titles | -> Firebase ID token, uid, email, name, photo, **and the calendar grant** |
 | Timezone setup | Confirm the detected IANA zone or pick from a searchable list showing each candidate's current local time | device tz; writes `users.timezone` |
 | Pairing | "Share" tab: generate + share a 6-char code. "Enter" tab: redeem partner's code | own `couple_id` (null), invite code + expiry |
-| Connect calendar | One button; states plainly that only busy/free is read, never event titles. Skippable via "I'll add my times manually" | Google grant state. **Pushed from the Free time empty state and from Settings - never a router guard**, so declining cannot trap anyone |
 | **Free time** (tab 1) | Both live clocks, countdown to the next window, then every window with an any/30m/1h/2h filter. Pull-to-refresh syncs the calendar *and* refetches windows | both users' tz + name, overlap windows, calendar-connected state, last sync ms |
 | **Calendar** (tab 2) | Page by week; tap own block to edit, a google block for a read-only sheet, a window for detail; FAB -> block form. Also the block-management surface - there is no separate Blocks tab | own + partner's blocks **with server-expanded `occurrences`**, overlap windows |
 | Block form (modal) | Title, type, category, start/end in local tz, recurrence, visibility, delete. Validate title non-empty and `end > start` | user tz; block on edit |
-| **Settings** (tab 3) | Calendar: connected account, last sync, sync now, disconnect. You: timezone, late-night toggle. Notifications: one toggle. Couple: partner, unpair (confirm), sign out | user row, couple row, calendar state |
+| **Settings** (tab 3) | Calendar: the signed-in Google account, last sync, "Sync now" (**no disconnect** — the grant is the login). You: timezone, late-night toggle. Notifications: one toggle. Couple: partner, unpair (confirm), sign out | user row, couple row, calendar scope state |
 
 **Router guards, in order**: `!authenticated -> /auth`; `!user.timezone -> /timezone-setup`;
 `!user.couple_id -> /pairing`; else the tabs. There is deliberately **no** calendar guard. A
@@ -253,7 +258,9 @@ path → **403**, and a non-existent couple also returns 403 (never leak existen
 
 ## 5. Google Calendar
 
-Google only. Scope: exactly `https://www.googleapis.com/auth/calendar.readonly`. Calendar API v3
+Google only. Scope: exactly `https://www.googleapis.com/auth/calendar.readonly`, requested as part
+of the **sign-in** consent rather than a later escalation, because Google sign-in is the only way
+into the app. Calendar API v3
 **`freeBusy.query` only** — never `events.list`. Primary calendar, 14-day lookahead. Store the
 returned busy intervals as `source='google'`, `type='busy'`, with a placeholder title; discard the
 raw response. **Event titles are never fetched, stored, or displayed — hard
@@ -264,9 +271,14 @@ Auto-sync on launch only if last sync > 1h ago; manual sync from pull-to-refresh
 ≤1 freebusy call per user per hour; exponential backoff on 429/503 with a user-visible
 rate-limited state.
 
-The OAuth token exchange happens on the client (Google Sign-In already holds the grant); the client
-posts the resulting busy intervals to `PUT /blocks/google`. No OAuth refresh token is stored
-server-side — note that ceiling.
+The client already holds the grant from sign-in, calls `freeBusy.query` itself, and posts the
+resulting busy intervals to `PUT /blocks/google`. **No OAuth refresh token is stored server-side**, so
+a sync only happens while the app is open — that is the accepted ceiling. Server-side sync would need
+encrypted refresh-token storage and a scheduler; not v1.
+
+A user may decline the calendar consent while still completing sign-in, or revoke it later. Handle it
+as one inline prompt (`ensureScope()`), never a blocking screen — the app must stay usable with
+manual blocks alone.
 
 ## 6. Realtime + push
 

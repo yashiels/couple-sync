@@ -28,7 +28,8 @@ Every task's requirements implicitly include this section.
 - **`git commit -am` is banned in this plan.** Most tasks create new files, and `-a` stages only *tracked* modifications, so a new file is silently left out. Every commit step names its paths: `git add <paths> && git commit -m "…"`. This exact failure already cost this project its whole backend directory once — it was untracked, so nothing protected it.
 - **Android is the only target for now.** Every verification step runs `npx expo run:android` on an emulator or device. iOS is not built, not tested, and not shipped in this plan — keep the code platform-neutral, but do not spend a step on it.
 - **Google is the only sign-in method.** Apple Sign-In is dropped from this plan: it needs a paid Apple Developer account, it is iOS-only, and Android is the priority. Do not add `expo-apple-authentication`. There is no email/password and no anonymous auth either.
-- **Google Calendar is the product, not a feature.** The core loop is *connect Gmail → we pull your free/busy → we show you both partners' free spots*. Connecting a calendar is therefore an onboarding step, not a Settings toggle, and a user who reaches Home without a connected calendar is a UX failure, not an edge case.
+- **Google Calendar is the product, and Google sign-in is the only door.** Signing in with Google *is* connecting the calendar: `signInWithGoogle()` requests `calendar.readonly` in the same consent flow, so there is no separate "connect your calendar" step, screen, or Settings toggle, and no `connect()`/`disconnect()`/`isConnected()` API. The core loop is *sign in with Google → we pull your free/busy → we show both partners' free spots*.
+- **But do not assume the scope was granted.** Google lets a user complete sign-in while declining the calendar consent, and a granted scope can be revoked later from their Google account. So `src/calendar.ts` exposes `ensureScope()` and `sync()` returns `'scope-missing'`, which the Free time screen surfaces as an inline "Allow calendar access" button — one row, not a screen, and never a router guard.
 - **The app requires an Expo development build, not Expo Go.** `@react-native-firebase/*` ships native modules and remote push needs a real build, so `expo-dev-client` is a dependency and `npx expo run:android` is how every "verify on a device" step is executed. Any step that assumes Expo Go is unexecutable.
 - **Google Calendar is freebusy-only.** Scope is exactly `https://www.googleapis.com/auth/calendar.readonly`; the only API call is `freeBusy.query`. Event titles are never requested, stored, logged, or displayed.
 - **Every REST and WebSocket path verifies the Firebase ID token.** Every couple-scoped path additionally calls `assertMember`. A non-member and a non-existent couple both return **403** — never 404, so existence is never leaked.
@@ -1185,7 +1186,7 @@ git commit -m "feat(backend): containerize with healthcheck and local compose st
 ## Task 10: Expo scaffold, routing, guard chain, and store
 
 **Files:**
-- Create: `app.config.ts`, `app/_layout.tsx`, `app/auth.tsx`, `app/timezone-setup.tsx`, `app/pairing.tsx`, `app/connect-calendar.tsx`, `app/(tabs)/_layout.tsx` + the **three** tab screens (`index`, `calendar`, `settings`), `app/block-form.tsx`, `src/store.ts`, `src/theme.ts`, `.env.example`
+- Create: `app.config.ts`, `app/_layout.tsx`, `app/auth.tsx`, `app/timezone-setup.tsx`, `app/pairing.tsx`, `app/(tabs)/_layout.tsx` + the **three** tab screens (`index`, `calendar`, `settings`), `app/block-form.tsx`, `src/store.ts`, `src/theme.ts`, `.env.example`
 - Modify: `tsconfig.json`, `package.json` (root)
 
 **Interfaces:**
@@ -1273,7 +1274,7 @@ Theme: colors (light + dark), spacing scale, type scale. Plain objects, no styli
 
 - [ ] **Step 5: Create every screen as a one-line stub**
 
-Literally `export default () => <Text>auth</Text>` per screen — seven files, one line each. Do **not**
+Literally `export default () => <Text>auth</Text>` per screen — six files, one line each. Do **not**
 lay out the screens here: Tasks 12–16 rewrite every one of them, and laying them out twice is a
 wasted pass. The only files with real content in this task are `_layout.tsx` (the guard chain) and
 `(tabs)/_layout.tsx` (the **three**-tab bar: Free time, Calendar, Settings), because those are what
@@ -1429,7 +1430,7 @@ the old build polled every 3 s.
 
 ## Task 13: Google Calendar connect + sync (the core product loop)
 
-**Files:** `src/calendar.ts`, `src/notifications.ts`, `app/connect-calendar.tsx`, modify `app/_layout.tsx`
+**Files:** `src/calendar.ts`, `src/notifications.ts`, modify `app/_layout.tsx`
 **Test:** `src/__tests__/calendar.test.ts`
 
 This task moved ahead of the screens deliberately. *Connect Gmail → pull free/busy → show free spots*
@@ -1444,11 +1445,16 @@ block and its Step 1/Step 2 detail as this task's specification.
 - [ ] **Step 2 (executed in Task 13): `src/notifications.ts`** — per Task 16 Step 2 in full.
 - [ ] **Step 3: Wire both into `app/_layout.tsx`** — per the call table in Task 16's Interfaces block.
       Auto-sync on launch when `lastCalendarSyncMs` is over an hour old.
-- [ ] **Step 4: Build `app/connect-calendar.tsx`** — a single-purpose screen: one sentence explaining
-      that Couple Sync reads only busy/free times and never event titles, one "Connect Google
-      Calendar" button, and a quiet "I'll add my times manually" link. **It is not a router guard** —
-      a guard here would trap a user who declines. It is pushed from Home's empty state and from
-      Settings, so it can always be backed out of.
+- [ ] **Step 4: Do NOT build a connect-calendar screen**
+
+There is nothing to connect. Google sign-in already granted `calendar.readonly`, so a "connect your
+calendar" screen would be a button that re-does what login did. Instead, `src/calendar.ts` exposes
+`ensureScope()` for the one real case — the user declined the calendar consent while completing
+sign-in, or revoked it later from their Google account — and the Free time screen renders that as a
+single inline row. One row, no screen, no router guard, nothing to get trapped behind.
+
+State the privacy sentence ("we read only busy/free times, never event titles") on the **auth**
+screen, next to the sign-in button, where the consent actually happens.
 - [ ] **Step 5: Verify on Android** — `npx expo run:android`; sign in, connect a real Google account,
       and confirm busy blocks appear via `GET /blocks`. Confirm the request log shows `freeBusy` and
       never `events`.
@@ -1467,7 +1473,7 @@ in length and a filter — that is one screen with a filter.
 
 - [ ] **Step 1: Build `WindowCard`** — start/end in both partners' zones, duration, score-derived emphasis, and a late-night marker when `reasonableBoth` is false. The marker is text or an icon, never colour alone.
 - [ ] **Step 2: Build the screen** — both partners' live clocks (tick once a **minute**, not once a second), a countdown to the next window, then the full window list with an any/30m/1h/2h filter (display-only per §0.7). **Drop any window whose `endUtc` is already past** before rendering — §9 notes the stored row can lag the clock.
-- [ ] **Step 3: Build the three empty states, which are the whole UX of this screen** — (a) no calendar connected → the connect prompt, routing to `app/connect-calendar.tsx`, shown *instead of* the list; (b) calendar connected but no windows → "you two have no shared free time in the next 14 days", with a link to review blocks; (c) loading → a skeleton, never a bare spinner over an empty list.
+- [ ] **Step 3: Build the three empty states, which are the whole UX of this screen** — (a) `sync` returned `'scope-missing'` → an inline "Allow calendar access" row calling `ensureScope()`, above the list rather than replacing it, since manual blocks may still produce windows; (b) no windows → "you two have no shared free time in the next 14 days", with a link to the Calendar tab to review blocks; (c) loading → a skeleton, never a bare spinner over an empty list.
 - [ ] **Step 4: Pull-to-refresh runs both** `calendar.sync(coupleId)` and `api.latestOverlap(coupleId)`, in that order. Refreshing windows without re-syncing the calendar is the bug a user will report as "it's out of date".
 - [ ] **Step 5: Verify on Android** — `npx expo run:android`; check all three empty states and that the clocks show two different zones.
 - [ ] **Step 6: Commit** — `git add app src && git commit -m "feat(app): implement free time screen"`
@@ -1502,14 +1508,16 @@ edits it; the FAB creates one.
 **Interfaces:**
 - Produces:
   ```ts
-  // src/calendar.ts
-  export function isConnected(): Promise<boolean>
-  export function connect(): Promise<void>          // requests the calendar.readonly scope
-  export function disconnect(): Promise<void>
+  // src/calendar.ts — no connect/disconnect/isConnected: the Google login IS the grant.
+  /** True when the current Google grant still includes calendar.readonly. */
+  export function hasCalendarScope(): Promise<boolean>
+  /** Re-runs Google consent to re-request calendar.readonly after a decline or revocation. */
+  export function ensureScope(): Promise<boolean>
   /** freeBusy.query on the primary calendar for the next 14 days → PUT /blocks/google.
-   *  Returns 'rate-limited' when the last sync was under an hour ago. */
+   *  'rate-limited' when the stored last sync is under an hour old.
+   *  'scope-missing' when the grant lacks calendar.readonly — caller offers ensureScope(). */
   export function sync(coupleId: string, opts?: { force?: boolean }):
-    Promise<'synced' | 'rate-limited' | 'not-connected'>
+    Promise<'synced' | 'rate-limited' | 'scope-missing'>
 
   // src/notifications.ts
   export function requestPermissionAndRegister(): Promise<void>
@@ -1525,6 +1533,7 @@ as an interface. This task therefore also modifies `app/_layout.tsx` and `app/(t
 | `requestPermissionAndRegister()` | `app/_layout.tsx`, after hydration | once per launch, when signed in |
 | `attachTapHandler()` | `app/_layout.tsx` mount | returns a cleanup, called on unmount |
 | `sync(coupleId)` | `app/_layout.tsx`, after hydration | launch, only if `lastCalendarSyncMs` is over 1 h old (§5 auto-sync) |
+| `ensureScope()` | Free time screen's inline prompt, and Settings | only when `sync` returned `'scope-missing'` |
 | `sync(coupleId)` | `app/(tabs)/index.tsx` pull-to-refresh | alongside `latestOverlap`, not instead of it |
 | `sync(coupleId, { force: true })` | Settings "Sync now" | the **only** caller allowed to pass `force` |
 
@@ -1565,7 +1574,7 @@ Request permission, get the FCM token, `api.registerFcmToken`, and re-register o
 
 - [ ] **Step 3: Build Settings**
 
-Four groups, in this order. **Calendar**: connected account email, last-sync time, "Sync now" (the only caller allowed `{ force: true }`), and disconnect behind a confirm that says her google blocks will be removed. **You**: timezone (searchable, shows current local time per candidate), late-night-windows toggle via `api.patchUser({ show_late_night_windows })`. **Notifications**: one toggle calling `api.patchUser({ notifications_enabled })` — it must change *server* behaviour, not local state (§0.5). **Couple**: partner name, unpair behind a confirm naming what is deleted, sign out.
+Four groups, in this order. **Calendar**: the signed-in Google account email, last-sync time, and "Sync now" (the only caller allowed `{ force: true }`). **No connect or disconnect control** — the calendar grant is the login, so disconnecting means signing out. If `hasCalendarScope()` is false, show an "Allow calendar access" row calling `ensureScope()` instead. **You**: timezone (searchable, shows current local time per candidate), late-night-windows toggle via `api.patchUser({ show_late_night_windows })`. **Notifications**: one toggle calling `api.patchUser({ notifications_enabled })` — it must change *server* behaviour, not local state (§0.5). **Couple**: partner name, unpair behind a confirm naming what is deleted, sign out.
 
 Every row is a plain labelled control. No settings-schema abstraction for nine rows.
 
