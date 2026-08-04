@@ -4,6 +4,10 @@ import { config } from './config.js';
 import { assertReachable } from './db.js';
 import { assertCredentials } from './firebase.js';
 import { registerErrorHandler } from './http.js';
+import authRoutes from './routes/auth.js';
+import couplesRoutes from './routes/couples.js';
+import invitesRoutes from './routes/invites.js';
+import usersRoutes from './routes/users.js';
 
 /**
  * Order matters: both probes run before anything can listen, and both reject rather than warn.
@@ -18,7 +22,12 @@ export async function start(): Promise<FastifyInstance> {
   registerErrorHandler(app);
   await app.register(cors, { origin: config.corsOrigins });
   app.get('/health', async () => ({ status: 'ok', time: Date.now() }));
-  // route registrations land here in Tasks 6-8
+  // One register() per plugin, because each adds its own requireAuth preHandler and Fastify scopes
+  // a hook to the plugin that added it. /health above stays unauthenticated.
+  for (const routes of [authRoutes, usersRoutes, couplesRoutes, invitesRoutes]) {
+    await app.register(routes);
+  }
+  // blocks, overlaps and the WS /sync land here in Tasks 7-8
 
   await app.listen({ port: config.port, host: '0.0.0.0' });
   return app;
