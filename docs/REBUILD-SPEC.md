@@ -307,6 +307,8 @@ pushed. Prune only hard-invalid tokens (`messaging/invalid-registration-token`,
 GET    /health                          no auth  → {status, time}
 POST   /auth/verify                              → {user}   (upsert)
 POST   /auth/fcm-token         {token}           → append with dedup
+DELETE /auth/fcm-token         {token}           → remove on sign-out (self only), so a shared
+                                                   handset never keeps a previous user's token
 GET    /blocks?coupleId=X&from=&to=              → couple's blocks + server-expanded `occurrences`
                                                    for [from,to] (onlyMe scrubbed per recipient;
                                                    range required, max 60 days)

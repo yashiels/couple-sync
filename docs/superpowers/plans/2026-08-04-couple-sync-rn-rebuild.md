@@ -231,10 +231,11 @@ grep -c 'expo-dev-client' package-lock.json  # expect > 0
 
 ```ts
 export { expandBlock } from './recurrence.js'
-export type { Interval } from './types.js'
+export type { Interval } from './intervals.js'   // NOT types.ts — Interval is declared in intervals.ts
 ```
 
-Do not change any engine logic — this is a visibility change only, and all 135 tests must still pass afterward.
+Verify the source path before writing this: `recurrence.ts:3` imports `Interval` from `./intervals.js`.
+Do not change any engine logic — this is a visibility change only, and all 135 tests must still pass.
 
 - [ ] **Step 8: Rewrite the controlling agent doc**
 
@@ -544,9 +545,24 @@ it('does NOT begin listening in either case')   // the old build listened and 40
 it('reports healthy only after both probes passed')
 ```
 
-Implement the probe as one `getAuth().verifyIdToken('not-a-token')` at boot and treat only a
-*credential/project* error as fatal — a malformed-token error proves the credential works. Comment
-that distinction, because it is subtle and someone will "simplify" it into catching everything.
+**Do not probe with `verifyIdToken('not-a-token')`** — it cannot validate the service-account key.
+`firebase-admin` resolves the project id and then rejects the malformed JWT during *decoding*
+(`token-verifier.js:117`), before the credential is ever used, so a completely bogus private key
+still produces the same "invalid token" error. That probe would pass with unusable credentials, which
+is the exact false-confidence being removed.
+
+Probe the credential directly instead:
+
+```ts
+// Actually exercises the private key: mints a real OAuth2 access token from Google.
+const token = await cert(config.firebaseServiceAccount).getAccessToken()   // throws on a bad key
+// And catch the silent-misconfiguration case: right key, wrong project.
+if (config.firebaseServiceAccount.project_id !== config.firebaseProjectId) {
+  throw new Error('FIREBASE_PROJECT_ID does not match the service account project_id')
+}
+```
+
+The draft `firebase.ts` already had this probe shape — keep it, and make it fatal rather than a warn.
 
 - [ ] **Step 7: Verify**
 
@@ -605,6 +621,11 @@ git commit -m "feat(backend): add fail-fast config, firebase init, auth, and err
   export function scrubBlockForViewer(block: BlockRow, viewerUid: string): BlockRow
   /** Drops fcm_tokens. Every path except GET /users/me sends the result of this. */
   export function stripTokens(user: UserRow): Omit<UserRow, 'fcm_tokens'>
+
+  /** snake_case row -> the engine's camelCase Block. The engine predates the wire shape and
+   *  owns its own type; this adapter is the single place the two vocabularies meet.
+   *  Required by both overlapService.ts and the occurrence endpoint. */
+  export function toEngineBlock(row: BlockRow): import('./overlap/index.js').Block
 
   // OverlapWindow stays camelCase — it is the engine's computed type, not a row.
   export type { OverlapWindow } from './overlap/index.js'
@@ -772,9 +793,26 @@ Load in one round trip inside the lock: the couple row, both user rows (`timezon
 couple. Partition by `couple.user_a_uid`. `onlyMe` blocks go into the engine input unscrubbed —
 scrubbing is a presentation concern.
 
-**Fan-out and push, per recipient:** for each of the two uids, skip `triggeredBy` entirely, then call
-`sendTo(uid, msg)` and push **only if it returned `false`**. Use that boolean, not a separate
-`isOnline` call — checking then sending is two round trips with a disconnect window between them.
+**Fan-out and push — and the distinction matters.** The WS `overlap` message goes to **both**
+partners including `triggeredBy`: the writer's own window list changed and their store must be
+updated, otherwise the device that made the edit is the one showing stale windows. Only the **push**
+is suppressed for `triggeredBy` — nobody should get an FCM notification about their own action.
+
+```
+for uid of [a, b]:
+    delivered = sendTo(uid, overlapMsg)          // ALWAYS, both partners
+    if uid !== triggeredBy and not delivered:
+        pushOverlapChanged(uid, windows, tz)     // only the other party, only if offline
+```
+
+Use `sendTo`'s boolean, not a separate `isOnline` call — check-then-send is two round trips with a
+disconnect window between them.
+
+**All WS and FCM side effects run AFTER the transaction commits, never inside `withTx`.** Two reasons:
+a notification sent inside the transaction can reach a device before the data is committed and
+readable, and awaiting an FCM network call while holding a pool connection starves the pool exactly
+when concurrent refreshes need one. So `refreshOverlap` computes and upserts inside the tx, returns
+the result, and the fan-out happens after.
 
 `hashtext` returns a 32-bit int, so distinct couple ids can theoretically collide and serialize
 against each other. That is harmless (a spurious wait, never a wrong result) — note it and move on.
@@ -810,10 +848,10 @@ git commit -m "feat(backend): add overlap service with input-hash dedup and fan-
 
 ```ts
 // src/__tests__/invites.test.ts
-it('POST /invites returns 201 with a 6-character code and expiresAt 48h out')
+it('POST /invites returns 201 with a 6-character code and expires_at 48h out')
 it('generates codes from an unambiguous alphabet — no O, 0, I or 1')
 it('POST /invites 409s when the caller already has a couple_id')
-it('redeem pairs two unpaired users and returns coupleId')
+it('redeem pairs two unpaired users and returns couple_id')
 it('redeem sets couple_id on BOTH user rows and stamps the invite accepted')
 it('redeem 404s on an unknown code')
 it('redeem rejects an expired code and does not pair')
@@ -821,6 +859,10 @@ it('redeem rejects an already-accepted code')
 it('redeem rejects self-pairing by the invite creator')
 it('redeem 409s when the redeemer already has a couple')
 it('redeem 409s when the inviter has since paired with someone else')
+it('redeem 409s when either user has a NULL timezone')          // engine would get an invalid zone
+it('redeem 409s when either timezone is not a valid IANA id')
+it('locks both user rows ordered by uid, not just the invite')  // two codes sharing one user
+it('two concurrent redemptions of DIFFERENT codes sharing one user create only ONE couple')
 it('redeem uses SELECT ... FOR UPDATE and performs every write in one transaction')
 it('redeem rolls back completely on a mid-transaction failure — no orphan couple row')
 it('redeem triggers refreshOverlap and a pairing WS message to the inviter')
@@ -828,7 +870,27 @@ it('redeem triggers refreshOverlap and a pairing WS message to the inviter')
 
 - [ ] **Step 2: Implement `invites.ts`**
 
-The redeem handler is a single `withTx`: `SELECT ... FOR UPDATE` the invite, then both user rows, run every check from §4, insert the couple, stamp the invite, update both users, `COMMIT`. Only after the commit: `refreshOverlap(coupleId, uid)` and a best-effort `sendTo(inviterUid, { t: 'pairing', ... })`.
+The redeem handler is a single `withTx`, and the **lock order is the correctness-critical part**:
+
+```sql
+-- 1. lock the invite
+SELECT * FROM invites WHERE code = $1 FOR UPDATE;
+-- 2. lock BOTH user rows, ordered by uid, in one statement.
+--    Locking only the invite is not enough: two DIFFERENT invite codes that share one user can
+--    redeem concurrently and create two active couples for that user. Ordering by uid is what
+--    prevents two concurrent redemptions from deadlocking on each other.
+SELECT uid, couple_id, timezone FROM users
+ WHERE uid IN ($2, $3) ORDER BY uid FOR UPDATE;
+```
+
+Then every check from §4, **plus one the client cannot be trusted with**: both users' `timezone`
+must be non-null and a valid IANA zone. The router guard makes this unreachable through the UI, but a
+direct API call could pair two users with `NULL` timezones, and the `refreshOverlap` that runs
+immediately after would hand the engine an invalid zone. Reject with 409 and a clear code.
+
+Then insert the couple, stamp the invite, update both users, `COMMIT`. **Only after the commit:**
+`refreshOverlap(coupleId, uid)`, a best-effort `sendTo(inviterUid, { t: 'pairing', … })`, and nothing
+else — no network call belongs inside the transaction.
 
 - [ ] **Step 3: Write the users tests, then implement `users.ts`**
 
@@ -984,13 +1046,16 @@ test in Tasks 3 and 4. So drive the matrix from a **list of every route**, in
 ```ts
 // One table. Adding a route without adding it here should be the thing that breaks.
 const PROTECTED = [
+  ['POST',   '/auth/verify'],           ['POST',   '/auth/fcm-token'],
+  ['DELETE', '/auth/fcm-token'],
   ['GET',    '/users/me'],              ['GET',    '/users/:uid'],   ['PATCH', '/users/:uid'],
   ['GET',    '/blocks'],                ['POST',   '/blocks'],       ['GET',   '/blocks/:id'],
   ['PATCH',  '/blocks/:id'],            ['DELETE', '/blocks/:id'],   ['PUT',   '/blocks/google'],
   ['GET',    '/overlaps/latest'],       ['GET',    '/couples/:id'],  ['POST',  '/couples/:id/unpair'],
   ['POST',   '/invites'],               ['POST',   '/invites/:code/redeem'],
-  ['POST',   '/auth/fcm-token'],
 ]
+// POST /auth/verify IS protected — it verifies a Bearer token to upsert the row. Omitting it
+// was the hole in an earlier draft of this table.
 const COUPLE_SCOPED = PROTECTED.filter(/* the /blocks, /overlaps, /couples paths */)
 
 it.each(PROTECTED)('%s %s 401s with no token',            /* … */)
@@ -999,8 +1064,16 @@ it.each(COUPLE_SCOPED)('%s %s 403s for a non-member',     /* … */)
 it.each(COUPLE_SCOPED)('%s %s 403s — not 404 — for a couple id that does not exist', /* … */)
 
 it('every registered route except /health and /admin/cleanup appears in PROTECTED', () => {
-  // enumerate app.printRoutes() / the route tree and diff against the table above,
-  // so a new unguarded route fails CI instead of shipping.
+  // Collect routes with a root-level onRoute hook — NOT printRoutes(), whose output is a
+  // formatted tree meant for humans and painful to diff:
+  //   const seen = []
+  //   app.addHook('onRoute', (r) => seen.push([r.method, r.url]))   // before registering plugins
+  // Then normalize before diffing:
+  //   - r.method can be an ARRAY when a route declares several verbs — flatten it
+  //   - Fastify auto-adds HEAD for every GET, and OPTIONS when CORS is registered. Drop both;
+  //     they are not separately authored routes and would look like permanent table gaps.
+  //   - drop '/health' and '/admin/cleanup' (public / separately guarded by ADMIN_TOKEN)
+  // A new unguarded route then fails CI instead of shipping.
 })
 ```
 
@@ -1114,8 +1187,12 @@ Use a plain `setInterval` that checks the clock — no `node-cron` dependency fo
 ```ts
 import { createHash, timingSafeEqual } from 'node:crypto'
 const digest = (s: string) => createHash('sha256').update(s).digest()   // always 32 bytes
-const ok = config.adminToken !== null &&
-           timingSafeEqual(digest(supplied), digest(config.adminToken))
+
+// Precomputed ONCE at module load. Hashing the secret on every request makes the request's
+// duration depend on the secret's length, which is the leak timingSafeEqual exists to close.
+const EXPECTED = config.adminToken === null ? null : digest(config.adminToken)
+
+const ok = EXPECTED !== null && timingSafeEqual(digest(supplied), EXPECTED)
 ```
 
 - [ ] **Step 5: Verify and commit**
@@ -1131,13 +1208,17 @@ git commit -m "feat(backend): add websocket fan-out, FCM push, and invite expiry
 ## Task 9: Docker, Compose, and the backend README
 
 **Files:**
-- Create: `backend/Dockerfile`, `backend/README.md`, `docker-compose.yml`, `docker-compose.override.yml`, `.dockerignore`
+- Create: `backend/Dockerfile`, `backend/README.md`, `backend/.dockerignore`, `docker-compose.yml`, `docker-compose.override.yml`
 
 **Interfaces:**
 - Consumes: a fully built backend.
 - Produces: a container that migrates then serves on port 3000, and a one-command local stack.
 
 - [ ] **Step 1: Write `backend/Dockerfile`**
+
+The compose file uses `build: ./backend`, so the build context is `backend/` — a `.dockerignore` at
+the repo root is **not read**. It must be `backend/.dockerignore`, excluding at minimum
+`node_modules`, `dist`, and `src/**/*.test.ts`.
 
 Multi-stage on `node:22-alpine`: a build stage that installs with `pnpm --frozen-lockfile` and runs `tsc`, then a runtime stage with production deps only, a non-root user, `EXPOSE 3000`, and:
 
@@ -1177,7 +1258,7 @@ Required environment variables in a table, the local-run command, how to run mig
 - [ ] **Step 7: Commit**
 
 ```bash
-git add backend/Dockerfile backend/README.md docker-compose.yml docker-compose.override.yml .dockerignore
+git add backend/Dockerfile backend/README.md backend/.dockerignore docker-compose.yml docker-compose.override.yml
 git commit -m "feat(backend): containerize with healthcheck and local compose stack"
 ```
 
@@ -1194,7 +1275,7 @@ git commit -m "feat(backend): containerize with healthcheck and local compose st
 - Produces:
   ```ts
   // src/store.ts
-  import type { UserRow, CoupleRow, BlockRow, OverlapWindow } from '../backend/src/wire'
+  import type { UserRow, CoupleRow, BlockWithOccurrences, OverlapWindow } from '../backend/src/wire'
 
   interface State {
     hydrated: boolean
@@ -1206,6 +1287,7 @@ git commit -m "feat(backend): containerize with healthcheck and local compose st
     computedAt: number | null
     pendingInviteCode: string | null               // parked across the sign-in round trip
     lastCalendarSyncMs: number | null              // persisted, not in-memory only — see Task 16
+    visibleRange: { from: number; to: number } | null   // the Calendar tab's current week
   }
   interface Actions {
     setHydrated(v: boolean): void
@@ -1213,8 +1295,9 @@ git commit -m "feat(backend): containerize with healthcheck and local compose st
     setPartner(p: Omit<UserRow, 'fcm_tokens'> | null): void
     setCouple(c: CoupleRow | null): void
     setBlocks(b: BlockWithOccurrences[]): void
-    upsertBlock(b: BlockRow): void                 // a block:set carries no occurrences; see note
     removeBlock(id: string): void
+    /** The week the Calendar tab is showing. The WS layer reads it to refetch the right range. */
+    setVisibleRange(from: number, to: number): void
     setWindows(w: OverlapWindow[], computedAt: number): void
     setPendingInvite(code: string | null): void
     setLastCalendarSync(ms: number): void
@@ -1236,11 +1319,14 @@ Four things this fixes that a naive store gets wrong:
    timezone intact and send them to `/pairing`; sign-out must clear everything. One function cannot do
    both — with only `reset()`, unpairing logs the user out and re-runs timezone setup.
 3. **`setHydrated` and `setLastCalendarSync` are declared**, because later tasks mutate both.
-4. **`upsertBlock` takes a `BlockRow`, but state holds `BlockWithOccurrences`.** A `block:set`
-   broadcast has no `occurrences` (the server does not know the client's visible range). So on
-   `block:set`, either re-fetch `GET /blocks` for the current range, or store the row with
-   `occurrences: []` and let the calendar refetch. Pick the refetch — it is one call and cannot go
-   stale. State the choice in a comment.
+4. **There is no `upsertBlock`, deliberately.** A `block:set` broadcast carries a `BlockRow` with no
+   `occurrences` — the server cannot know the client's visible week — so merging it into state would
+   put an un-renderable block on the grid. Instead the WS handler reads `visibleRange` and calls
+   `api.listBlocks(coupleId, from, to)`, replacing the list via `setBlocks`. One extra request per
+   partner edit, always correct, no occurrence-merge logic to get wrong. `setVisibleRange` exists so
+   the WS layer knows what to refetch; the Calendar tab sets it on every week change. When
+   `visibleRange` is null (Calendar never opened), skip the refetch entirely — nothing is rendering
+   blocks.
 
 The root `tsconfig.json` must add `backend/src/wire.ts` to its `include` so the type-only import
 resolves. Confirm with `npx tsc --noEmit` that it resolves, and confirm `npx expo export` (or a
@@ -1258,7 +1344,7 @@ Order per §1, evaluated only once `hydrated` is true:
 ```
 !user                → /auth
 !user.timezone       → /timezone-setup
-!user.coupleId       → /pairing
+!user.couple_id      → /pairing        // couple_id, snake_case — there is no `coupleId`
 otherwise            → /(tabs)
 ```
 
@@ -1283,10 +1369,21 @@ you are actually verifying.
 - [ ] **Step 6: Verify**
 
 ```bash
-npx tsc --noEmit && npx expo-doctor && npx expo prebuild --platform android --clean
+npx tsc --noEmit && npx expo-doctor
+# prebuild needs a real google-services.json — see the note below before running it
+npx expo prebuild --platform android --clean
 ```
 
-Expected: tsc clean; `prebuild` generates `ios/` and `android/` without error. Report every
+**`expo prebuild` cannot succeed without `google-services.json` on disk.** The
+`@react-native-firebase/app` config plugin throws when `android.googleServicesFile` is missing or
+points at a nonexistent path (`plugin/build/android/copyGoogleServices.js:18`). So either obtain the
+real file from the Firebase console first, or commit a clearly-labelled placeholder
+`google-services.placeholder.json` and point `android.googleServicesFile` at it so the scaffold
+verifies. **Do not** claim prebuild passes without having run it. If the real file is unavailable,
+stop at `tsc --noEmit && expo-doctor`, say so explicitly in your report, and list obtaining
+`google-services.json` as a human prerequisite blocking Task 13.
+
+Expected when the file exists: tsc clean; `prebuild` generates `android/` without error. Report every
 `expo-doctor` warning honestly rather than suppressing it.
 
 **`expo prebuild` is the checkpoint, not `expo start`.** `@react-native-firebase/*` ships native
@@ -1317,7 +1414,7 @@ git commit -m "feat(app): scaffold expo-router tree, guard chain, store and them
 - Produces:
   ```ts
   // src/api.ts — every method injects the current ID token
-  import type { UserRow, CoupleRow, BlockRow, OverlapWindow } from '../backend/src/wire'
+  import type { UserRow, CoupleRow, BlockRow, BlockWithOccurrences, OverlapWindow } from '../backend/src/wire'
 
   /** Request body for a manual block. The server sets id, couple_id, user_id, source, created_at. */
   type NewBlock = Pick<BlockRow,
@@ -1332,8 +1429,9 @@ git commit -m "feat(app): scaffold expo-router tree, guard chain, store and them
     getCouple(id: string): Promise<CoupleRow>
     unpair(id: string): Promise<void>
     createInvite(): Promise<{ code: string; expires_at: number }>
-    redeemInvite(code: string): Promise<{ couple_id: string }>
-    listBlocks(coupleId: string): Promise<BlockRow[]>
+    redeemInvite(code: string): Promise<{ couple_id: string }>   // snake_case, like every other payload
+    /** from/to are REQUIRED — the server needs a range to expand occurrences into. */
+    listBlocks(coupleId: string, from: number, to: number): Promise<BlockWithOccurrences[]>
     createBlock(b: NewBlock): Promise<BlockRow>
     updateBlock(id: string, patch: Partial<NewBlock>): Promise<BlockRow>
     deleteBlock(id: string): Promise<void>
@@ -1348,11 +1446,25 @@ git commit -m "feat(app): scaffold expo-router tree, guard chain, store and them
   export function disconnect(): void
 
   // src/auth.ts
+  export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly'
+  /** Call once at module load, BEFORE any sign-in:
+   *  GoogleSignin.configure({ webClientId, scopes: [CALENDAR_SCOPE] })
+   *  Requesting the scope here is what makes login and calendar consent one step. */
+  export function configureGoogleSignIn(): void
   export function signInWithGoogle(): Promise<void>
   export function signOut(): Promise<void>
+  /** Firebase ID token — for OUR backend only. Cannot authorize the Google Calendar API. */
   export function getIdToken(): Promise<string | null>
+  /** Google OAuth access token — for the Calendar API only. Never sent to our backend. */
+  export function getGoogleAccessToken(): Promise<string | null>
   export function onAuthChange(cb: (uid: string | null) => void): () => void
   ```
+
+  **Two different tokens, and confusing them is the most likely bug in this task.**
+  `getIdToken()` returns a Firebase ID token; the Calendar API rejects it. Calendar calls need
+  `const { accessToken } = await GoogleSignin.getTokens()`. `getGoogleAccessToken()` wraps that and
+  exists so `src/calendar.ts` never reaches for the wrong one. Add a test asserting the Calendar
+  request's `Authorization` header carries the Google access token, not the Firebase ID token.
 
 - [ ] **Step 1: Write the API client tests first**
 
@@ -1378,7 +1490,8 @@ it('connects with the id token in the Authorization header')
 it('reconnects with exponential backoff, capped, after an unexpected close')
 it('does not reconnect after an explicit disconnect')
 it('does not open a second socket when connect is called twice')
-it('applies block:set to the store via upsertBlock')
+it('refetches the visible range via listBlocks on block:set, and calls setBlocks')
+it('does NOT refetch on block:set when visibleRange is null')
 it('applies block:del to the store via removeBlock')
 it('applies overlap to the store via setWindows')
 it('applies user:update to the store')
@@ -1390,7 +1503,25 @@ it('refetches the latest overlap after a reconnect')   // catches anything misse
 
 - [ ] **Step 4: Implement `src/auth.ts` and wire the sign-in screen**
 
-Google via `@react-native-google-signin/google-signin` → Firebase credential. Request the `calendar.readonly` scope **here, at sign-in**, not later — see Task 12a. `onAuthChange` drives hydration in `_layout.tsx`: on a uid, `api.verify()` → `setUser`, then couple + blocks + windows in parallel, then `connect()`, then `hydrated = true`. On sign-out: `disconnect()`, `reset()`.
+Google via `@react-native-google-signin/google-signin` → Firebase credential. Request the `calendar.readonly` scope **here, at sign-in**, not later — see Task 12a. `onAuthChange` drives hydration in `_layout.tsx`. **The fetches are conditional** — an unconditional
+couple/blocks/windows fetch throws for a first-time or unpaired user (no `couple_id`) and they never
+reach their guard:
+
+```
+uid arrives
+  → api.verify()  → setUser
+  → if (!user.couple_id) { setHydrated(true); return }      // guards route to tz-setup or pairing
+  → in parallel: getCouple(couple_id), getUser(partnerUid), latestOverlap(couple_id)
+       → setCouple, setPartner, setWindows        // partner is REQUIRED: Home shows two clocks
+  → ws.connect()
+  → setHydrated(true)
+  → then, not blocking hydration: notifications + auto-sync (see Task 13)
+```
+
+`partnerUid` comes from the couple row: whichever of `user_a_uid`/`user_b_uid` is not you. Blocks are
+**not** fetched here — they need a `from`/`to` range and only the Calendar tab knows one.
+
+On sign-out: `disconnect()`, remove this device's FCM token server-side (see Task 13), then `reset()`.
 
 - [ ] **Step 5: Write `src/time.ts`**
 
@@ -1511,7 +1642,9 @@ edits it; the FAB creates one.
   // src/calendar.ts — no connect/disconnect/isConnected: the Google login IS the grant.
   /** True when the current Google grant still includes calendar.readonly. */
   export function hasCalendarScope(): Promise<boolean>
-  /** Re-runs Google consent to re-request calendar.readonly after a decline or revocation. */
+  /** GoogleSignin.addScopes([CALENDAR_SCOPE]) — the ONLY correct use of addScopes here, for a
+   *  user who declined at sign-in or revoked later. On success the caller must sync immediately
+   *  (with force:true, bypassing the hour limiter) so the grant produces visible data at once. */
   export function ensureScope(): Promise<boolean>
   /** freeBusy.query on the primary calendar for the next 14 days → PUT /blocks/google.
    *  'rate-limited' when the stored last sync is under an hour old.
@@ -1521,7 +1654,8 @@ edits it; the FAB creates one.
 
   // src/notifications.ts
   export function requestPermissionAndRegister(): Promise<void>
-  export function attachTapHandler(): () => void     // routes a tap to /overlap
+  export function attachTapHandler(): () => void     // routes a tap to /(tabs) — the Free time tab.
+                                                     // NOT /overlap: that route no longer exists.
   ```
 
 **Every one of these must be called from somewhere.** An earlier draft of this task produced them
@@ -1533,7 +1667,13 @@ as an interface. This task therefore also modifies `app/_layout.tsx` and `app/(t
 | `requestPermissionAndRegister()` | `app/_layout.tsx`, after hydration | once per launch, when signed in |
 | `attachTapHandler()` | `app/_layout.tsx` mount | returns a cleanup, called on unmount |
 | `sync(coupleId)` | `app/_layout.tsx`, after hydration | launch, only if `lastCalendarSyncMs` is over 1 h old (§5 auto-sync) |
-| `ensureScope()` | Free time screen's inline prompt, and Settings | only when `sync` returned `'scope-missing'` |
+| `ensureScope()` | Free time screen's inline prompt, and Settings | only when `sync` returned `'scope-missing'`; on success sync immediately with `{ force: true }` |
+| `sync(coupleId, { force: true })` | right after a successful pair (both the redeemer's HTTP result and the inviter's `pairing` WS message) | a brand-new couple has zero google blocks; waiting up to an hour to populate them makes the app look broken at the exact moment the user first sees it |
+
+**Clear the persisted limiter on unpair and on sign-out.** Unpair deletes the couple's blocks, so a
+stale `lastCalendarSyncMs` would suppress the re-sync that repopulates them after re-pairing — the
+user would see an empty calendar and a "synced 20 minutes ago" label. `resetCouple()` and `reset()`
+both clear it.
 | `sync(coupleId)` | `app/(tabs)/index.tsx` pull-to-refresh | alongside `latestOverlap`, not instead of it |
 | `sync(coupleId, { force: true })` | Settings "Sync now" | the **only** caller allowed to pass `force` |
 
@@ -1542,7 +1682,17 @@ way to bypass the quota from a render path.
 
 - [ ] **Step 1 (executed in Task 13): `src/calendar.ts`**
 
-Request exactly `https://www.googleapis.com/auth/calendar.readonly` as a scope escalation on the existing Google Sign-In. Call **only** `freeBusy.query` on `primary` for `now → now + 14d`. Map each busy interval to `{ start_utc, end_utc }` and `PUT /blocks/google`. **Never call `events.list`, never read a `summary` field.** Exponential backoff on 429/503.
+The scope is **already granted at sign-in** via `GoogleSignin.configure({ scopes: [CALENDAR_SCOPE] })` — this module does not escalate anything. It only spends the grant.
+
+Call **only** `freeBusy.query` on `primary` for `now → now + 14d`, authorized with
+`await getGoogleAccessToken()` (the Google OAuth access token, **not** the Firebase ID token). Map
+each returned busy interval to `{ start_utc, end_utc }` epoch-ms and `PUT /blocks/google`.
+**Never call `events.list`, never read a `summary` field.** Exponential backoff on 429/503.
+
+**Carve-out to the global "never an ISO string" rule:** `freeBusy.query` *requires* RFC3339
+`timeMin`/`timeMax`, so this one outbound third-party request uses ISO strings. Convert at the
+boundary — `DateTime.fromMillis(ms, { zone: 'utc' }).toISO()` on the way out, back to epoch ms on the
+way in. The rule governs *our* wire format; it cannot govern Google's.
 
 **Persist the rate limit, do not hold it in a module variable.** An in-memory timestamp resets on
 every app launch, which is exactly when auto-sync fires — so the ≤1 call/hour rule would be broken by
