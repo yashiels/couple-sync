@@ -406,7 +406,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
 - [ ] **Step 3: Write `db.ts` to the interface above**
 
-`getPool` lazily constructs one `pg.Pool` from the configured connection string. `withTx` must `ROLLBACK` on throw and `release()` in a `finally`. Verify what the draft `db.ts` does today and rewrite whatever differs — in particular confirm the client is released on the error path.
+`pool` is created eagerly at module load from the configured connection string (the draft already does
+this, and `config.ts` has validated the URL by then — so anything importing `db.ts` needs a valid
+config, which is exactly why `db.test.ts` mocks `config.js` and `migrate.ts` never imports `db.ts`). `withTx` must `ROLLBACK` on throw and `release()` in a `finally`. Verify what the draft `db.ts` does today and rewrite whatever differs — in particular confirm the client is released on the error path.
 
 - [ ] **Step 4: Write the migration test**
 
