@@ -84,6 +84,60 @@ export function visibleWindows<T extends Pick<OverlapWindow, 'endUtc' | 'duratio
 }
 
 /**
+ * Page 0 of the Calendar tab's week pager: Monday 1 January 2024, held as a calendar date rather
+ * than an instant. Fixed rather than relative to "now" so a page index means the same week on every
+ * launch — anchoring on "the Monday of this week" would renumber every page at local midnight and
+ * make a stored index meaningless.
+ */
+const EPOCH_MONDAY = { year: 2024, month: 1, day: 1 } as const;
+
+function anchor(zone: string): DateTime {
+  return DateTime.fromObject(EPOCH_MONDAY, { zone });
+}
+
+/** The page index of the week containing `at`, in the viewer's zone. Negative before 2024. */
+export function weekIndex(at: number, zone: string): number {
+  const days = DateTime.fromMillis(at, { zone }).startOf('day').diff(anchor(zone), 'days').days;
+  return Math.floor(Math.round(days) / 7);
+}
+
+/** Local Monday 00:00 of a page, as epoch ms. */
+export function weekStart(index: number, zone: string): number {
+  // plus({ weeks }) walks calendar weeks and keeps the local wall clock at 00:00, so a DST week is
+  // still exactly one page. Adding 7 * 86_400_000 would drift an hour twice a year.
+  return anchor(zone).plus({ weeks: index }).toMillis();
+}
+
+/**
+ * The `GET /blocks?from=&to=` range for a page: local Monday 00:00 up to the *next* local Monday
+ * 00:00, which is 167 or 169 hours in a DST week. This is also what goes into `visibleRange`, which
+ * `src/ws.ts` reads to know what to refetch when the partner changes something.
+ */
+export function weekRange(index: number, zone: string): { from: number; to: number } {
+  return { from: weekStart(index, zone), to: weekStart(index + 1, zone) };
+}
+
+const LOCAL_INPUT = 'yyyy-MM-dd HH:mm';
+
+/**
+ * The block form's start/end fields: text, because no date picker is installed and a block is two
+ * timestamps, not a wizard.
+ *
+ * Ceiling: typing a datetime is worse than spinning a wheel. The upgrade path is
+ * `@react-native-community/datetimepicker`, which is one dependency and two callbacks — deliberately
+ * not paid for yet.
+ */
+export function formatLocalInput(at: number, zone: string): string {
+  return DateTime.fromMillis(at, { zone }).toFormat(LOCAL_INPUT);
+}
+
+/** Null when the text is not a real local time in `zone`, which is what the form reports as invalid. */
+export function parseLocalInput(text: string, zone: string): number | null {
+  const parsed = DateTime.fromFormat(text.trim(), LOCAL_INPUT, { zone });
+  return parsed.isValid ? parsed.toMillis() : null;
+}
+
+/**
  * Where one server-expanded occurrence sits on a 7-column week grid, in the viewer's zone.
  * `dayIndex` is 0-6 from the week start's local day; `topMinutes` is minutes past local midnight.
  *
