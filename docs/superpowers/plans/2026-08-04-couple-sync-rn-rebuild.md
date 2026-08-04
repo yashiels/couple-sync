@@ -23,7 +23,13 @@ Every task's requirements implicitly include this section.
 - **Package manager** is `pnpm` in `backend/` (declared via `packageManager`) and `npm` at the repo root (an `npm`-generated `package-lock.json` already exists there). Never mix.
 - **TypeScript** is `strict` in both projects. `backend/tsconfig.json` additionally sets `noUncheckedIndexedAccess` — the existing engine code depends on it, do not relax it.
 - **Backend module system** is ESM. Relative imports carry a `.js` extension (`import { query } from './db.js'`).
-- **Overlap is computed server-side only.** The client never computes, hashes, or publishes windows. Any client-side interval algebra beyond positioning a block on the week grid is a defect.
+- **Overlap is computed server-side only.** The client never computes, hashes, or publishes windows. Any client-side interval algebra beyond positioning an already-expanded interval on the week grid is a defect.
+- **Recurrence is expanded server-side too, and the server must hand the client the expanded occurrences.** The client has no `rrule` dependency, so it cannot turn `recurrence_rule: 'FREQ=WEEKLY;BYDAY=TU,WE'` into three rectangles on a week grid. `GET /blocks` therefore takes a `from`/`to` range and returns, per block, an `occurrences: { start_utc, end_utc }[]` array produced by the engine's existing `expandBlock`. Never re-add client-side expansion, and never ship a calendar view that reads `recurrence_rule` directly.
+- **`git commit -am` is banned in this plan.** Most tasks create new files, and `-a` stages only *tracked* modifications, so a new file is silently left out. Every commit step names its paths: `git add <paths> && git commit -m "…"`. This exact failure already cost this project its whole backend directory once — it was untracked, so nothing protected it.
+- **Android is the only target for now.** Every verification step runs `npx expo run:android` on an emulator or device. iOS is not built, not tested, and not shipped in this plan — keep the code platform-neutral, but do not spend a step on it.
+- **Google is the only sign-in method.** Apple Sign-In is dropped from this plan: it needs a paid Apple Developer account, it is iOS-only, and Android is the priority. Do not add `expo-apple-authentication`. There is no email/password and no anonymous auth either.
+- **Google Calendar is the product, not a feature.** The core loop is *connect Gmail → we pull your free/busy → we show you both partners' free spots*. Connecting a calendar is therefore an onboarding step, not a Settings toggle, and a user who reaches Home without a connected calendar is a UX failure, not an edge case.
+- **The app requires an Expo development build, not Expo Go.** `@react-native-firebase/*` ships native modules and remote push needs a real build, so `expo-dev-client` is a dependency and `npx expo run:ios` / `run:android` is how every "verify on a simulator" step is executed. Any step that assumes Expo Go is unexecutable.
 - **Google Calendar is freebusy-only.** Scope is exactly `https://www.googleapis.com/auth/calendar.readonly`; the only API call is `freeBusy.query`. Event titles are never requested, stored, logged, or displayed.
 - **Every REST and WebSocket path verifies the Firebase ID token.** Every couple-scoped path additionally calls `assertMember`. A non-member and a non-existent couple both return **403** — never 404, so existence is never leaked.
 - **`CORS_ORIGINS` must not default to `*`.** Boot fails when it is unset.
@@ -100,16 +106,14 @@ Verify this before Task 1. `git status` shows 313 staged deletions (the entire F
 | `app/auth.tsx` | Sign-in screen |
 | `app/timezone-setup.tsx` | Timezone confirm/search |
 | `app/pairing.tsx` | Share / Enter tabs |
-| `app/(tabs)/_layout.tsx` | Bottom tab bar |
-| `app/(tabs)/index.tsx` | Home |
-| `app/(tabs)/calendar.tsx` | Week view |
-| `app/(tabs)/overlap.tsx` | Window list + filter |
-| `app/(tabs)/blocks.tsx` | Own-block list |
+| `app/(tabs)/_layout.tsx` | Bottom tab bar — **three** tabs |
+| `app/(tabs)/index.tsx` | Free time: next window, then the full list with a duration filter. Also the connect-your-calendar state. |
+| `app/(tabs)/calendar.tsx` | Week view; also where blocks are managed |
 | `app/(tabs)/settings.tsx` | Settings |
-| `app/block-form.tsx` | Create/edit block (modal) |
+| `app/block-form.tsx` | Create/edit block (modal, opened from the calendar) |
 | `src/api.ts` | Typed REST client; injects the bearer token; maps errors |
 | `src/ws.ts` | WS client with reconnect backoff; dispatches into the store |
-| `src/auth.ts` | Firebase Auth: Google + Apple sign-in, sign-out, token access |
+| `src/auth.ts` | Firebase Auth: Google sign-in (with the calendar scope), sign-out, token access |
 | `src/store.ts` | zustand store: `user`, `couple`, `blocks`, `windows`, `hydrated`, actions |
 | `src/theme.ts` | Colors, spacing, type scale; light + dark |
 | `src/time.ts` | luxon display helpers: format a window, a clock, a block's grid position |
@@ -208,11 +212,34 @@ The engine already imports these; a previous agent hand-copied them into `node_m
 
 Also confirm `"packageManager": "pnpm@<version>"`, `"type": "module"`, and scripts `build` (`tsc`), `dev`, `start`, `migrate`, `test` (`vitest run`) are all present; add whichever are missing.
 
-- [ ] **Step 6: Remove `rrule` from the root `package.json`**
+- [ ] **Step 6: Remove `rrule` from the root `package.json` and regenerate the lockfile**
 
-The client does no recurrence expansion (§0.1). `luxon` stays — the client needs it for display formatting and grid positioning.
+The client does no recurrence expansion (§0.1). `luxon` stays — the client needs it for display formatting and grid positioning. Add `expo-dev-client` in the same edit (see Global Constraints).
 
-- [ ] **Step 7: Install and prove the engine suite runs green**
+Removing it from `package.json` alone is not enough — `rrule` stays a direct dependency in `package-lock.json` until the lockfile is rebuilt:
+
+```bash
+npm install
+grep -c '"rrule"' package-lock.json   # expect 0
+grep -c 'expo-dev-client' package-lock.json  # expect > 0
+```
+
+- [ ] **Step 7: Re-export `expandBlock` from the engine's public surface**
+
+`backend/src/overlap/recurrence.ts:49` already exports `expandBlock(block, windowStart, windowEnd): Interval[]`, but `index.ts` does not re-export it. Task 7's occurrence endpoint needs it. Add to `backend/src/overlap/index.ts`:
+
+```ts
+export { expandBlock } from './recurrence.js'
+export type { Interval } from './types.js'
+```
+
+Do not change any engine logic — this is a visibility change only, and all 135 tests must still pass afterward.
+
+- [ ] **Step 8: Rewrite the controlling agent doc**
+
+`AGENTS.md` (deleted from this branch in the bulk removal, but still present on `main`) states at line 92 that *"the device computes overlap and publishes it over WS — the server does not compute overlap"* and lists *"Move overlap computation to the server"* under **Do not**. That is now exactly backwards and it is a file agents read as authoritative. Write a fresh `AGENTS.md` reflecting server-side compute, the Expo stack, and `pnpm`-for-backend / `npm`-for-app. Do not defer this to Task 17 — a subagent picking up Task 2 would read the stale rule first.
+
+- [ ] **Step 9: Install and prove the engine suite runs green**
 
 ```bash
 cd backend && pnpm install && pnpm build && pnpm test
@@ -220,16 +247,16 @@ cd backend && pnpm install && pnpm build && pnpm test
 
 Expected: `tsc` exits 0; vitest reports **135 passed** across 6 files. If the count is lower, `include` is still wrong. If any test fails after a clean `pnpm install`, a dependency version is wrong — fix the version, never the test.
 
-- [ ] **Step 8: Ignore the worktree directory in the parent repo**
+- [ ] **Step 10: Ignore the worktree directory in the parent repo**
 
 ```bash
 echo '.worktrees/' >> "$(git rev-parse --git-common-dir)/info/exclude"
 ```
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
-git add -A
+git add -A   # -A is correct HERE (a bulk delete + many new files); every LATER task names its paths
 git commit -m "chore(repo): scrap Flutter app, keep overlap engine, fix backend project config"
 ```
 
@@ -286,7 +313,12 @@ CREATE TABLE IF NOT EXISTS users (
   email                    TEXT NOT NULL,
   display_name             TEXT,
   photo_url                TEXT,
-  timezone                 TEXT NOT NULL DEFAULT 'UTC',
+  -- NULL until the user confirms it in onboarding. Do NOT default to 'UTC':
+  -- the router guard is `!user.timezone -> /timezone-setup`, and a NOT NULL DEFAULT
+  -- makes that guard permanently false, so onboarding becomes unreachable.
+  -- Safe to be null: a couple cannot exist before pairing, and pairing is gated behind
+  -- timezone setup, so the overlap engine never sees a null zone.
+  timezone                 TEXT,
   couple_id                TEXT REFERENCES couples(id) ON DELETE SET NULL,
   fcm_tokens               TEXT[] NOT NULL DEFAULT '{}',
   show_late_night_windows  BOOLEAN NOT NULL DEFAULT FALSE,
@@ -339,7 +371,26 @@ Note in a comment at the top of the file: no `schema_migrations` table yet, so e
 
 - [ ] **Step 2: Write `migrate.ts`**
 
-Read every `*.sql` in `src/migrations/` sorted by filename, run each in its own transaction, log each filename, exit non-zero on failure. It must work both as a library (`runMigrations()`) and as a standalone entrypoint (`node dist/migrate.js`), because the Dockerfile calls it before the server starts.
+Read every `*.sql` in `src/migrations/` sorted by filename, run each in its own transaction, log each filename, exit non-zero on failure.
+
+```ts
+/** @param url explicit connection string. Required — migrate.ts must NOT import config.ts. */
+export function runMigrations(url: string): Promise<void>
+```
+
+**`migrate.ts` must not import `config.ts` or `db.ts`.** It creates its own throwaway `pg.Client`
+from the `url` argument and closes it. If it imported `db.ts`, importing it would load `config.ts`,
+which demands `FIREBASE_SERVICE_ACCOUNT_JSON` and `CORS_ORIGINS` — so the migration test could not
+run without inventing Firebase credentials, and a pre-deploy migration job would need the full
+server env. As a standalone entrypoint it reads `process.env.DATABASE_URL` itself:
+
+```ts
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const url = process.env.DATABASE_URL
+  if (!url) { console.error('DATABASE_URL required'); process.exit(1) }
+  runMigrations(url).catch((e) => { console.error(e); process.exit(1) })
+}
+```
 
 - [ ] **Step 3: Write `db.ts` to the interface above**
 
@@ -360,6 +411,7 @@ describe.skipIf(!url)('migrations', () => {
   it('rejects an invalid block type / source / visibility / couple status', async () => { /* 4 CHECK assertions */ })
   it('cascades timeblocks and overlaps_latest when a couple row is deleted', async () => { /* … */ })
   it('nulls users.couple_id when the couple is deleted', async () => { /* ON DELETE SET NULL */ })
+  it('allows a user row with a null timezone', async () => { /* onboarding depends on it */ })
   it('returns BIGINT columns as numbers, not strings', async () => {
     // insert created_at: 1712345678000, read it back, expect typeof === 'number'
     // Without the int8 parser in db.ts this fails, and every timestamp in wire.ts is a lie.
@@ -478,18 +530,36 @@ app.get('/health', async () => ({ status: 'ok', time: Date.now() }))   // no aut
 await app.listen({ port: config.port, host: '0.0.0.0' })
 ```
 
-- [ ] **Step 6: Verify**
+- [ ] **Step 6: Write boot tests that prove fail-fast actually fails**
+
+`cert()` accepts a structurally valid service account whose key is unusable, so parsing is not
+proof. The bootstrap must probe the credential before `listen`, and that must be tested:
+
+```ts
+// src/__tests__/boot.test.ts
+it('exits non-zero when the service account parses but the credential is rejected')
+it('exits non-zero when the database is unreachable')
+it('does NOT begin listening in either case')   // the old build listened and 401'd everything
+it('reports healthy only after both probes passed')
+```
+
+Implement the probe as one `getAuth().verifyIdToken('not-a-token')` at boot and treat only a
+*credential/project* error as fatal — a malformed-token error proves the credential works. Comment
+that distinction, because it is subtle and someone will "simplify" it into catching everything.
+
+- [ ] **Step 7: Verify**
 
 ```bash
 cd backend && pnpm build && pnpm test
 ```
 
-Expected: tsc clean; config, auth, migration and the 135 engine tests all pass.
+Expected: tsc clean; config, auth, boot, migration and the 135 engine tests all pass.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git commit -am "feat(backend): add fail-fast config, firebase init, auth, and error handling"
+git add backend/src/config.ts backend/src/firebase.ts backend/src/auth.ts backend/src/http.ts backend/src/index.ts backend/src/__tests__
+git commit -m "feat(backend): add fail-fast config, firebase init, auth, and error handling"
 ```
 
 ---
@@ -497,7 +567,7 @@ git commit -am "feat(backend): add fail-fast config, firebase init, auth, and er
 ## Task 4: Membership guard, the wire module, and the socket registry
 
 **Files:**
-- Rewrite: `backend/src/couples.ts`, `backend/src/sockets.ts`
+- Rewrite: `backend/src/couples.ts`, `backend/src/sockets.ts`, `backend/src/push.ts`
 - Create: `backend/src/wire.ts` (replaces the draft `backend/src/dto.ts` — delete that file)
 - Test: `backend/src/__tests__/couples.test.ts`, `backend/src/__tests__/wire.test.ts`
 
@@ -510,7 +580,8 @@ git commit -am "feat(backend): add fail-fast config, firebase init, auth, and er
   export interface UserRow {
     uid: string; email: string
     display_name: string | null; photo_url: string | null
-    timezone: string; couple_id: string | null
+    timezone: string | null      // null until confirmed in onboarding — the router guard depends on it
+    couple_id: string | null
     show_late_night_windows: boolean; notifications_enabled: boolean
     fcm_tokens: string[]        // stripped before a partner ever sees the row
     created_at: number
@@ -601,7 +672,9 @@ Delete the draft `backend/src/dto.ts` — `wire.ts` replaces it. Fix the `import
 - [ ] **Step 4: Commit**
 
 ```bash
-git commit -am "feat(backend): add membership guard, DTO scrubbing, and socket registry"
+git add backend/src/couples.ts backend/src/wire.ts backend/src/sockets.ts backend/src/push.ts backend/src/__tests__
+git rm -q backend/src/dto.ts
+git commit -m "feat(backend): add membership guard, wire scrubbing, and socket registry"
 ```
 
 ---
@@ -613,7 +686,8 @@ git commit -am "feat(backend): add membership guard, DTO scrubbing, and socket r
 - Test: `backend/src/__tests__/overlapService.test.ts`
 
 **Interfaces:**
-- Consumes: `computeOverlap`, `computeInputHash`, `ALGO_VERSION`, `Block`, `OverlapWindow` from `./overlap/index.js`; `query`, `withTx`; `assertMember`, `partnerUid`; `sendTo`, `isOnline`; `pushOverlapChanged`.
+- Consumes: `computeOverlap`, `computeInputHash`, `OverlapInput`, `Block`, `OverlapWindow` from `./overlap/index.js`; `query`, `withTx`; `assertMember`, `partnerUid`; `sendTo` from `sockets.ts`; `pushOverlapChanged` from `push.ts`.
+  **`push.ts` is delivered in Task 4, not Task 8** — Task 5 imports it, so it must exist first. Task 4 renames the draft's `pushOverlap(partner, windows)` to `pushOverlapChanged(uid, windows, timezone)` and Task 8 only hardens it (token pruning tests, body formatting).
 - Produces:
   ```ts
   // src/overlapService.ts
@@ -646,17 +720,63 @@ it('reports changed:false and sends no WS message and no push on an unchanged ha
 it('upserts windows, computed_at and input_hash when the hash differs')
 it('sends a WS overlap message to both partners when the result changed')
 it('does not push to triggeredBy even when that user is offline')
-it('pushes to the partner only when the partner is offline')
+it('pushes to the partner only when sendTo returned false for them')
 it('does not push when the partner has notifications_enabled false')
-it('returns an empty window list for a couple with no blocks on either side')
+it('returns 15 windows for a couple with no blocks on either side')  // NOT [] — see below
 it('computes for a couple where only one partner has any blocks')
+it('passes ONE OverlapInput object to both computeInputHash and computeOverlap')
+it('serializes two concurrent refreshes for the same couple')
+it('never stores an older result when two writes race')
+it('does not serialize refreshes for different couples')
 ```
+
+**Two people with no blocks are free all the time, so the engine correctly returns windows, not an
+empty list.** `backend/src/overlap/index.test.ts:57` asserts exactly 15 for the default fixture
+(a partial first local day + 13 whole days + a partial last day). Any test here that expects `[]`
+for an empty couple will fail against the real engine. Verify the exact count against the engine's
+own fixture rather than hard-coding 15 blindly — it depends on the timezone and `now` you pass.
 
 - [ ] **Step 2: Implement `refreshOverlap`**
 
-Load in one round trip: the couple row, both user rows (`timezone`, `show_late_night_windows`, `notifications_enabled`, `fcm_tokens`), and every `timeblocks` row for the couple. Partition by `couple.user_a_uid`. Call `computeInputHash` with `now = Date.now()`, compare to the stored `input_hash`, and return early with `changed: false` on a match. Otherwise `computeOverlap`, upsert, then fan out.
+The whole body runs inside one `withTx`, and its **first statement takes a per-couple advisory lock**:
 
-Comment the ceiling above the `computeOverlap` call: it runs inline on the request thread; measured at ~90 ms for 500 recurring blocks per partner against a 500 ms budget, so a job queue is the upgrade path only if p99 write latency starts to matter.
+```ts
+export async function refreshOverlap(coupleId: string, triggeredBy: string | null) {
+  return withTx(async (c) => {
+    // Serializes refreshes for THIS couple only; different couples never block each other.
+    // Without it, two concurrent writes can interleave load→compute→upsert and store the
+    // older result, and every concurrent first-read after an hour rollover would write,
+    // fan out, and push. Released automatically at COMMIT/ROLLBACK.
+    await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [coupleId])
+
+    // one captured `now`, one input object, used for BOTH the hash and the compute —
+    // calling Date.now() twice can straddle an hour boundary and make the hash describe
+    // a different computation than the one that ran.
+    const now = Date.now()
+    const input: OverlapInput = { blocksA, blocksB, timezoneA, timezoneB, prefsA, prefsB, now }
+
+    const hash = computeInputHash(input)
+    if (hash === stored?.input_hash) return { windows: stored.windows, computedAt: stored.computed_at, changed: false }
+
+    // ponytail: inline on the request thread. ~100ms for 500 recurring blocks/partner
+    // against a 500ms budget. A job queue is the upgrade path only if p99 write latency matters.
+    const windows = computeOverlap(input)
+    // upsert, then fan out
+  })
+}
+```
+
+Load in one round trip inside the lock: the couple row, both user rows (`timezone`,
+`show_late_night_windows`, `notifications_enabled`, `fcm_tokens`), and every `timeblocks` row for the
+couple. Partition by `couple.user_a_uid`. `onlyMe` blocks go into the engine input unscrubbed —
+scrubbing is a presentation concern.
+
+**Fan-out and push, per recipient:** for each of the two uids, skip `triggeredBy` entirely, then call
+`sendTo(uid, msg)` and push **only if it returned `false`**. Use that boolean, not a separate
+`isOnline` call — checking then sending is two round trips with a disconnect window between them.
+
+`hashtext` returns a 32-bit int, so distinct couple ids can theoretically collide and serialize
+against each other. That is harmless (a spurious wait, never a wrong result) — note it and move on.
 
 - [ ] **Step 3: Verify**
 
@@ -667,7 +787,8 @@ cd backend && pnpm test
 - [ ] **Step 4: Commit**
 
 ```bash
-git commit -am "feat(backend): add overlap service with input-hash dedup and fan-out"
+git add backend/src/overlapService.ts backend/src/__tests__
+git commit -m "feat(backend): add overlap service with input-hash dedup and fan-out"
 ```
 
 ---
@@ -719,6 +840,7 @@ it('PATCH /users/:uid 403s when the target is not the caller')
 it('PATCH accepts timezone, show_late_night_windows, notifications_enabled and display_name')
 it('PATCH rejects any other field, including couple_id, email and fcm_tokens')
 it('PATCH rejects an invalid IANA timezone')
+it('PATCH rejects setting timezone back to null')
 it('PATCH triggers refreshOverlap when timezone changed')
 it('PATCH triggers refreshOverlap when show_late_night_windows changed')
 it('PATCH does NOT trigger refreshOverlap when only display_name changed')
@@ -747,7 +869,8 @@ it('unpair does all of it in one transaction')
 
 ```bash
 cd backend && pnpm build && pnpm test
-git commit -am "feat(backend): add auth, users, couples and invites routes"
+git add backend/src/routes backend/src/index.ts backend/src/__tests__
+git commit -m "feat(backend): add auth, users, couples and invites routes"
 ```
 
 ---
@@ -798,7 +921,39 @@ That second-to-last test is a hard privacy boundary from §5: even if a client t
 
 Validate the body explicitly (Fastify JSON schema or hand-rolled — no new dependency). Validate `recurrenceRule` by attempting to parse it with `rrulestr` and rejecting anything whose `FREQ` is outside the supported set, so an unparseable rule fails at write time rather than silently producing zero occurrences later.
 
-- [ ] **Step 3: Write the overlaps tests, then implement `overlaps.ts`**
+- [ ] **Step 3: Add server-side occurrence expansion to `GET /blocks`**
+
+This is what makes a server-only-compute calendar view possible at all. The client has no `rrule`,
+so it cannot expand `FREQ=WEEKLY;BYDAY=TU,WE` into rectangles. The server does it, reusing the
+engine's `expandBlock` (re-exported in Task 1 Step 7 — no new code, no new dependency).
+
+```ts
+// GET /blocks?coupleId=X&from=<epochMs>&to=<epochMs>
+// `from`/`to` are required and must span at most 60 days (a week view asks for ~7).
+// Added to wire.ts:
+export interface BlockWithOccurrences extends BlockRow {
+  /** Every instance intersecting [from, to], already clamped to it. A non-recurring block
+   *  yields exactly one. Present only on GET /blocks, never on a block:set broadcast. */
+  occurrences: { start_utc: number; end_utc: number }[]
+}
+```
+
+```ts
+// src/__tests__/blocks.test.ts
+it('GET /blocks 400s when from or to is missing')
+it('GET /blocks 400s when the range exceeds 60 days')
+it('a non-recurring block in range yields exactly one occurrence equal to its own bounds')
+it('a non-recurring block outside the range yields an empty occurrences array')
+it('a weekly BYDAY=TU,WE block yields two occurrences in a Mon-Sun range')
+it('occurrences are clamped to the requested range, not to the 14-day overlap horizon')
+it('a recurring 09:00-local block keeps 09:00 local across a DST transition in the range')
+it('occurrences are computed for the partners blocks too, and respect the onlyMe scrub')
+```
+
+The DST test matters: the same `expandBlock` bug the old Dart build had would show up here as a
+block drawn an hour off on the far side of a transition.
+
+- [ ] **Step 4: Write the overlaps tests, then implement `overlaps.ts`**
 
 ```ts
 // src/__tests__/overlaps.test.ts
@@ -807,17 +962,69 @@ it('returns the stored windows when the recomputed hash matches')
 it('does not write to the database when the hash matches')
 it('recomputes and returns fresh windows when the stored hash is stale')
 it('recomputes when the hour bucket rolled over even though no block changed')  // the staleness fix
-it('returns an empty array — not 404 — for a couple that has never computed')
+it('computes and UPSERTS for a couple that has never computed')   // §3: not an empty response
+it('passes the requesting uid as triggeredBy, so a read never pushes to the reader')
 it('accepts a window whose durationMinutes is 1560')   // camelCase: engine type, not a row
 ```
 
-The hour-bucket test is the one that proves §3's staleness fix: the old build let past windows linger until some unrelated change event fired.
+Two corrections to an earlier draft of this task. First, a couple that has never computed must
+**recompute and store**, not return `[]` — §3 makes the read path the staleness fix, and two
+block-less partners legitimately have ~15 windows. Second, the handler calls
+`refreshOverlap(coupleId, req.uid)` — **not** `null`. Passing `null` means the reader is not excluded
+from the fan-out, so a user with no live socket gets an FCM push triggered by their own pull-to-refresh.
 
-- [ ] **Step 4: Verify and commit**
+- [ ] **Step 4: Write the route-wide security matrices**
+
+Per-function unit tests on `requireAuth` and `assertMember` prove the functions work; they prove
+nothing about a handler that forgot to call them. A route registered without the guard passes every
+test in Tasks 3 and 4. So drive the matrix from a **list of every route**, in
+`backend/src/__tests__/guards.matrix.test.ts`:
+
+```ts
+// One table. Adding a route without adding it here should be the thing that breaks.
+const PROTECTED = [
+  ['GET',    '/users/me'],              ['GET',    '/users/:uid'],   ['PATCH', '/users/:uid'],
+  ['GET',    '/blocks'],                ['POST',   '/blocks'],       ['GET',   '/blocks/:id'],
+  ['PATCH',  '/blocks/:id'],            ['DELETE', '/blocks/:id'],   ['PUT',   '/blocks/google'],
+  ['GET',    '/overlaps/latest'],       ['GET',    '/couples/:id'],  ['POST',  '/couples/:id/unpair'],
+  ['POST',   '/invites'],               ['POST',   '/invites/:code/redeem'],
+  ['POST',   '/auth/fcm-token'],
+]
+const COUPLE_SCOPED = PROTECTED.filter(/* the /blocks, /overlaps, /couples paths */)
+
+it.each(PROTECTED)('%s %s 401s with no token',            /* … */)
+it.each(PROTECTED)('%s %s 401s with an invalid token',    /* … */)
+it.each(COUPLE_SCOPED)('%s %s 403s for a non-member',     /* … */)
+it.each(COUPLE_SCOPED)('%s %s 403s — not 404 — for a couple id that does not exist', /* … */)
+
+it('every registered route except /health and /admin/cleanup appears in PROTECTED', () => {
+  // enumerate app.printRoutes() / the route tree and diff against the table above,
+  // so a new unguarded route fails CI instead of shipping.
+})
+```
+
+That last test is the one that actually holds the line — the tables go stale otherwise.
+
+- [ ] **Step 5: Prove the `onlyMe` scrub survives the WS fan-out, not just `GET /blocks`**
+
+`GET /blocks` scrubbing is not enough: `block:set` is broadcast to both partners, and scrubbing is
+**per recipient** — the owner must get the title, the partner must not, from the same broadcast.
+
+```ts
+// src/__tests__/blocks.test.ts
+it('block:set sends the owner their own title and the partner a nulled title, from one write')
+it('block:del broadcasts only the id, never the block body')
+it('an onlyMe block still changes the computed overlap windows')   // reaches the engine unscrubbed
+```
+
+The first test is the door the old build's privacy bug would walk back through.
+
+- [ ] **Step 6: Verify and commit**
 
 ```bash
 cd backend && pnpm build && pnpm test
-git commit -am "feat(backend): add block routes with onlyMe enforcement and overlap read path"
+git add backend/src/routes backend/src/wire.ts backend/src/index.ts backend/src/__tests__
+git commit -m "feat(backend): add block routes with onlyMe enforcement and overlap read path"
 ```
 
 ---
@@ -893,16 +1100,29 @@ it('expireStaleInvites leaves accepted invites untouched')
 it('POST /admin/cleanup 503s when the admin token is unset')
 it('POST /admin/cleanup 401s on a wrong token')
 it('POST /admin/cleanup 200s and reports the count on the correct token')
-it('compares the admin token in constant time')   // assert timingSafeEqual is used
+it('compares the admin token in constant time')
+it('does not throw on a SHORTER supplied token')   // timingSafeEqual throws on length mismatch
+it('does not throw on a LONGER supplied token')
+it('rejects an empty supplied token')
 ```
 
 Use a plain `setInterval` that checks the clock — no `node-cron` dependency for one daily job. Comment the ceiling: it drifts on a long-running process and only fires on the replica that owns it.
+
+**`crypto.timingSafeEqual` throws `RangeError` when the two buffers differ in length**, which turns a wrong-length token into a 500 and leaks the expected length through the error path. Hash both sides to a fixed width first, then compare:
+
+```ts
+import { createHash, timingSafeEqual } from 'node:crypto'
+const digest = (s: string) => createHash('sha256').update(s).digest()   // always 32 bytes
+const ok = config.adminToken !== null &&
+           timingSafeEqual(digest(supplied), digest(config.adminToken))
+```
 
 - [ ] **Step 5: Verify and commit**
 
 ```bash
 cd backend && pnpm build && pnpm test
-git commit -am "feat(backend): add websocket fan-out, FCM push, and invite expiry"
+git add backend/src/sync.ts backend/src/cron.ts backend/src/push.ts backend/src/index.ts backend/src/__tests__
+git commit -m "feat(backend): add websocket fan-out, FCM push, and invite expiry"
 ```
 
 ---
@@ -965,7 +1185,7 @@ git commit -m "feat(backend): containerize with healthcheck and local compose st
 ## Task 10: Expo scaffold, routing, guard chain, and store
 
 **Files:**
-- Create: `app.config.ts`, `app/_layout.tsx`, `app/auth.tsx`, `app/timezone-setup.tsx`, `app/pairing.tsx`, `app/(tabs)/_layout.tsx` + the five tab screens, `app/block-form.tsx`, `src/store.ts`, `src/theme.ts`, `.env.example`
+- Create: `app.config.ts`, `app/_layout.tsx`, `app/auth.tsx`, `app/timezone-setup.tsx`, `app/pairing.tsx`, `app/connect-calendar.tsx`, `app/(tabs)/_layout.tsx` + the **three** tab screens (`index`, `calendar`, `settings`), `app/block-form.tsx`, `src/store.ts`, `src/theme.ts`, `.env.example`
 - Modify: `tsconfig.json`, `package.json` (root)
 
 **Interfaces:**
@@ -977,25 +1197,49 @@ git commit -m "feat(backend): containerize with healthcheck and local compose st
 
   interface State {
     hydrated: boolean
-    user: UserRow | null                   // own row, so fcm_tokens is present
+    user: UserRow | null                          // own row, so fcm_tokens is present
+    partner: Omit<UserRow, 'fcm_tokens'> | null    // Home clocks + window detail need their name/tz
     couple: CoupleRow | null
-    blocks: BlockRow[]
+    blocks: BlockWithOccurrences[]
     windows: OverlapWindow[]
-    pendingInviteCode: string | null       // parked across the sign-in round trip
-    lastCalendarSyncMs: number | null
+    computedAt: number | null
+    pendingInviteCode: string | null               // parked across the sign-in round trip
+    lastCalendarSyncMs: number | null              // persisted, not in-memory only — see Task 16
   }
   interface Actions {
+    setHydrated(v: boolean): void
     setUser(u: UserRow | null): void
+    setPartner(p: Omit<UserRow, 'fcm_tokens'> | null): void
     setCouple(c: CoupleRow | null): void
-    setBlocks(b: BlockRow[]): void
-    upsertBlock(b: BlockRow): void
+    setBlocks(b: BlockWithOccurrences[]): void
+    upsertBlock(b: BlockRow): void                 // a block:set carries no occurrences; see note
     removeBlock(id: string): void
     setWindows(w: OverlapWindow[], computedAt: number): void
     setPendingInvite(code: string | null): void
-    reset(): void                          // on sign-out and on unpair
+    setLastCalendarSync(ms: number): void
+    /** Unpair: keep the authenticated user and their timezone, drop everything couple-scoped. */
+    resetCouple(): void
+    /** Sign-out: drop everything including the user. */
+    reset(): void
   }
   export const useStore: UseBoundStore<StoreApi<State & Actions>>
   ```
+
+Four things this fixes that a naive store gets wrong:
+
+1. **`partner` is a separate slot.** Home renders two clocks and the window detail shows both zones, so
+   the partner's row is required state. Critically, a `user:update` WS message can be for *either*
+   party — routing it into `user` unconditionally would overwrite the signed-in user with their
+   partner's row. Dispatch on `msg.user.uid`.
+2. **`resetCouple()` is distinct from `reset()`.** Unpair must leave the user signed in with their
+   timezone intact and send them to `/pairing`; sign-out must clear everything. One function cannot do
+   both — with only `reset()`, unpairing logs the user out and re-runs timezone setup.
+3. **`setHydrated` and `setLastCalendarSync` are declared**, because later tasks mutate both.
+4. **`upsertBlock` takes a `BlockRow`, but state holds `BlockWithOccurrences`.** A `block:set`
+   broadcast has no `occurrences` (the server does not know the client's visible range). So on
+   `block:set`, either re-fetch `GET /blocks` for the current range, or store the row with
+   `occurrences: []` and let the calendar refetch. Pick the refetch — it is one call and cannot go
+   stale. State the choice in a comment.
 
 The root `tsconfig.json` must add `backend/src/wire.ts` to its `include` so the type-only import
 resolves. Confirm with `npx tsc --noEmit` that it resolves, and confirm `npx expo export` (or a
@@ -1004,7 +1248,7 @@ Metro bundle) does **not** pull in `pg` — if it does, someone wrote a value im
 
 - [ ] **Step 1: Write `app.config.ts`**
 
-Name `Couple Sync`, slug `couple-sync`, scheme `couplesync`, iOS bundle + Android package `money.stitch.couplesync`, the existing `assets/*.png` wired as icon/splash/adaptive icon, and the `@react-native-firebase/app`, `@react-native-google-signin/google-signin`, `expo-apple-authentication`, `expo-notifications`, `expo-build-properties` plugins. Read `API_BASE_URL` from `process.env` into `extra`.
+Name `Couple Sync`, slug `couple-sync`, scheme `couplesync`, Android package `money.stitch.couplesync` (set the iOS bundle to the same string for later, but do not configure iOS beyond that), the existing `assets/*.png` wired as icon/splash/adaptive icon, and the `@react-native-firebase/app`, `@react-native-google-signin/google-signin`, `expo-notifications`, `expo-build-properties`, `expo-dev-client` plugins. **No `expo-apple-authentication`.** Read `API_BASE_URL` from `process.env` into `extra`.
 
 - [ ] **Step 2: Build the route tree and the guard chain in `app/_layout.tsx`**
 
@@ -1029,18 +1273,27 @@ Theme: colors (light + dark), spacing scale, type scale. Plain objects, no styli
 
 - [ ] **Step 5: Create every screen as a one-line stub**
 
-Literally `export default () => <Text>auth</Text>` per screen — nine files, one line each. Do **not**
+Literally `export default () => <Text>auth</Text>` per screen — seven files, one line each. Do **not**
 lay out the screens here: Tasks 12–16 rewrite every one of them, and laying them out twice is a
 wasted pass. The only files with real content in this task are `_layout.tsx` (the guard chain) and
-`(tabs)/_layout.tsx` (the tab bar), because those are what you are actually verifying.
+`(tabs)/_layout.tsx` (the **three**-tab bar: Free time, Calendar, Settings), because those are what
+you are actually verifying.
 
 - [ ] **Step 6: Verify**
 
 ```bash
-npx tsc --noEmit && npx expo-doctor
+npx tsc --noEmit && npx expo-doctor && npx expo prebuild --platform android --clean
 ```
 
-Expected: tsc clean. Report every `expo-doctor` warning honestly rather than suppressing it. Do not attempt a native build — no Firebase credential files exist yet.
+Expected: tsc clean; `prebuild` generates `ios/` and `android/` without error. Report every
+`expo-doctor` warning honestly rather than suppressing it.
+
+**`expo prebuild` is the checkpoint, not `expo start`.** `@react-native-firebase/*` ships native
+modules, so this app can never run in Expo Go — every later verification step needs a development
+build (`npx expo run:android`). Add `expo-dev-client` and confirm the config plugins resolve here, at
+the scaffold, rather than discovering it in Task 12 when a screen refuses to load. The Firebase credential file
+(`google-services.json`) does not exist yet, so `prebuild` succeeding while `run:android` cannot yet
+launch is the expected state — say so in your report. **Android only** — do not prebuild iOS.
 
 - [ ] **Step 7: Commit**
 
@@ -1095,7 +1348,6 @@ git commit -m "feat(app): scaffold expo-router tree, guard chain, store and them
 
   // src/auth.ts
   export function signInWithGoogle(): Promise<void>
-  export function signInWithApple(): Promise<void>
   export function signOut(): Promise<void>
   export function getIdToken(): Promise<string | null>
   export function onAuthChange(cb: (uid: string | null) => void): () => void
@@ -1137,7 +1389,7 @@ it('refetches the latest overlap after a reconnect')   // catches anything misse
 
 - [ ] **Step 4: Implement `src/auth.ts` and wire the sign-in screen**
 
-Google via `@react-native-google-signin/google-signin` → Firebase credential; Apple via `expo-apple-authentication` → Firebase credential (guard it to iOS). `onAuthChange` drives hydration in `_layout.tsx`: on a uid, `api.verify()` → `setUser`, then couple + blocks + windows in parallel, then `connect()`, then `hydrated = true`. On sign-out: `disconnect()`, `reset()`.
+Google via `@react-native-google-signin/google-signin` → Firebase credential. Request the `calendar.readonly` scope **here, at sign-in**, not later — see Task 12a. `onAuthChange` drives hydration in `_layout.tsx`: on a uid, `api.verify()` → `setUser`, then couple + blocks + windows in parallel, then `connect()`, then `hydrated = true`. On sign-out: `disconnect()`, `reset()`.
 
 - [ ] **Step 5: Write `src/time.ts`**
 
@@ -1147,7 +1399,8 @@ luxon helpers only — format a window range in a given zone, a live clock strin
 
 ```bash
 npx tsc --noEmit && npm test
-git commit -am "feat(app): add api client, websocket client, firebase auth and time helpers"
+git add src app tsconfig.json
+git commit -m "feat(app): add api client, websocket client, firebase auth and time helpers"
 ```
 
 ---
@@ -1158,60 +1411,93 @@ git commit -am "feat(app): add api client, websocket client, firebase auth and t
 
 **Interfaces:** Consumes `api`, `src/auth.ts`, `store`. Produces nothing later tasks depend on.
 
-- [ ] **Step 1: Finish `app/auth.tsx`** — Google and Apple buttons (Apple iOS-only), a loading state, and an inline error message on failure. No email/password, no anonymous (§0.8).
+- [ ] **Step 1: Finish `app/auth.tsx`** — **one** Google sign-in button, a loading state, and an inline error message on failure. No Apple button, no email/password, no anonymous. One button is the whole screen; do not build a provider-list abstraction for a single provider.
 - [ ] **Step 2: Write `src/timezones.ts`** — the IANA zone list grouped by region with a search filter. Use `Intl.supportedValuesOf('timeZone')` rather than shipping a hand-maintained list.
 - [ ] **Step 3: Finish `app/timezone-setup.tsx`** — pre-select `expo-localization`'s detected zone, offer a searchable override, `api.patchUser` on confirm. Show each candidate's current local time so a wrong pick is obvious.
-- [ ] **Step 4: Finish `app/pairing.tsx`** — Share tab (`api.createInvite`, show the code + expiry, copy button, `Share.share` with the `couplesync://invite/<code>` link) and Enter tab (6-char input, `api.redeemInvite`, distinct messages for expired / already-used / self-pair / already-paired). Consume `pendingInviteCode` when present. Navigation happens off the WS `pairing` message and the `coupleId` change — **no polling loop**; the old build polled every 3 s.
+- [ ] **Step 4: Finish `app/pairing.tsx`** — Share tab (`api.createInvite`, show the code + expiry, copy button, `Share.share` with the `couplesync://invite/<code>` link) and Enter tab (6-char input, `api.redeemInvite`, distinct messages for expired / already-used / self-pair / already-paired). Consume `pendingInviteCode` when present.
+
+**Both sides must navigate, by different routes.** The *inviter* is moved by the WS `pairing`
+message. The *redeemer* gets only an HTTP `{ couple_id }` response — no WS message is sent to
+themselves — so `redeemInvite` must, on success, hydrate directly: fetch the couple, the partner,
+the blocks and the windows, set them, and let the guard chain fall through to `/(tabs)`. Without
+that the redeemer sits on `/pairing` staring at a success message. **No polling loop** either way;
+the old build polled every 3 s.
 - [ ] **Step 5: Verify** — `npx tsc --noEmit`, then run on a simulator and walk sign-in → timezone → pairing.
-- [ ] **Step 6: Commit** — `git commit -am "feat(app): implement auth, timezone setup and pairing screens"`
+- [ ] **Step 6: Commit** — `git add app src && git commit -m "feat(app): implement auth, timezone setup and pairing screens"`
 
 ---
 
-## Task 13: Home and Overlap screens
+## Task 13: Google Calendar connect + sync (the core product loop)
 
-**Files:** `app/(tabs)/index.tsx`, `app/(tabs)/overlap.tsx`, `src/components/WindowCard.tsx`
+**Files:** `src/calendar.ts`, `src/notifications.ts`, `app/connect-calendar.tsx`, modify `app/_layout.tsx`
+**Test:** `src/__tests__/calendar.test.ts`
 
-**Interfaces:** Consumes `store.windows`, `store.user`, `store.couple`, `api`, `src/time.ts`.
+This task moved ahead of the screens deliberately. *Connect Gmail → pull free/busy → show free spots*
+**is** the product; a Home screen with no calendar data is a demo. Build the data source first.
 
-- [ ] **Step 1: Build `WindowCard`** — start/end in both zones, duration, score-derived emphasis, and a late-night marker when `reasonableBoth` is false.
-- [ ] **Step 2: Build Home** — both partners' live clocks (tick once a minute, not once a second), a countdown to the next window, the next 5 windows, quick actions (add block, sync calendar, view all), and pull-to-refresh calling `api.latestOverlap`. **Filter out any window whose `endUtc` is in the past** before rendering — §9 notes the stored row can lag the clock.
-- [ ] **Step 3: Build Overlap** — the full list with an any/30m/1h/2h filter (display-only per §0.7) and a detail view. The empty state distinguishes "no windows found" from "no blocks yet — add some or sync your calendar".
-- [ ] **Step 4: Verify** — `npx tsc --noEmit` plus a visual check against seeded backend data.
-- [ ] **Step 5: Commit** — `git commit -am "feat(app): implement home and overlap screens"`
+**Interfaces:** as specified in Task 16 below for `src/calendar.ts` and `src/notifications.ts` — that
+task now owns only the Settings screen, so implement both modules here and read Task 16's interface
+block and its Step 1/Step 2 detail as this task's specification.
 
----
-
-## Task 14: Calendar week view
-
-**Files:** `app/(tabs)/calendar.tsx`, `src/components/WeekGrid.tsx`
-
-**Interfaces:** Consumes `store.blocks`, `store.windows`, the positioning helper in `src/time.ts`.
-
-- [ ] **Step 1: Build `WeekGrid`** — 7 day columns × 24 hour rows in the viewer's timezone, blocks positioned via `src/time.ts`, overlap windows layered underneath. A block whose own `timezone` differs from the viewer's renders at the viewer's wall clock.
-- [ ] **Step 2: Add week paging** — anchor page 0 to a fixed epoch Monday so paging is deterministic; a horizontal pager for prev/next week; a "today" jump.
-- [ ] **Step 3: Wire the taps** — a block opens a detail sheet (a partner's `onlyMe` block shows "Busy" with no title, because the server already nulled it); a window opens the same detail as Task 14; the FAB opens `block-form`.
-- [ ] **Step 4: Verify** — `npx tsc --noEmit`; confirm a recurring block appears on every expected day and that a DST week does not visually shift.
-- [ ] **Step 5: Commit** — `git commit -am "feat(app): implement calendar week view"`
-
----
-
-## Task 15: Block management and the block form
-
-**Files:** `app/(tabs)/blocks.tsx`, `app/block-form.tsx`, `src/components/RecurrencePicker.tsx`
-
-**Interfaces:** Consumes `api.createBlock`/`updateBlock`/`deleteBlock`, `store`.
-
-- [ ] **Step 1: Build the blocks list** — own blocks only, filterable by source and category, swipe-to-delete with confirmation. Google-sourced rows are visibly read-only and have no edit affordance.
-- [ ] **Step 2: Build `RecurrencePicker`** — none / daily / weekly (with weekday selection) / monthly, emitting an RRULE string. Only emit rules the backend accepts (§3.2), since Task 7 rejects anything else at write time.
-- [ ] **Step 3: Build the form** — title, type, category, start/end date-time pickers in the user's zone, the recurrence picker, and a visibility toggle whose helper text states plainly that `onlyMe` hides the title from your partner but still blocks out the time. Validate a non-empty title and `end > start` client-side, and surface the server's 400 message when the server rejects anyway.
-- [ ] **Step 4: Verify** — `npx tsc --noEmit`; create, edit and delete a recurring block and confirm the overlap list updates over the WS without a manual refresh.
-- [ ] **Step 5: Commit** — `git commit -am "feat(app): implement block management and block form"`
+- [ ] **Step 1 (executed in Task 13): `src/calendar.ts`** — per Task 16 Step 1 in full, including the persisted
+      rate limit and the seven client-side privacy tests.
+- [ ] **Step 2 (executed in Task 13): `src/notifications.ts`** — per Task 16 Step 2 in full.
+- [ ] **Step 3: Wire both into `app/_layout.tsx`** — per the call table in Task 16's Interfaces block.
+      Auto-sync on launch when `lastCalendarSyncMs` is over an hour old.
+- [ ] **Step 4: Build `app/connect-calendar.tsx`** — a single-purpose screen: one sentence explaining
+      that Couple Sync reads only busy/free times and never event titles, one "Connect Google
+      Calendar" button, and a quiet "I'll add my times manually" link. **It is not a router guard** —
+      a guard here would trap a user who declines. It is pushed from Home's empty state and from
+      Settings, so it can always be backed out of.
+- [ ] **Step 5: Verify on Android** — `npx expo run:android`; sign in, connect a real Google account,
+      and confirm busy blocks appear via `GET /blocks`. Confirm the request log shows `freeBusy` and
+      never `events`.
+- [ ] **Step 6: Commit** — `git add app src && git commit -m "feat(app): add google calendar sync and notifications"`
 
 ---
 
-## Task 16: Settings, Google Calendar sync, and notifications
+## Task 14: Free time screen
 
-**Files:** `app/(tabs)/settings.tsx`, `src/calendar.ts`, `src/notifications.ts`
+**Files:** `app/(tabs)/index.tsx`, `src/components/WindowCard.tsx`
+
+**Interfaces:** Consumes `store.windows`, `store.user`, `store.partner`, `api`, `src/time.ts`, `src/calendar.ts`.
+
+One screen, not two. Home and a separate Overlap tab both rendered a list of windows differing only
+in length and a filter — that is one screen with a filter.
+
+- [ ] **Step 1: Build `WindowCard`** — start/end in both partners' zones, duration, score-derived emphasis, and a late-night marker when `reasonableBoth` is false. The marker is text or an icon, never colour alone.
+- [ ] **Step 2: Build the screen** — both partners' live clocks (tick once a **minute**, not once a second), a countdown to the next window, then the full window list with an any/30m/1h/2h filter (display-only per §0.7). **Drop any window whose `endUtc` is already past** before rendering — §9 notes the stored row can lag the clock.
+- [ ] **Step 3: Build the three empty states, which are the whole UX of this screen** — (a) no calendar connected → the connect prompt, routing to `app/connect-calendar.tsx`, shown *instead of* the list; (b) calendar connected but no windows → "you two have no shared free time in the next 14 days", with a link to review blocks; (c) loading → a skeleton, never a bare spinner over an empty list.
+- [ ] **Step 4: Pull-to-refresh runs both** `calendar.sync(coupleId)` and `api.latestOverlap(coupleId)`, in that order. Refreshing windows without re-syncing the calendar is the bug a user will report as "it's out of date".
+- [ ] **Step 5: Verify on Android** — `npx expo run:android`; check all three empty states and that the clocks show two different zones.
+- [ ] **Step 6: Commit** — `git add app src && git commit -m "feat(app): implement free time screen"`
+
+---
+
+## Task 15: Calendar week view and block form
+
+**Files:** `app/(tabs)/calendar.tsx`, `app/block-form.tsx`, `src/components/WeekGrid.tsx`, `src/components/RecurrencePicker.tsx`
+
+**Interfaces:** Consumes `store.blocks` (`BlockWithOccurrences[]`), `store.windows`, `src/time.ts`, `api.createBlock`/`updateBlock`/`deleteBlock`.
+
+The calendar **is** the block-management surface — there is no separate Blocks tab. Tapping a block
+edits it; the FAB creates one.
+
+- [ ] **Step 1: Build `WeekGrid`** — 7 day columns × 24 hour rows in the viewer's timezone. Render from each block's **server-supplied `occurrences`** array (Task 7 Step 3), never from `recurrence_rule`; the client cannot expand recurrence and must not try. Overlap windows layer underneath the blocks.
+- [ ] **Step 2: Fetch the visible range** — `GET /blocks?coupleId=X&from=<weekStart>&to=<weekEnd>` on every week change, so occurrences always cover what is on screen. Anchor page 0 to a fixed epoch Monday so paging is deterministic; add a "today" jump.
+- [ ] **Step 3: Wire the taps** — own block → `block-form` prefilled; google-sourced block → a read-only sheet with no edit affordance; partner's `onlyMe` block → "Busy", no title (the server already nulled it, so there is nothing to hide client-side); window → the same detail sheet as Task 14; FAB → empty `block-form`.
+- [ ] **Step 4: Build `RecurrencePicker`** — none / daily / weekly (with weekday selection) / monthly, emitting an RRULE string. Emit **only** rules the backend accepts (§3.2), since Task 7 rejects anything else at write time.
+- [ ] **Step 5: Build `block-form`** — title, type, category, start/end pickers in the user's zone, the recurrence picker, and a visibility toggle whose helper text says plainly that `onlyMe` hides the title from your partner but still blocks out the time. Validate non-empty title and `end > start` locally; surface the server's 400 when it rejects anyway. Delete lives here, behind a confirm.
+- [ ] **Step 6: Verify on Android** — `npx expo run:android`; create a weekly block and confirm it appears on **every** expected day (this is what proves server-side expansion works end to end); confirm a DST week does not visually shift; confirm the free-time list updates over the WS without a manual refresh.
+- [ ] **Step 7: Commit** — `git add app src && git commit -m "feat(app): implement calendar week view and block form"`
+
+---
+
+## Task 16: Settings
+
+**Files:** `app/(tabs)/settings.tsx`
+
+`src/calendar.ts` and `src/notifications.ts` are built in **Task 13**; the interface block and Steps 1–2 below are their specification and Task 13 executes them. This task builds only the screen that drives them.
 
 **Interfaces:**
 - Produces:
@@ -1230,23 +1516,64 @@ git commit -am "feat(app): add api client, websocket client, firebase auth and t
   export function attachTapHandler(): () => void     // routes a tap to /overlap
   ```
 
-- [ ] **Step 1: Implement `src/calendar.ts`**
+**Every one of these must be called from somewhere.** An earlier draft of this task produced them
+and wired none of them up, which is how the old build ended up with notifications that existed only
+as an interface. This task therefore also modifies `app/_layout.tsx` and `app/(tabs)/index.tsx`:
 
-Request exactly `https://www.googleapis.com/auth/calendar.readonly` as a scope escalation on the existing Google Sign-In. Call **only** `freeBusy.query` on `primary` for `now → now + 14d`. Map each busy interval to `{ startUtc, endUtc }` and `PUT /blocks/google`. **Never call `events.list`, never read a `summary` field.** Enforce the ≤1 call/hour limit locally and return `'rate-limited'` instead of calling. Exponential backoff on 429/503.
+| Call | Where | When |
+|---|---|---|
+| `requestPermissionAndRegister()` | `app/_layout.tsx`, after hydration | once per launch, when signed in |
+| `attachTapHandler()` | `app/_layout.tsx` mount | returns a cleanup, called on unmount |
+| `sync(coupleId)` | `app/_layout.tsx`, after hydration | launch, only if `lastCalendarSyncMs` is over 1 h old (§5 auto-sync) |
+| `sync(coupleId)` | `app/(tabs)/index.tsx` pull-to-refresh | alongside `latestOverlap`, not instead of it |
+| `sync(coupleId, { force: true })` | Settings "Sync now" | the **only** caller allowed to pass `force` |
 
-- [ ] **Step 2: Implement `src/notifications.ts`**
+`force` exists solely for that explicit Settings button; comment it as such so it does not become a
+way to bypass the quota from a render path.
+
+- [ ] **Step 1 (executed in Task 13): `src/calendar.ts`**
+
+Request exactly `https://www.googleapis.com/auth/calendar.readonly` as a scope escalation on the existing Google Sign-In. Call **only** `freeBusy.query` on `primary` for `now → now + 14d`. Map each busy interval to `{ start_utc, end_utc }` and `PUT /blocks/google`. **Never call `events.list`, never read a `summary` field.** Exponential backoff on 429/503.
+
+**Persist the rate limit, do not hold it in a module variable.** An in-memory timestamp resets on
+every app launch, which is exactly when auto-sync fires — so the ≤1 call/hour rule would be broken by
+the very code path it exists to protect. Store `lastCalendarSyncMs` in `expo-secure-store` and read
+it before deciding.
+
+Honest ceiling to write down: the limit is **per device**, not per user. Someone with a phone and a
+tablet gets two calls an hour. Server-side enforcement would need a last-sync column on `users`; that
+is the upgrade path if quota ever becomes real. Two calls/hour against a 1-unit quota does not
+justify a column today.
+
+**Add a client-side test for the privacy boundary** — Task 7's server-side title rejection does not
+prove the client never *asked* for titles:
+
+```ts
+// src/__tests__/calendar.test.ts — mock the Google client
+it('requests exactly the calendar.readonly scope and no other')
+it('calls freeBusy.query and never events.list')
+it('queries only the primary calendar')
+it('sends no title field in the PUT /blocks/google payload')
+it('returns rate-limited without calling the API when the stored sync is 30 minutes old')
+it('calls the API when the stored sync is 90 minutes old')
+it('calls the API regardless of the stored sync when force is true')
+```
+
+- [ ] **Step 2 (executed in Task 13): `src/notifications.ts`**
 
 Request permission, get the FCM token, `api.registerFcmToken`, and re-register on token refresh. Foreground notifications **must actually display** — the previous build wired a display interface that production never populated, so foreground notifications were silently dead. Add a check that proves display is wired, not merely called.
 
 - [ ] **Step 3: Build Settings**
 
-Connect/disconnect Google with a last-sync timestamp and a manual sync button; change timezone; a notifications toggle that calls `api.patchUser({ notificationsEnabled })` — it must change server behaviour, not just local state (§0.5); a late-night-windows toggle via `api.patchUser`, after which the overlap list visibly changes; unpair behind a confirmation dialog; sign out.
+Four groups, in this order. **Calendar**: connected account email, last-sync time, "Sync now" (the only caller allowed `{ force: true }`), and disconnect behind a confirm that says her google blocks will be removed. **You**: timezone (searchable, shows current local time per candidate), late-night-windows toggle via `api.patchUser({ show_late_night_windows })`. **Notifications**: one toggle calling `api.patchUser({ notifications_enabled })` — it must change *server* behaviour, not local state (§0.5). **Couple**: partner name, unpair behind a confirm naming what is deleted, sign out.
 
-- [ ] **Step 4: Verify each toggle end-to-end**
+Every row is a plain labelled control. No settings-schema abstraction for nine rows.
 
-Flip notifications off and assert the server stops pushing. Flip late-night on and assert new windows appear. Both were fake in the old build — prove they are not now.
+- [ ] **Step 4: Verify each toggle end-to-end on Android**
 
-- [ ] **Step 5: Commit** — `git commit -am "feat(app): implement settings, google calendar sync and notifications"`
+`npx expo run:android`. Flip notifications off and assert the server stops pushing (check the backend log, not the UI). Flip late-night on and assert the free-time list visibly gains windows. Change timezone and assert the windows shift. **All three were fake or dead in the old build** — a toggle that only writes local state is the exact defect being fixed, so prove each one reaches the server.
+
+- [ ] **Step 5: Commit** — `git add app src && git commit -m "feat(app): implement settings screen"`
 
 ---
 
@@ -1269,6 +1596,24 @@ Two jobs on `ubuntu-latest`, both gating PRs. The previous CI ran static analysi
 # job: app      — npm ci; npx tsc --noEmit; npm run lint; npm test
 ```
 
+**Two config files must exist or both app steps fail, and they are this task's real work:**
+
+1. `eslint.config.mjs` — ESLint 9 requires flat config. There is none, so `npm run lint` currently
+   exits 2 and the CI job would be red on its first run:
+   ```js
+   import expo from 'eslint-config-expo/flat.js'
+   export default [...expo, { ignores: ['backend/**', 'dist/**', 'ios/**', 'android/**'] }]
+   ```
+2. `vitest.config.ts` at the repo root — with no `include`, root Vitest walks the whole tree and
+   collects `backend/src/**/*.test.ts`, which fails because the app job never installs backend deps:
+   ```ts
+   import { defineConfig } from 'vitest/config'
+   export default defineConfig({ test: { include: ['src/**/*.test.ts'], environment: 'node' } })
+   ```
+
+Run both locally before pushing — `npm run lint` and `npm test` must exit 0, and `npm test` must
+report only app tests, never the 135 engine tests.
+
 - [ ] **Step 2: Delete the stale Flutter git hooks; do not replace them**
 
 `.githooks/pre-commit` and `pre-push` were deleted in Task 1 because they ran `flutter analyze` and
@@ -1280,7 +1625,7 @@ message.
 
 - [ ] **Step 3: Write `README.md`**
 
-What the product is, the two-deployable layout, how to run the backend locally (one compose command), how to run the app (`npm start`), the required environment variables, and the human-only setup steps: Firebase project config files (`google-services.json`, `GoogleService-Info.plist`), the Google OAuth client IDs, enabling the Calendar API, and the Apple Developer account needed for Apple Sign-In.
+What the product is, the two-deployable layout, how to run the backend locally (one compose command), how to run the app (`npm start`), the required environment variables, and the human-only setup steps: `google-services.json` from the Firebase console, the Android OAuth client ID **plus a Web client ID** (`@react-native-google-signin` needs the Web one as `webClientId`), the debug and release SHA-1 fingerprints registered in Firebase (Google Sign-In fails silently without them — the single most common setup mistake), and enabling the Google Calendar API in the GCP project. iOS setup is deliberately out of scope.
 
 - [ ] **Step 4: Write `CLAUDE.md`**
 
@@ -1294,7 +1639,7 @@ Replace the deleted Flutter version. Correct stack, correct commands, the **serv
 
 Push the branch and confirm both jobs pass. A red pipeline here means an earlier task's tests only ever ran locally.
 
-- [ ] **Step 7: Commit** — `git commit -am "ci: gate backend and app tests; rewrite project docs"`
+- [ ] **Step 7: Commit** — `git add .github .githooks README.md CLAUDE.md AGENTS.md PRD.md ARCHITECTURE.md eslint.config.mjs vitest.config.ts && git commit -m "ci: gate backend and app tests; rewrite project docs"`
 
 ---
 
