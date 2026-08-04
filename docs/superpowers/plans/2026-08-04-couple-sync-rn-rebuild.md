@@ -17,6 +17,8 @@
 Every task's requirements implicitly include this section.
 
 - **Timestamps** are UTC epoch milliseconds everywhere: `BIGINT` in Postgres, `number` in TypeScript, plain integers on the wire. Never an ISO string, never a `Date` in a payload.
+- **The wire shape is the row shape.** Database rows go out over REST and WS in `snake_case`, exactly as Postgres returns them. There is no DTO mapping layer, because renaming `couple_id` to `coupleId` buys nothing and costs a mapper per entity plus a drift-detection test. The two transforms that carry real logic — scrubbing an `onlyMe` block and stripping `fcm_tokens` — live in `backend/src/wire.ts` and are the only functions between a row and a response. The one exception is `OverlapWindow`, which is the engine's own computed type and stays `camelCase` (`startUtc`, `durationMinutes`) because it is not a row.
+- **The app imports its wire types directly from the backend, type-only:** `import type { UserRow } from '../backend/src/wire'`. One repo, one definition, no hand-copy and no contract test to police the copy. `import type` is erased before Metro sees it, so no backend code is ever bundled — and an accidental *value* import fails loudly at bundle time when Metro tries to resolve `pg`.
 - **Timezones** are IANA IDs (`America/New_York`, `Africa/Johannesburg`). Never an abbreviation, never a UTC offset.
 - **Package manager** is `pnpm` in `backend/` (declared via `packageManager`) and `npm` at the repo root (an `npm`-generated `package-lock.json` already exists there). Never mix.
 - **TypeScript** is `strict` in both projects. `backend/tsconfig.json` additionally sets `noUncheckedIndexedAccess` — the existing engine code depends on it, do not relax it.
@@ -33,6 +35,7 @@ Every task's requirements implicitly include this section.
 - **App identity:** display name `Couple Sync`, slug `couple-sync`, bundle/package id `money.stitch.couplesync`, URL scheme `couplesync`.
 - **Commit format:** `<type>(<scope>): <message>`, e.g. `feat(backend): add invite redeem transaction`. No `Co-Authored-By: Claude` trailer.
 - **Style:** ponytail mode. Minimum code that works; no abstraction with a single call site; no config for a value that never changes. Where a deliberate shortcut has a known ceiling, leave a one-line comment naming the ceiling and the upgrade path.
+- **Accessibility basics are not optional** and are not what the spec deferred (it deferred the full WCAG *sweep*). Every task that ships UI owes three things, checked at that task's verify step: an `accessibilityLabel` on every icon-only control; a minimum 44×44pt touch target on every tappable element; and no state conveyed by colour alone — a late-night window, a `tentative` block, and a read-only google-sourced row each need a text or icon marker, not just a hue. These cost one prop each; retrofitting them later costs a sweep.
 
 ---
 
@@ -46,7 +49,7 @@ Verify this before Task 1. `git status` shows 313 staged deletions (the entire F
 - `backend/package.json`, `backend/pnpm-lock.yaml`, `backend/tsconfig.json`, `backend/vitest.config.ts` — need the fixes in Task 1.
 
 **Unreviewed draft — treat as a starting point, not as correct.** Written by an interrupted agent against an earlier spec revision, never compiled, never tested, never reviewed. Each task below that touches one of these files owns verifying it against the spec and rewriting whatever does not match:
-- `backend/src/config.ts`, `db.ts`, `firebase.ts`, `auth.ts`, `couples.ts`, `http.ts`, `sockets.ts`, `push.ts`, `dto.ts`, `routes/auth.ts`
+- `backend/src/config.ts`, `db.ts`, `firebase.ts`, `auth.ts`, `couples.ts`, `http.ts`, `sockets.ts`, `push.ts`, `dto.ts` (replaced by `wire.ts` in Task 4), `routes/auth.ts`
 
 **Delete — built to the abandoned device-computes design:**
 - `backend/src/overlap.ts` (`validateWindows`, the `computedBy` forgery gate — the client no longer publishes windows, so this whole module is obsolete and its filename collides confusingly with `src/overlap/`)
@@ -71,7 +74,7 @@ Verify this before Task 1. `git status` shows 313 staged deletions (the entire F
 | `src/auth.ts` | Extract + verify the bearer/query token; Fastify `preHandler` that sets `req.uid` |
 | `src/http.ts` | `HttpError` + the Fastify error handler that maps it to a response |
 | `src/couples.ts` | `assertMember`, `partnerUid` |
-| `src/dto.ts` | Row → wire-shape mappers, including the `onlyMe` scrub |
+| `src/wire.ts` | Row interfaces (the wire shape), the `onlyMe` scrub, `fcm_tokens` stripping, the `WsMessage` union. Imported type-only by the app. |
 | `src/sockets.ts` | `uid → WebSocket` registry, `sendTo`, `isOnline` |
 | `src/overlap/**` | **Existing.** Pure engine. §3. |
 | `src/overlapService.ts` | The only caller of `computeOverlap`: load rows → compute → dedup on `input_hash` → upsert → fan out → push |
@@ -108,7 +111,6 @@ Verify this before Task 1. `git status` shows 313 staged deletions (the entire F
 | `src/ws.ts` | WS client with reconnect backoff; dispatches into the store |
 | `src/auth.ts` | Firebase Auth: Google + Apple sign-in, sign-out, token access |
 | `src/store.ts` | zustand store: `user`, `couple`, `blocks`, `windows`, `hydrated`, actions |
-| `src/types.ts` | Wire types, kept in lockstep with `backend/src/dto.ts` |
 | `src/theme.ts` | Colors, spacing, type scale; light + dark |
 | `src/time.ts` | luxon display helpers: format a window, a clock, a block's grid position |
 | `src/calendar.ts` | Google freebusy fetch → block payloads |
@@ -118,14 +120,21 @@ Verify this before Task 1. `git status` shows 313 staged deletions (the entire F
 
 ## Task Sequencing
 
-Tasks 1–4 must land in order. After Task 10, the two tracks are independent and can run in parallel; they meet at Task 18.
+Tasks 1–4 must land in order. Task 4 produces `backend/src/wire.ts`, which is the only thing Track 2
+needs from Track 1 — so once Task 4 lands, the two tracks are independent and run in parallel. They
+meet at Task 17.
 
 ```
-Track 1 (backend):  1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10
-Track 2 (app):                                        └→ 11 → 12 → 13 → 14 → 15 → 16 → 17
-                                                                                        ↓
-                                                                              18 (CI + docs)
+Track 1 (backend):  1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9
+Track 2 (app):               └────→ 10 → 11 → 12 → 13 → 14 → 15 → 16
+                                                                    ↓
+                                                          17 (CI + docs)
 ```
+
+Track 2 codes against the type declarations in `wire.ts`, not against a running server, so it does
+not wait for Tasks 5–9. The first task that genuinely needs a live backend is Task 12 Step 5
+(walking the sign-in flow on a simulator); if Track 1 is behind at that point, run Track 2's
+verification steps against the local compose stack once Task 9 lands.
 
 ---
 
@@ -246,7 +255,16 @@ git commit -m "chore(repo): scrap Flutter app, keep overlap engine, fix backend 
   export function withTx<T>(fn: (c: pg.PoolClient) => Promise<T>): Promise<T>
   /** SELECT 1. Throws on failure — called at boot so a bad DB crashes instead of reporting healthy. */
   export function assertReachable(): Promise<void>
-  export function closePool(): Promise<void>
+  ```
+  No `closePool` — nothing in this plan calls it. Add it alongside a graceful-shutdown handler if and
+  when one is needed, not before.
+
+  **`db.ts` must register an int8 parser at module load:**
+  ```ts
+  // pg returns BIGINT as a string by default, which would make every *_utc field a string
+  // and quietly falsify every timestamp type in wire.ts. Epoch ms fits in a double until
+  // year 287396, so Number is lossless here.
+  pg.types.setTypeParser(20, Number)
   ```
 
 - [ ] **Step 1: Write the schema, exactly per §2**
@@ -342,6 +360,10 @@ describe.skipIf(!url)('migrations', () => {
   it('rejects an invalid block type / source / visibility / couple status', async () => { /* 4 CHECK assertions */ })
   it('cascades timeblocks and overlaps_latest when a couple row is deleted', async () => { /* … */ })
   it('nulls users.couple_id when the couple is deleted', async () => { /* ON DELETE SET NULL */ })
+  it('returns BIGINT columns as numbers, not strings', async () => {
+    // insert created_at: 1712345678000, read it back, expect typeof === 'number'
+    // Without the int8 parser in db.ts this fails, and every timestamp in wire.ts is a lie.
+  })
 })
 ```
 
@@ -472,59 +494,76 @@ git commit -am "feat(backend): add fail-fast config, firebase init, auth, and er
 
 ---
 
-## Task 4: Membership guard, DTOs, and the socket registry
+## Task 4: Membership guard, the wire module, and the socket registry
 
 **Files:**
-- Rewrite: `backend/src/couples.ts`, `backend/src/dto.ts`, `backend/src/sockets.ts`
-- Test: `backend/src/__tests__/couples.test.ts`, `backend/src/__tests__/dto.test.ts`
+- Rewrite: `backend/src/couples.ts`, `backend/src/sockets.ts`
+- Create: `backend/src/wire.ts` (replaces the draft `backend/src/dto.ts` — delete that file)
+- Test: `backend/src/__tests__/couples.test.ts`, `backend/src/__tests__/wire.test.ts`
 
 **Interfaces:**
 - Consumes: `db.ts`, `http.ts`.
 - Produces:
   ```ts
-  // src/couples.ts
+  // src/wire.ts — row shapes ARE the wire shapes. snake_case, no mapping layer.
+  // The app imports these type-only: import type { UserRow } from '../backend/src/wire'
+  export interface UserRow {
+    uid: string; email: string
+    display_name: string | null; photo_url: string | null
+    timezone: string; couple_id: string | null
+    show_late_night_windows: boolean; notifications_enabled: boolean
+    fcm_tokens: string[]        // stripped before a partner ever sees the row
+    created_at: number
+  }
   export interface CoupleRow {
     id: string; user_a_uid: string; user_b_uid: string
     status: 'active' | 'inactive'; paired_at: number; created_at: number
   }
+  export interface BlockRow {
+    id: string; couple_id: string; user_id: string
+    title: string | null; type: 'busy'|'free'|'tentative'; category: string | null
+    start_utc: number; end_utc: number; timezone: string
+    recurrence_rule: string | null; source: 'google'|'manual'
+    visibility: 'bothPartners'|'onlyMe'; created_at: number
+  }
+
+  /** Identity when viewerUid owns the block. Otherwise, for visibility==='onlyMe',
+   *  returns a copy with title and category nulled. Never drops the interval —
+   *  the overlap engine needs it, the partner just must not see what it is. */
+  export function scrubBlockForViewer(block: BlockRow, viewerUid: string): BlockRow
+  /** Drops fcm_tokens. Every path except GET /users/me sends the result of this. */
+  export function stripTokens(user: UserRow): Omit<UserRow, 'fcm_tokens'>
+
+  // OverlapWindow stays camelCase — it is the engine's computed type, not a row.
+  export type { OverlapWindow } from './overlap/index.js'
+
+  export type WsMessage =
+    | { t: 'hello';       uid: string; couple_id: string | null }
+    | { t: 'block:set';   block: BlockRow }
+    | { t: 'block:del';   id: string }
+    | { t: 'overlap';     couple_id: string; windows: OverlapWindow[]; computed_at: number }
+    | { t: 'unpair';      couple_id: string }
+    | { t: 'pairing';     couple_id: string; partner_uid: string }
+    | { t: 'user:update'; user: Omit<UserRow, 'fcm_tokens'> }
+
+  // src/couples.ts
   /** Throws HttpError(403,'forbidden') when the couple is missing, inactive, or uid is not a member. */
   export function assertMember(coupleId: string, uid: string): Promise<CoupleRow>
   export function partnerUid(couple: CoupleRow, uid: string): string
-
-  // src/dto.ts
-  export interface UserDto {
-    uid: string; email: string; displayName: string | null; photoUrl: string | null
-    timezone: string; coupleId: string | null
-    showLateNightWindows: boolean; notificationsEnabled: boolean
-    fcmTokens?: string[]        // present only on GET /users/me
-    createdAt: number
-  }
-  export interface BlockDto {
-    id: string; coupleId: string; userId: string
-    title: string | null; type: 'busy'|'free'|'tentative'; category: string | null
-    startUtc: number; endUtc: number; timezone: string
-    recurrenceRule: string | null; source: 'google'|'manual'
-    visibility: 'bothPartners'|'onlyMe'; createdAt: number
-  }
-  export interface CoupleDto {
-    id: string; userAUid: string; userBUid: string
-    status: 'active'|'inactive'; pairedAt: number; createdAt: number
-  }
-  export function toUserDto(row: unknown, opts: { includeTokens: boolean }): UserDto
-  export function toBlockDto(row: unknown): BlockDto
-  export function toCoupleDto(row: unknown): CoupleDto
-  /** Identity when viewerUid owns the block. Otherwise, for visibility==='onlyMe',
-   *  returns a copy with title and category nulled. Never drops the interval —
-   *  the engine needs it, the partner just must not see what it is. */
-  export function scrubBlockForViewer(block: BlockDto, viewerUid: string): BlockDto
 
   // src/sockets.ts
   export function register(uid: string, ws: WebSocket): void
   export function unregister(uid: string, ws: WebSocket): void
   export function isOnline(uid: string): boolean
   /** false when uid has no live socket. */
-  export function sendTo(uid: string, msg: object): boolean
+  export function sendTo(uid: string, msg: WsMessage): boolean
   ```
+
+There is deliberately no `toUserRow`/`toBlockRow` mapper and no contract test. `pg` already returns
+rows in this shape, and the app imports the same declarations, so there is nothing to convert and
+nothing to drift. `BIGINT` is the one thing to watch: `pg` returns it as a **string** by default, so
+register an int8 parser once in `db.ts` (`pg.types.setTypeParser(20, Number)`) and assert it in the
+migration test — otherwise every timestamp arrives as `"1712345678000"` and the types lie.
 
 - [ ] **Step 1: Write the membership tests first**
 
@@ -538,22 +577,24 @@ it('throws 403 when the couple status is inactive')
 it('partnerUid returns b for a, and a for b')
 ```
 
-- [ ] **Step 2: Write the DTO tests, focusing on the `onlyMe` scrub**
+- [ ] **Step 2: Write the wire tests, focusing on the `onlyMe` scrub**
 
 ```ts
-// src/__tests__/dto.test.ts
+// src/__tests__/wire.test.ts
 it('scrubBlockForViewer is identity for the block owner')
 it('nulls title and category on an onlyMe block for the partner')
-it('preserves startUtc, endUtc, timezone, recurrenceRule and type on a scrubbed block')
+it('preserves start_utc, end_utc, timezone, recurrence_rule and type on a scrubbed block')
 it('leaves a bothPartners block untouched for the partner')
 it('does not mutate the input block')
-it('toUserDto omits fcmTokens when includeTokens is false')
-it('toUserDto includes fcmTokens when includeTokens is true')
+it('stripTokens removes fcm_tokens and leaves every other field intact')
+it('stripTokens does not mutate the input user')
 ```
 
 The interval-preserving assertion is the important one: scrubbing must not remove the data the engine needs, or `onlyMe` blocks would stop shaping the overlap.
 
 - [ ] **Step 3: Implement all three modules; run the tests**
+
+Delete the draft `backend/src/dto.ts` — `wire.ts` replaces it. Fix the `import type { UserRow } from './dto.js'` in the draft `push.ts` to point at `./wire.js`.
 
 `sockets.ts` holds a `Map<string, Set<WebSocket>>` so a user with two devices works. Comment the ceiling: in-memory, single-replica only; Redis pub/sub is the upgrade path.
 
@@ -588,11 +629,10 @@ git commit -am "feat(backend): add membership guard, DTO scrubbing, and socket r
    * Callers: every block write, a tz/late-night PATCH, invite redeem, and GET /overlaps/latest.
    */
   export function refreshOverlap(coupleId: string, triggeredBy: string | null): Promise<RefreshResult>
-
-  /** Stored row without recomputing. Returns null when absent. */
-  export function readStored(coupleId: string):
-    Promise<{ windows: OverlapWindow[]; computedAt: number } | null>
   ```
+  `refreshOverlap` is the whole public surface. There is no separate `readStored` — every read path
+  goes through `refreshOverlap`, which already returns the stored windows unchanged when the hash
+  matches. A second read-only accessor would have zero call sites.
 
 - [ ] **Step 1: Write the service tests first**
 
@@ -672,17 +712,17 @@ The redeem handler is a single `withTx`: `SELECT ... FOR UPDATE` the invite, the
 
 ```ts
 // src/__tests__/users.test.ts
-it('GET /users/me includes fcmTokens')
-it('GET /users/:uid returns the partner without fcmTokens')
+it('GET /users/me includes fcm_tokens')
+it('GET /users/:uid returns the partner without fcm_tokens')
 it('GET /users/:uid 403s for a uid that is neither self nor partner')
 it('PATCH /users/:uid 403s when the target is not the caller')
-it('PATCH accepts timezone, showLateNightWindows, notificationsEnabled and displayName')
-it('PATCH rejects any other field, including coupleId, email and fcmTokens')
+it('PATCH accepts timezone, show_late_night_windows, notifications_enabled and display_name')
+it('PATCH rejects any other field, including couple_id, email and fcm_tokens')
 it('PATCH rejects an invalid IANA timezone')
 it('PATCH triggers refreshOverlap when timezone changed')
-it('PATCH triggers refreshOverlap when showLateNightWindows changed')
-it('PATCH does NOT trigger refreshOverlap when only displayName changed')
-it('PATCH broadcasts user:update to the partner with fcmTokens stripped')
+it('PATCH triggers refreshOverlap when show_late_night_windows changed')
+it('PATCH does NOT trigger refreshOverlap when only display_name changed')
+it('PATCH broadcasts user:update to the partner with fcm_tokens stripped')
 ```
 
 - [ ] **Step 4: Write the couples tests, then implement `couples.ts`**
@@ -701,7 +741,7 @@ it('unpair does all of it in one transaction')
 
 - [ ] **Step 5: Rewrite `routes/auth.ts`**
 
-`POST /auth/verify` upserts from the decoded token (`uid`, `email`, `name`, `picture`) — on conflict, refresh `email`/`display_name`/`photo_url` but never overwrite `timezone`, `couple_id` or the preference columns — and returns `toUserDto(row, { includeTokens: true })`. `POST /auth/fcm-token` appends with dedup so a repeat is a no-op. Add tests: a first-time sign-in creates the row; a repeat sign-in does not reset the timezone; a repeated FCM token does not duplicate.
+`POST /auth/verify` upserts from the decoded token (`uid`, `email`, `name`, `picture`) — on conflict, refresh `email`/`display_name`/`photo_url` but never overwrite `timezone`, `couple_id` or the preference columns — and returns the full row (this is the caller's own row, so `fcm_tokens` stays). `POST /auth/fcm-token` appends with dedup so a repeat is a no-op. Add tests: a first-time sign-in creates the row; a repeat sign-in does not reset the timezone; a repeated FCM token does not duplicate.
 
 - [ ] **Step 6: Verify and commit**
 
@@ -732,11 +772,11 @@ it('GET /blocks 403s for a non-member')
 it('GET /blocks nulls title and category on the partners onlyMe blocks')
 it('GET /blocks keeps title and category on the callers own onlyMe blocks')
 it('POST /blocks 400s on an empty title')
-it('POST /blocks 400s when endUtc <= startUtc')
+it('POST /blocks 400s when end_utc <= start_utc')
 it('POST /blocks 400s on an invalid IANA timezone')
 it('POST /blocks 400s on an unparseable recurrence rule')
 it('POST /blocks 400s on an unsupported RRULE FREQ')      // only DAILY/WEEKLY/MONTHLY/YEARLY
-it('POST /blocks forces userId to the caller, ignoring any userId in the body')
+it('POST /blocks forces user_id to the caller, ignoring any user_id in the body')
 it('POST /blocks forces source to manual, ignoring any source in the body')
 it('POST /blocks triggers refreshOverlap and broadcasts block:set')
 it('PATCH /blocks/:id 403s when the caller does not own the block')
@@ -747,7 +787,7 @@ it('DELETE /blocks/:id triggers refreshOverlap and broadcasts block:del')
 it('PUT /blocks/google replaces only the callers google blocks, leaving manual blocks alone')
 it('PUT /blocks/google leaves the partners google blocks alone')
 it('PUT /blocks/google is atomic — a mid-insert failure leaves the old set intact')
-it('PUT /blocks/google forces type=busy and a placeholder title on every entry')
+it('PUT /blocks/google forces type=busy, source=google and a placeholder title on every entry')
 it('PUT /blocks/google rejects a payload carrying a title')  // no event titles, ever
 it('PUT /blocks/google triggers exactly one refreshOverlap for the whole batch')
 ```
@@ -768,7 +808,7 @@ it('does not write to the database when the hash matches')
 it('recomputes and returns fresh windows when the stored hash is stale')
 it('recomputes when the hour bucket rolled over even though no block changed')  // the staleness fix
 it('returns an empty array — not 404 — for a couple that has never computed')
-it('accepts a window whose durationMinutes is 1560')   // reachable via the midnight-split path
+it('accepts a window whose durationMinutes is 1560')   // camelCase: engine type, not a row
 ```
 
 The hour-bucket test is the one that proves §3's staleness fix: the old build let past windows linger until some unrelated change event fired.
@@ -922,70 +962,33 @@ git commit -m "feat(backend): containerize with healthcheck and local compose st
 
 ---
 
-## Task 10: Freeze the wire contract shared with the app
-
-**Files:**
-- Create: `backend/src/__tests__/contract.test.ts`, `src/types.ts` (repo root)
-
-**Interfaces:**
-- Consumes: `dto.ts`.
-- Produces: `src/types.ts` for the app, identical in shape to `backend/src/dto.ts`.
-
-This task exists so Track 2 can be built against a frozen, asserted contract rather than a guess.
-
-- [ ] **Step 1: Write `src/types.ts` at the repo root**
-
-Hand-copy `UserDto`, `BlockDto`, `CoupleDto`, `OverlapWindow` and the WS message union from `backend/src/dto.ts`. A shared workspace package for six interfaces is not worth the tooling — comment that ceiling and note that Step 2's test is what keeps the two in sync.
-
-```ts
-export type WsMessage =
-  | { t: 'hello';       uid: string; coupleId: string | null }
-  | { t: 'block:set';   block: BlockDto }
-  | { t: 'block:del';   id: string }
-  | { t: 'overlap';     coupleId: string; windows: OverlapWindow[]; computedAt: number }
-  | { t: 'unpair';      coupleId: string }
-  | { t: 'pairing';     coupleId: string; partnerUid: string }
-  | { t: 'user:update'; user: UserDto }
-```
-
-- [ ] **Step 2: Write a contract test that fails if the two drift**
-
-`backend/src/__tests__/contract.test.ts` asserts the exact key set of each DTO the routes emit, so adding or renaming a field without updating `src/types.ts` breaks a test rather than the app at runtime.
-
-- [ ] **Step 3: Verify and commit**
-
-```bash
-cd backend && pnpm test && cd .. && npx tsc --noEmit
-git commit -am "test(backend): freeze the wire contract shared with the app"
-```
-
----
-
-## Task 11: Expo scaffold, routing, guard chain, and store
+## Task 10: Expo scaffold, routing, guard chain, and store
 
 **Files:**
 - Create: `app.config.ts`, `app/_layout.tsx`, `app/auth.tsx`, `app/timezone-setup.tsx`, `app/pairing.tsx`, `app/(tabs)/_layout.tsx` + the five tab screens, `app/block-form.tsx`, `src/store.ts`, `src/theme.ts`, `.env.example`
 - Modify: `tsconfig.json`, `package.json` (root)
 
 **Interfaces:**
-- Consumes: `src/types.ts` from Task 10.
+- Consumes: `backend/src/wire.ts` from Task 4, imported type-only.
 - Produces:
   ```ts
   // src/store.ts
+  import type { UserRow, CoupleRow, BlockRow, OverlapWindow } from '../backend/src/wire'
+
   interface State {
     hydrated: boolean
-    user: UserDto | null
-    couple: CoupleDto | null
-    blocks: BlockDto[]
+    user: UserRow | null                   // own row, so fcm_tokens is present
+    couple: CoupleRow | null
+    blocks: BlockRow[]
     windows: OverlapWindow[]
-    pendingInviteCode: string | null      // parked across the sign-in round trip
+    pendingInviteCode: string | null       // parked across the sign-in round trip
     lastCalendarSyncMs: number | null
   }
   interface Actions {
-    setUser(u: UserDto | null): void
-    setCouple(c: CoupleDto | null): void
-    setBlocks(b: BlockDto[]): void
-    upsertBlock(b: BlockDto): void
+    setUser(u: UserRow | null): void
+    setCouple(c: CoupleRow | null): void
+    setBlocks(b: BlockRow[]): void
+    upsertBlock(b: BlockRow): void
     removeBlock(id: string): void
     setWindows(w: OverlapWindow[], computedAt: number): void
     setPendingInvite(code: string | null): void
@@ -993,6 +996,11 @@ git commit -am "test(backend): freeze the wire contract shared with the app"
   }
   export const useStore: UseBoundStore<StoreApi<State & Actions>>
   ```
+
+The root `tsconfig.json` must add `backend/src/wire.ts` to its `include` so the type-only import
+resolves. Confirm with `npx tsc --noEmit` that it resolves, and confirm `npx expo export` (or a
+Metro bundle) does **not** pull in `pg` — if it does, someone wrote a value import instead of
+`import type`.
 
 - [ ] **Step 1: Write `app.config.ts`**
 
@@ -1019,9 +1027,12 @@ While `hydrated` is false, render a splash — never a screen. A wrong-route fla
 
 Theme: colors (light + dark), spacing scale, type scale. Plain objects, no styling library. Store: exactly the interface above, no persistence yet.
 
-- [ ] **Step 5: Create every screen as a laid-out placeholder**
+- [ ] **Step 5: Create every screen as a one-line stub**
 
-One file per §1 row, structurally correct, reading from the store, with a comment naming the API call Task 12 will wire. Home/calendar/overlap/blocks/settings behind the tab bar; `block-form` presented as a modal.
+Literally `export default () => <Text>auth</Text>` per screen — nine files, one line each. Do **not**
+lay out the screens here: Tasks 12–16 rewrite every one of them, and laying them out twice is a
+wasted pass. The only files with real content in this task are `_layout.tsx` (the guard chain) and
+`(tabs)/_layout.tsx` (the tab bar), because those are what you are actually verifying.
 
 - [ ] **Step 6: Verify**
 
@@ -1040,7 +1051,7 @@ git commit -m "feat(app): scaffold expo-router tree, guard chain, store and them
 
 ---
 
-## Task 12: API client, WebSocket client, and Firebase auth
+## Task 11: API client, WebSocket client, and Firebase auth
 
 **Files:**
 - Create: `src/api.ts`, `src/ws.ts`, `src/auth.ts`, `src/time.ts`
@@ -1048,26 +1059,32 @@ git commit -m "feat(app): scaffold expo-router tree, guard chain, store and them
 - Test: `src/__tests__/api.test.ts`, `src/__tests__/ws.test.ts`
 
 **Interfaces:**
-- Consumes: `src/types.ts`, `src/store.ts`.
+- Consumes: `backend/src/wire.ts` (type-only), `src/store.ts`.
 - Produces:
   ```ts
   // src/api.ts — every method injects the current ID token
+  import type { UserRow, CoupleRow, BlockRow, OverlapWindow } from '../backend/src/wire'
+
+  /** Request body for a manual block. The server sets id, couple_id, user_id, source, created_at. */
+  type NewBlock = Pick<BlockRow,
+    'title'|'type'|'category'|'start_utc'|'end_utc'|'timezone'|'recurrence_rule'|'visibility'>
+
   export const api: {
-    verify(): Promise<UserDto>
-    me(): Promise<UserDto>
-    getUser(uid: string): Promise<UserDto>
-    patchUser(uid: string, patch: Partial<Pick<UserDto,
-      'timezone'|'showLateNightWindows'|'notificationsEnabled'|'displayName'>>): Promise<UserDto>
-    getCouple(id: string): Promise<CoupleDto>
+    verify(): Promise<UserRow>
+    me(): Promise<UserRow>
+    getUser(uid: string): Promise<Omit<UserRow, 'fcm_tokens'>>
+    patchUser(uid: string, patch: Partial<Pick<UserRow,
+      'timezone'|'show_late_night_windows'|'notifications_enabled'|'display_name'>>): Promise<UserRow>
+    getCouple(id: string): Promise<CoupleRow>
     unpair(id: string): Promise<void>
-    createInvite(): Promise<{ code: string; expiresAt: number }>
-    redeemInvite(code: string): Promise<{ coupleId: string }>
-    listBlocks(coupleId: string): Promise<BlockDto[]>
-    createBlock(b: NewBlock): Promise<BlockDto>
-    updateBlock(id: string, patch: Partial<NewBlock>): Promise<BlockDto>
+    createInvite(): Promise<{ code: string; expires_at: number }>
+    redeemInvite(code: string): Promise<{ couple_id: string }>
+    listBlocks(coupleId: string): Promise<BlockRow[]>
+    createBlock(b: NewBlock): Promise<BlockRow>
+    updateBlock(id: string, patch: Partial<NewBlock>): Promise<BlockRow>
     deleteBlock(id: string): Promise<void>
-    putGoogleBlocks(coupleId: string, intervals: { startUtc: number; endUtc: number }[]): Promise<BlockDto[]>
-    latestOverlap(coupleId: string): Promise<{ windows: OverlapWindow[]; computedAt: number }>
+    putGoogleBlocks(coupleId: string, intervals: { start_utc: number; end_utc: number }[]): Promise<BlockRow[]>
+    latestOverlap(coupleId: string): Promise<{ windows: OverlapWindow[]; computed_at: number }>
     registerFcmToken(token: string): Promise<void>
   }
   export class ApiError extends Error { status: number; code: string }
@@ -1135,7 +1152,7 @@ git commit -am "feat(app): add api client, websocket client, firebase auth and t
 
 ---
 
-## Task 13: Onboarding screens — auth, timezone, pairing
+## Task 12: Onboarding screens — auth, timezone, pairing
 
 **Files:** `app/auth.tsx`, `app/timezone-setup.tsx`, `app/pairing.tsx`, `src/timezones.ts`
 
@@ -1150,7 +1167,7 @@ git commit -am "feat(app): add api client, websocket client, firebase auth and t
 
 ---
 
-## Task 14: Home and Overlap screens
+## Task 13: Home and Overlap screens
 
 **Files:** `app/(tabs)/index.tsx`, `app/(tabs)/overlap.tsx`, `src/components/WindowCard.tsx`
 
@@ -1164,7 +1181,7 @@ git commit -am "feat(app): add api client, websocket client, firebase auth and t
 
 ---
 
-## Task 15: Calendar week view
+## Task 14: Calendar week view
 
 **Files:** `app/(tabs)/calendar.tsx`, `src/components/WeekGrid.tsx`
 
@@ -1178,7 +1195,7 @@ git commit -am "feat(app): add api client, websocket client, firebase auth and t
 
 ---
 
-## Task 16: Block management and the block form
+## Task 15: Block management and the block form
 
 **Files:** `app/(tabs)/blocks.tsx`, `app/block-form.tsx`, `src/components/RecurrencePicker.tsx`
 
@@ -1192,7 +1209,7 @@ git commit -am "feat(app): add api client, websocket client, firebase auth and t
 
 ---
 
-## Task 17: Settings, Google Calendar sync, and notifications
+## Task 16: Settings, Google Calendar sync, and notifications
 
 **Files:** `app/(tabs)/settings.tsx`, `src/calendar.ts`, `src/notifications.ts`
 
@@ -1233,7 +1250,7 @@ Flip notifications off and assert the server stops pushing. Flip late-night on a
 
 ---
 
-## Task 18: CI, git hooks, and documentation
+## Task 17: CI, git hooks, and documentation
 
 **Files:**
 - Create: `.github/workflows/ci.yml`, `.githooks/pre-commit`, `.githooks/pre-push`, `README.md`, `CLAUDE.md`
@@ -1252,9 +1269,14 @@ Two jobs on `ubuntu-latest`, both gating PRs. The previous CI ran static analysi
 # job: app      — npm ci; npx tsc --noEmit; npm run lint; npm test
 ```
 
-- [ ] **Step 2: Rewrite the git hooks**
+- [ ] **Step 2: Delete the stale Flutter git hooks; do not replace them**
 
-`pre-commit` runs `tsc --noEmit` in whichever project the staged files belong to. `pre-push` keeps the existing branch-naming check and adds `backend && pnpm test` plus the root `npm test`. Keep `commit-msg` as-is.
+`.githooks/pre-commit` and `pre-push` were deleted in Task 1 because they ran `flutter analyze` and
+`dart format`. Do **not** write TypeScript replacements. CI (Step 1) already gates build and tests on
+every PR, and a pre-push hook that runs the full suite is friction that gets `--no-verify`'d within a
+week — at which point it gates nothing while still costing everyone time. `commit-msg` stays as-is:
+it is fast, it enforces the conventional-commit format, and CI cannot retroactively fix a bad commit
+message.
 
 - [ ] **Step 3: Write `README.md`**
 
@@ -1278,7 +1300,16 @@ Push the branch and confirm both jobs pass. A red pipeline here means an earlier
 
 ## Self-Review
 
-**Spec coverage.** §1 screens → Tasks 11, 13–17. §2 data model → Task 2. §3 engine → already built; its integration → Task 5; the hour-bucket staleness fix → Task 7. §4 auth + pairing → Tasks 3, 6, 13. §5 Google Calendar → Tasks 7 (`PUT /blocks/google`) and 17 (client). §6 realtime + push → Tasks 8, 12. §7 REST surface → Tasks 6, 7, 8. §8 non-negotiables → distributed, each with a named test: freebusy-only (Task 7 Step 1, Task 17 Step 1), token verification (Task 3), `assertMember` (Task 4), `onlyMe` (Tasks 4, 7), the admin token (Task 8), CORS + fail-fast (Tasks 3, 9), Spark plan (no task adds a Blaze feature), idempotent migrations (Task 2). §9 ceilings → comments required in Tasks 4, 5, 8, 10.
+**Spec coverage.** §1 screens → Tasks 10, 12–16. §2 data model → Task 2. §3 engine → already built; its integration → Task 5; the hour-bucket staleness fix → Task 7. §4 auth + pairing → Tasks 3, 6, 12. §5 Google Calendar → Tasks 7 (`PUT /blocks/google`) and 16 (client). §6 realtime + push → Tasks 8, 11. §7 REST surface → Tasks 6, 7, 8. §8 non-negotiables → distributed, each with a named test: freebusy-only (Task 7 Step 1, Task 16 Step 1), token verification (Task 3), `assertMember` (Task 4), `onlyMe` (Tasks 4, 7), the admin token (Task 8), CORS + fail-fast (Tasks 3, 9), Spark plan (no task adds a Blaze feature), idempotent migrations (Task 2). §9 ceilings → comments required in Tasks 4, 5, 8.
+
+**Ponytail pass — five things deleted from an earlier draft of this plan, recorded so nobody re-adds them:**
+1. **The DTO mapping layer** (`toUserDto`/`toBlockDto`/`toCoupleDto`). Rows now go out `snake_case` as `pg` returns them. `wire.ts` keeps only the two functions that carry real logic.
+2. **A whole task** that hand-copied wire types into `src/types.ts` and added a key-set-assertion `contract.test.ts` to police the copy. Replaced by one type-only import across the repo — one definition, nothing to drift, no test needed to detect drift that cannot happen.
+3. **`readStored` and `closePool`** — zero call sites anywhere in the plan.
+4. **Laying out nine screens twice.** Task 10 stubs them in one line each; Tasks 12–16 write them once, properly.
+5. **TypeScript `pre-commit`/`pre-push` hooks.** CI gates the same things and cannot be `--no-verify`'d.
+
+**One bug caught during that pass:** `pg` returns `BIGINT` as a **string** by default. Without the int8 parser now required in `db.ts` (Task 2), every `*_utc` field would arrive as `"1712345678000"` while `wire.ts` declared it a `number` — the timestamps would have type-checked and been wrong. Asserted in the migration test.
 
 **Two spec corrections found while planning**, from the engine implementer's report, to be applied to `docs/REBUILD-SPEC.md` in Task 1 Step 1:
 1. §3 step 8's "a fall-back day must yield a 25-hour segment" is only reachable on the `showLateNightWindows: true` midnight-split path. The waking-hours clip is 07:00–23:00, so it yields 16 hours by construction and *cannot* produce 25. The engine tests assert 25/23 for the full-day split and 16/16 with pinned UTC boundaries for the waking clip, which is what actually catches a `+ 86_400_000` regression. Correct the wording.
