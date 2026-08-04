@@ -558,7 +558,7 @@ it('prefers the header over ?token= when both are present')
 
 - [ ] **Step 5: Implement `http.ts` and `index.ts`**
 
-`registerErrorHandler` maps `HttpError` → `{ error: code, detail? }` at its status, and anything else → 500 with the stack logged but not returned. `index.ts`:
+`registerErrorHandler` maps `HttpError` → `{ error: code, detail? }` at its status. Fastify's own sub-500 errors (unparseable JSON body, schema validation) pass through with their own status — otherwise a malformed request body answers 500. Everything else → 500, stack logged but not returned. `index.ts`:
 
 ```ts
 // order matters: a bad DB or bad credentials must crash the process, not degrade the service
@@ -720,6 +720,9 @@ git commit -m "feat(backend): add fail-fast config, firebase init, auth, and err
     uid: string, tokens: string[], windows: OverlapWindow[], timezone: string
   ): Promise<void>
   ```
+
+Task 3 left a temporary `messaging()` export in `firebase.ts` purely so the draft `push.ts` compiled.
+Rewriting `push.ts` here means that shim can go — delete it and use `sendEach`.
 
 `pushOverlapChanged` takes the tokens explicitly rather than re-reading the user row: `refreshOverlap`
 already loaded both rows inside its transaction, and a second query after commit could observe a
