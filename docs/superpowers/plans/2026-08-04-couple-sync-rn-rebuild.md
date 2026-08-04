@@ -781,7 +781,7 @@ git commit -m "feat(backend): add membership guard, wire scrubbing, and socket r
 
 **Interfaces:**
 - Consumes: `computeOverlap`, `computeInputHash`, `OverlapInput`, `Block`, `OverlapWindow` from `./overlap/index.js`; `query`, `withTx`; `assertMember`, `partnerUid`; `sendTo` from `sockets.ts`; `pushOverlapChanged` from `push.ts`.
-  **`push.ts` is delivered in Task 4, not Task 8** — Task 5 imports it, so it must exist first. Task 4 renames the draft's `pushOverlap(partner, windows)` to `pushOverlapChanged(uid, windows, timezone)` and Task 8 only hardens it (token pruning tests, body formatting).
+  **`push.ts` is delivered in Task 4, not Task 8** — Task 5 imports it, so it must exist first. Task 4 renames the draft's `pushOverlap(partner, windows)` to `pushOverlapChanged(uid, tokens, windows, timezone)` — taking tokens explicitly, since `refreshOverlap` already loaded both user rows — and Task 8 only hardens it (token-pruning tests, body formatting).
 - Produces:
   ```ts
   // src/overlapService.ts
@@ -1235,8 +1235,10 @@ git commit -m "feat(backend): add block routes with onlyMe enforcement and overl
   export function attachSyncServer(app: FastifyInstance): void   // handles the /sync upgrade
 
   // src/push.ts
-  /** Sends to every token for uid; prunes only hard-invalid tokens. No-op when tokens is empty. */
-  export function pushOverlapChanged(uid: string, windows: OverlapWindow[], timezone: string): Promise<void>
+  /** Declared in Task 4. Listed here because Task 8 hardens it: token pruning + body formatting. */
+  export function pushOverlapChanged(
+    uid: string, tokens: string[], windows: OverlapWindow[], timezone: string
+  ): Promise<void>
 
   // src/cron.ts
   export function registerAdminRoutes(app: FastifyInstance): void   // POST /admin/cleanup
