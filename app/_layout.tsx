@@ -2,10 +2,37 @@ import * as Linking from 'expo-linking';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
+import { api } from '../src/api';
+import { configureGoogleSignIn, hydrateFromServer, onAuthChange } from '../src/auth';
 import { useStore } from '../src/store';
-import { fontSize, spacing, useColors } from '../src/theme';
+import { fontSize, radius, spacing, touchTarget, useColors } from '../src/theme';
+import { connect, disconnect } from '../src/ws';
+
+// At module load, before any sign-in can happen, and deliberately not inside a component: it must
+// throw where a missing GOOGLE_WEB_CLIENT_ID is a startup error, not a sign-in that never resolves.
+configureGoogleSignIn();
+
+/**
+ * Cold start for a signed-in uid. ws.connect() comes FIRST, before anything couple-related: an
+ * unpaired inviter needs a live socket or they never receive the `pairing` message and sit on the
+ * pairing screen forever. Hydration is wrapped so a failure renders a retry screen instead of an
+ * eternal splash.
+ */
+async function bootstrap(): Promise<void> {
+  const store = useStore.getState();
+  store.setHydrationError(null);
+  try {
+    connect(); // inside the try: a misconfigured API_BASE_URL throws here, and that is a retry screen
+    await api.verify(); // upserts the user row from the token claims
+    await hydrateFromServer();
+  } catch (err) {
+    store.setHydrationError(err instanceof Error ? err.message : 'could not reach the server');
+  } finally {
+    store.setHydrated(true);
+  }
+}
 
 /**
  * couplesync://invite/ABC123 — park the code and navigate nowhere; the guard chain owns the route, and
@@ -21,7 +48,7 @@ export default function RootLayout() {
   const colors = useColors();
   const hydrated = useStore((s) => s.hydrated);
   const user = useStore((s) => s.user);
-  const setHydrated = useStore((s) => s.setHydrated);
+  const hydrationError = useStore((s) => s.hydrationError);
 
   useEffect(() => {
     Linking.getInitialURL().then(parkInvite); // cold start
@@ -29,25 +56,68 @@ export default function RootLayout() {
     return () => sub.remove();
   }, []);
 
-  // Task 11 replaces this with real hydration: Firebase auth state + GET /users/me, setting
-  // hydrationError on failure. Until then there is nothing to load.
-  useEffect(() => setHydrated(true), [setHydrated]);
+  // The single source of "is there a session". A signed-out launch resolves to reset(), which leaves
+  // hydrated true — an empty state is known, not unknown, and the splash must not outlive it.
+  useEffect(
+    () =>
+      onAuthChange((uid) => {
+        if (!uid) {
+          disconnect();
+          useStore.getState().reset();
+          return;
+        }
+        void bootstrap();
+      }),
+    [],
+  );
+
+  const centered = {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    padding: spacing.lg,
+    backgroundColor: colors.background,
+  } as const;
 
   // Splash while hydrating — never a screen. Deciding the route from a half-loaded user is what
   // caused the wrong-route flash in the old build's redirect chain.
   if (!hydrated) {
     return (
-      <View
-        style={{
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: spacing.md,
-          backgroundColor: colors.background,
-        }}
-      >
+      <View style={centered}>
         <Text style={{ color: colors.text, fontSize: fontSize.title }}>Couple Sync</Text>
         <ActivityIndicator color={colors.accent} />
+      </View>
+    );
+  }
+
+  // A failed cold start renders this instead of a route: the guard chain would otherwise read a null
+  // user as "signed out" and drop a signed-in user back onto /auth because the network blinked.
+  if (hydrationError) {
+    return (
+      <View style={centered}>
+        <Text style={{ color: colors.text, fontSize: fontSize.heading }}>Could not load</Text>
+        <Text style={{ color: colors.textMuted, fontSize: fontSize.body, textAlign: 'center' }}>
+          {hydrationError}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            useStore.getState().setHydrated(false);
+            void bootstrap();
+          }}
+          style={{
+            minHeight: touchTarget,
+            minWidth: 2 * touchTarget,
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingHorizontal: spacing.lg,
+            borderRadius: radius,
+            backgroundColor: colors.accent,
+          }}
+        >
+          <Text style={{ color: colors.accentText, fontSize: fontSize.body }}>Try again</Text>
+        </Pressable>
       </View>
     );
   }
