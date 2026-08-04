@@ -87,7 +87,7 @@ Verify this before Task 1. `git status` shows 313 staged deletions (the entire F
 | `src/overlapService.ts` | The only caller of `computeOverlap`: load rows → compute → dedup on `input_hash` → upsert → fan out → push |
 | `src/push.ts` | FCM send + invalid-token pruning |
 | `src/cron.ts` | Daily invite expiry timer + `POST /admin/cleanup` |
-| `src/routes/auth.ts` | `POST /auth/verify`, `POST /auth/fcm-token` |
+| `src/routes/auth.ts` | `POST /auth/verify`, `POST`/`DELETE /auth/fcm-token` |
 | `src/routes/users.ts` | `GET /users/me`, `GET /users/:uid`, `PATCH /users/:uid` |
 | `src/routes/blocks.ts` | Block CRUD + `PUT /blocks/google` |
 | `src/routes/overlaps.ts` | `GET /overlaps/latest` |
@@ -926,7 +926,7 @@ it('unpair does all of it in one transaction')
 
 - [ ] **Step 5: Rewrite `routes/auth.ts`**
 
-`POST /auth/verify` upserts from the decoded token (`uid`, `email`, `name`, `picture`) — on conflict, refresh `email`/`display_name`/`photo_url` but never overwrite `timezone`, `couple_id` or the preference columns — and returns the full row (this is the caller's own row, so `fcm_tokens` stays). `POST /auth/fcm-token` appends with dedup so a repeat is a no-op. Add tests: a first-time sign-in creates the row; a repeat sign-in does not reset the timezone; a repeated FCM token does not duplicate.
+`POST /auth/verify` upserts from the decoded token (`uid`, `email`, `name`, `picture`) — on conflict, refresh `email`/`display_name`/`photo_url` but never overwrite `timezone`, `couple_id` or the preference columns — and returns the full row (this is the caller's own row, so `fcm_tokens` stays). `POST /auth/fcm-token` appends with dedup so a repeat is a no-op. **Also add `DELETE /auth/fcm-token`** (body `{ token }`, self-only) — the app calls it on sign-out so a shared handset never keeps a previous user's token. Add tests: a first-time sign-in creates the row; a repeat sign-in does not reset the timezone; a repeated FCM token does not duplicate; DELETE removes only the named token and leaves the user's other device tokens intact; DELETE for a token the user does not own is a no-op, not an error.
 
 - [ ] **Step 6: Verify and commit**
 
@@ -1720,7 +1720,25 @@ it('calls the API regardless of the stored sync when force is true')
 
 - [ ] **Step 2 (executed in Task 13): `src/notifications.ts`**
 
-Request permission, get the FCM token, `api.registerFcmToken`, and re-register on token refresh. Foreground notifications **must actually display** — the previous build wired a display interface that production never populated, so foreground notifications were silently dead. Add a check that proves display is wired, not merely called.
+Request permission, get the FCM token, `api.registerFcmToken`, and re-register on `onTokenRefresh`.
+
+**Delete the token server-side on sign-out**, before clearing local auth. Without it, one physical
+device's token stays attached to the previous user's row: sign out, sign in as the partner, and that
+handset receives pushes meant for someone else — a privacy leak, not just noise. This needs
+`DELETE /auth/fcm-token` (body `{ token }`, self-only), added in Task 6.
+
+Foreground notifications **must actually display** — the previous build wired a display interface that
+production never populated, so foreground notifications were silently dead. Test that display is
+genuinely invoked, not merely that a function was called.
+
+```ts
+// src/__tests__/notifications.test.ts
+it('registers the token after permission is granted')
+it('re-registers on onTokenRefresh')
+it('deletes the token server-side on sign-out, before clearing auth')
+it('actually invokes the display API for a foreground message')
+it('routes a notification tap to the Free time tab, not a nonexistent /overlap route')
+```
 
 - [ ] **Step 3: Build Settings**
 
