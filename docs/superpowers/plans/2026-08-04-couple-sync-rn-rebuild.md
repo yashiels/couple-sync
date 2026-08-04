@@ -16,6 +16,10 @@
 
 Every task's requirements implicitly include this section.
 
+- **`windows[0]` is NOT the next window.** The engine sorts by **score descending** (`compareWindows`),
+  so `windows[0]` is the *best* window, which can be days away. Anything showing "next" must
+  `reduce` to the minimum `startUtc` — this already bit the FCM notification body in Task 8, and the
+  Free time screen's countdown is the other place it matters.
 - **Timestamps** are UTC epoch milliseconds everywhere: `BIGINT` in Postgres, `number` in TypeScript, plain integers on the wire. Never an ISO string, never a `Date` in a payload.
 - **The wire shape is the row shape.** Database rows go out over REST and WS in `snake_case`, exactly as Postgres returns them. There is no DTO mapping layer, because renaming `couple_id` to `coupleId` buys nothing and costs a mapper per entity plus a drift-detection test. The two transforms that carry real logic — scrubbing an `onlyMe` block and stripping `fcm_tokens` — live in `backend/src/wire.ts` and are the only functions between a row and a response. The one exception is `OverlapWindow`, which is the engine's own computed type and stays `camelCase` (`startUtc`, `durationMinutes`) because it is not a row.
 - **The app imports its wire types directly from the backend, type-only:** `import type { UserRow } from '../backend/src/wire'`. One repo, one definition, no hand-copy and no contract test to police the copy. `import type` is erased before Metro sees it, so no backend code is ever bundled — and an accidental *value* import fails loudly at bundle time when Metro tries to resolve `pg`.
@@ -2004,6 +2008,10 @@ screen, next to the sign-in button, where the consent actually happens.
 
 One screen, not two. Home and a separate Overlap tab both rendered a list of windows differing only
 in length and a filter — that is one screen with a filter.
+
+The **countdown and "next window"** must pick the earliest `startUtc`, not `windows[0]` — the list is
+score-sorted (see Global Constraints). Sort a copy by time for the countdown; keep score order for the
+list itself, since that is what makes the good windows surface first.
 
 - [ ] **Step 1: Build `WindowCard`** — start/end in both partners' zones, duration, score-derived emphasis, and a late-night marker when `reasonableBoth` is false. The marker is text or an icon, never colour alone.
 - [ ] **Step 2: Build the screen** — both partners' live clocks (tick once a **minute**, not once a second), a countdown to the next window, then the full window list with an any/30m/1h/2h filter (display-only per §0.7). **Drop any window whose `endUtc` is already past** before rendering — §9 notes the stored row can lag the clock.
