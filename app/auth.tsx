@@ -4,8 +4,12 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { signInWithGoogle } from '../src/auth';
 import { fontSize, radius, spacing, touchTarget, useColors } from '../src/theme';
 
-// Task 12 lays this screen out properly. What matters here is the wiring: one button, the privacy
-// sentence next to it (this is where the consent actually happens), and a visible failure.
+/**
+ * One button is the whole screen. Google is the only sign-in method (§1) and signing in *is* how the
+ * calendar gets connected, so there is no provider list, no second button, and no later "connect your
+ * calendar" step — which is why the privacy sentence sits next to this button: the consent happens
+ * here.
+ */
 export default function AuthScreen() {
   const colors = useColors();
   const [busy, setBusy] = useState(false);
@@ -19,7 +23,10 @@ export default function AuthScreen() {
       // rest when it does succeed.
       await signInWithGoogle();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'sign-in failed');
+      // The native cause is kept verbatim underneath the sentence on purpose: the two failures that
+      // actually happen here are a missing SHA-1 fingerprint and a Play-services-less device, and
+      // both are diagnosable only from Google's own code (`DEVELOPER_ERROR`).
+      setError(err instanceof Error && err.message ? err.message : 'unknown error');
     } finally {
       setBusy(false);
     }
@@ -73,9 +80,14 @@ export default function AuthScreen() {
       </Text>
 
       {error ? (
-        <Text style={{ color: colors.danger, fontSize: fontSize.label, textAlign: 'center' }}>
-          {error}
-        </Text>
+        <View style={{ gap: spacing.xs }}>
+          <Text style={{ color: colors.danger, fontSize: fontSize.label, textAlign: 'center' }}>
+            Sign-in failed. Check your connection and try again.
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.caption, textAlign: 'center' }}>
+            {error}
+          </Text>
+        </View>
       ) : null}
     </View>
   );
