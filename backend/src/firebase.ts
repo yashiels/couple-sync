@@ -1,27 +1,50 @@
-import admin from 'firebase-admin';
+import { cert, initializeApp } from 'firebase-admin/app';
+import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
+import { getMessaging, type BaseMessage } from 'firebase-admin/messaging';
 import { config } from './config.js';
 
-// cert() throws on a malformed key, and that throw is deliberately uncaught: a container with bad
-// credentials must not boot.
-const app = admin.initializeApp({
-  credential: admin.credential.cert({
-    projectId: config.serviceAccount.projectId,
-    clientEmail: config.serviceAccount.clientEmail,
-    privateKey: config.serviceAccount.privateKey,
-  }),
-  projectId: config.serviceAccount.projectId,
-});
+// cert() throws on a structurally broken service account, and that throw is deliberately uncaught:
+// a container with bad credentials must not boot.
+const credential = cert(config.firebaseServiceAccount);
+const app = initializeApp({ credential, projectId: config.firebaseProjectId });
 
-export function verifyIdToken(token: string): Promise<admin.auth.DecodedIdToken> {
-  return admin.auth(app).verifyIdToken(token);
+/** firebase-admin's full claim set. Never narrow it — req.claims is typed DecodedIdToken and
+ *  routes read email/name/picture off it. */
+export function verifyIdToken(token: string): Promise<DecodedIdToken> {
+  return getAuth(app).verifyIdToken(token);
 }
 
-export function messaging(): admin.messaging.Messaging {
-  return admin.messaging(app);
-}
-
-// Proves the private key can actually mint an access token, so a wrong-but-parseable key fails at
-// boot instead of on the first request.
+/**
+ * Boot probe. Fatal, never a warning.
+ *
+ * Do NOT probe with verifyIdToken('not-a-token'): firebase-admin rejects a malformed JWT while
+ * *decoding* it, before the credential is ever used, so that probe passes with a completely bogus
+ * private key — the exact false confidence the previous build shipped. getAccessToken() mints a
+ * real OAuth2 access token from Google, so it fails on an unusable key.
+ */
 export async function assertCredentials(): Promise<void> {
-  await app.options.credential!.getAccessToken();
+  // Checked first because it needs no network. Right key, wrong project is a silent
+  // misconfiguration in which every token verification fails on audience.
+  if (config.firebaseServiceAccount.projectId !== config.firebaseProjectId) {
+    throw new Error(
+      `[firebase] FIREBASE_PROJECT_ID (${config.firebaseProjectId}) does not match the service account projectId (${String(config.firebaseServiceAccount.projectId)})`,
+    );
+  }
+  await credential.getAccessToken();
+}
+
+/** One message per token, so one dead token cannot fail the batch. errorCode is null on success. */
+export async function sendEach(
+  tokens: string[],
+  payload: BaseMessage,
+): Promise<{ token: string; errorCode: string | null }[]> {
+  if (tokens.length === 0) return [];
+  const res = await getMessaging(app).sendEach(tokens.map((token) => ({ ...payload, token })));
+  return res.responses.map((r, i) => ({ token: tokens[i]!, errorCode: r.error?.code ?? null }));
+}
+
+// Ceiling: raw Messaging handle, kept only because the draft push.ts still calls
+// sendEachForMulticast. Task 8 moves push.ts onto sendEach — delete this export then.
+export function messaging(): ReturnType<typeof getMessaging> {
+  return getMessaging(app);
 }

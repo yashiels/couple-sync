@@ -10,7 +10,7 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
   // Upsert on every sign-in. Never clobbers timezone / couple_id / prefs — only the identity fields
   // Firebase owns.
   app.post('/auth/verify', async (req) => {
-    const c = req.tokenClaims;
+    const c = req.claims;
     const [row] = await query<UserRow>(
       `INSERT INTO users (uid, email, display_name, photo_url, created_at)
        VALUES ($1, $2, $3, $4, $5)
