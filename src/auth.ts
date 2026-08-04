@@ -10,6 +10,7 @@ import Constants from 'expo-constants';
 
 import type { CoupleRow } from '../backend/src/wire';
 import { api } from './api';
+import { unregisterFcmToken } from './notifications';
 import { useStore } from './store';
 import { disconnect } from './ws';
 
@@ -41,10 +42,12 @@ export async function signInWithGoogle(): Promise<void> {
 }
 
 /**
- * Task 13 adds the FCM token deletion here, before the local auth is cleared — otherwise a shared
- * handset keeps receiving the previous user's pushes.
+ * The FCM token is deleted FIRST, while the Firebase ID token that authorizes DELETE /auth/fcm-token
+ * still exists — otherwise this handset stays attached to the previous user's row and keeps receiving
+ * their pushes. It is best-effort inside `unregisterFcmToken`, so an offline sign-out still signs out.
  */
 export async function signOut(): Promise<void> {
+  await unregisterFcmToken();
   disconnect();
   await GoogleSignin.signOut();
   await firebaseSignOut(getAuth());
@@ -85,9 +88,11 @@ export function partnerUidOf(couple: CoupleRow, uid: string): string {
 }
 
 /**
- * Task 13 registers `calendar.sync(coupleId, { force: true })` here. A seam rather than a direct
- * import so this module does not depend on the Google session plumbing, and so the transition rule
- * below is testable without it.
+ * `app/_layout.tsx` registers `calendar.sync(coupleId, { force: true })` here. A seam rather than a
+ * direct import so this module does not depend on the Google session plumbing, and so the transition
+ * rule below is testable without it. Because every pairing path — the redeemer's HTTP result, the
+ * inviter's WS `pairing`, and a `hello` reconciling a missed one — funnels through hydrateFromServer,
+ * this one registration covers all three and fires exactly once per real transition.
  */
 let firstPairHandler: ((coupleId: string) => void) | null = null;
 

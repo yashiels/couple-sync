@@ -34,6 +34,9 @@ vi.mock('@react-native-google-signin/google-signin', () => ({
   GoogleSignin: { configure: vi.fn(), signIn: vi.fn(), signOut: vi.fn(), getTokens: vi.fn() },
 }));
 vi.mock('../ws', () => ({ connect: vi.fn(), disconnect: mocks.disconnect }));
+// signOut deletes the FCM token first; the real module reaches expo-notifications and FCM. The
+// ordering that matters there is asserted in notifications.test.ts, against the real src/auth.ts.
+vi.mock('../notifications', () => ({ unregisterFcmToken: async () => undefined }));
 vi.mock('../api', () => ({
   api: {
     me: mocks.me,

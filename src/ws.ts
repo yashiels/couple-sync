@@ -179,6 +179,10 @@ function handleMessage(raw: string): void {
       store.resetCouple();
       break;
     case 'pairing':
+      // The forced first-pair calendar sync is NOT called here. hydrateFromServer fires the
+      // first-pair handler on a real null -> couple_id transition, so this path and the `hello`
+      // reconciliation above both already trigger it exactly once. A direct sync(…, { force: true })
+      // here would be a second forced call on the same event.
       fireAndForget(hydrateFromServer());
       break;
     default:

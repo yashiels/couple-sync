@@ -5,14 +5,33 @@ import { useEffect } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { api } from '../src/api';
-import { configureGoogleSignIn, hydrateFromServer, onAuthChange } from '../src/auth';
-import { useStore } from '../src/store';
+import {
+  configureGoogleSignIn,
+  hydrateFromServer,
+  onAuthChange,
+  setFirstPairHandler,
+} from '../src/auth';
+import { clearSyncLimiter, sync } from '../src/calendar';
+import { attachTapHandler, requestPermissionAndRegister } from '../src/notifications';
+import { setPersistedCalendarSyncCleaner, useStore } from '../src/store';
 import { fontSize, radius, spacing, touchTarget, useColors } from '../src/theme';
 import { connect, disconnect } from '../src/ws';
 
 // At module load, before any sign-in can happen, and deliberately not inside a component: it must
 // throw where a missing GOOGLE_WEB_CLIENT_ID is a startup error, not a sign-in that never resolves.
 configureGoogleSignIn();
+
+// The two seams src/auth.ts and src/store.ts left for the calendar module, filled at module load so
+// no auth event, pairing, or unpair can arrive before them.
+//
+// A brand-new couple has zero google blocks, and waiting up to an hour to populate them makes the app
+// look broken at the exact moment the user first sees it — so this is a permitted `force` caller. It
+// fires on a real null -> couple_id transition only, which is why it covers the redeemer's HTTP
+// result, the inviter's WS `pairing`, and a reconciling `hello` without firing again on a reconnect.
+setFirstPairHandler((coupleId) => {
+  void sync(coupleId, { force: true }).catch(() => undefined);
+});
+setPersistedCalendarSyncCleaner(clearSyncLimiter);
 
 /**
  * Cold start for a signed-in uid. ws.connect() comes FIRST, before anything couple-related: an
@@ -26,7 +45,15 @@ async function bootstrap(): Promise<void> {
   try {
     connect(); // inside the try: a misconfigured API_BASE_URL throws here, and that is a retry screen
     await api.verify(); // upserts the user row from the token claims
-    await hydrateFromServer();
+    const coupleId = await hydrateFromServer();
+
+    // Both after hydration, and both fire-and-forget: a refused notification permission or an
+    // unreachable Google must not turn a working launch into the retry screen below.
+    void requestPermissionAndRegister().catch(() => undefined);
+    // Never forced. Deliberately not gated on the store's lastCalendarSyncMs either — that is null on
+    // every launch, which is exactly why the ≤1-automatic-call-per-hour limiter is persisted inside
+    // sync() instead of held in memory.
+    if (coupleId) void sync(coupleId).catch(() => undefined);
   } catch (err) {
     store.setHydrationError(err instanceof Error ? err.message : 'could not reach the server');
   } finally {
@@ -55,6 +82,10 @@ export default function RootLayout() {
     const sub = Linking.addEventListener('url', ({ url }) => parkInvite(url)); // already running
     return () => sub.remove();
   }, []);
+
+  // Returns its own cleanup. On mount rather than after hydration: a tap that launched the app is
+  // reported once and early, and there is nothing to gain by being told about it later.
+  useEffect(() => attachTapHandler(), []);
 
   // The single source of "is there a session". A signed-out launch resolves to reset(), which leaves
   // hydrated true — an empty state is known, not unknown, and the splash must not outlive it.

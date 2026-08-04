@@ -78,6 +78,19 @@ const coupleScoped = {
   visibleRange: null,
 } satisfies Partial<State>;
 
+/**
+ * Set by `app/_layout.tsx` to `calendar.clearSyncLimiter`. A seam rather than an import because the
+ * limiter's authoritative copy lives in expo-secure-store, and importing that here would drag a
+ * native module into every test that touches the store. Both resets fire it: the in-memory
+ * `lastCalendarSyncMs` below is only a mirror, and clearing the mirror alone would leave the persisted
+ * timestamp suppressing the re-sync that repopulates a re-paired couple's google blocks.
+ */
+let clearPersistedCalendarSync: (() => void) | null = null;
+
+export function setPersistedCalendarSyncCleaner(fn: (() => void) | null): void {
+  clearPersistedCalendarSync = fn;
+}
+
 // There is deliberately no upsertBlock. A block:set broadcast carries a BlockRow with no
 // `occurrences` — the server cannot know this client's visible week — so merging it into `blocks`
 // would put an un-renderable block on the grid. The WS handler reads visibleRange and refetches the
@@ -99,10 +112,15 @@ export const useStore = create<State & Actions>((set) => ({
 
   // couple_id is cleared on the local row too: the guard chain is what sends the user back to
   // /pairing, and it reads user.couple_id.
-  resetCouple: () =>
-    set((s) => ({ ...coupleScoped, user: s.user ? { ...s.user, couple_id: null } : null })),
+  resetCouple: () => {
+    clearPersistedCalendarSync?.();
+    set((s) => ({ ...coupleScoped, user: s.user ? { ...s.user, couple_id: null } : null }));
+  },
 
   // hydrated stays true: sign-out is a known-empty state, not an unknown one, and dropping it would
   // leave the splash up forever (hydration runs once per launch).
-  reset: () => set({ ...initialState, hydrated: true }),
+  reset: () => {
+    clearPersistedCalendarSync?.();
+    set({ ...initialState, hydrated: true });
+  },
 }));

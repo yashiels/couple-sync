@@ -103,7 +103,10 @@ export default function PairingScreen() {
       return;
     }
     try {
-      // Refetches api.me() and is what flips the guard; this screen then leaves the navigator.
+      // Refetches api.me() and is what flips the guard; this screen then leaves the navigator. It
+      // also fires the first-pair handler app/_layout.tsx registered, which is what forces the new
+      // couple's first calendar sync — so there is deliberately no sync(…, { force: true }) call
+      // here, which would only make it a second forced sync for the same transition.
       await hydrateFromServer();
     } catch {
       // The pairing committed server-side, so retrying the redeem would only return invite_used.
