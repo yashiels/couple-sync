@@ -1,5 +1,5 @@
-import { DateTime } from 'luxon';
-import { describe, expect, it } from 'vitest';
+import { DateTime, Settings } from 'luxon';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { OverlapWindow } from '../../backend/src/wire';
 import {
@@ -7,10 +7,11 @@ import {
   formatClock,
   formatCountdown,
   formatDuration,
-  formatLocalInput,
+  formatLocalDateTime,
   formatWindowRange,
+  fromPickerDate,
   gridPosition,
-  parseLocalInput,
+  toPickerDate,
   visibleWindows,
   weekIndex,
   weekRange,
@@ -202,29 +203,73 @@ describe('week paging', () => {
   });
 });
 
-describe('local datetime input', () => {
-  it('round-trips an instant through the form field in the block zone', () => {
-    const at = Date.UTC(2026, 7, 4, 17, 30);
-    expect(formatLocalInput(at, 'Europe/Berlin')).toBe('2026-08-04 19:30');
-    expect(parseLocalInput('2026-08-04 19:30', 'Europe/Berlin')).toBe(at);
+describe('local datetime display', () => {
+  it('shows an instant as wall clock in the block zone', () => {
+    expect(formatLocalDateTime(Date.UTC(2026, 7, 4, 17, 30), 'Europe/Berlin')).toBe(
+      'Tue 4 Aug 2026, 19:30',
+    );
+    expect(formatLocalDateTime(Date.UTC(2026, 7, 4, 17, 30), 'America/New_York')).toBe(
+      'Tue 4 Aug 2026, 13:30',
+    );
+  });
+});
+
+/**
+ * The case a look at the screen cannot catch: the device is in one zone and the block is authored in
+ * another. `Settings.defaultZone` stands in for the phone, because that is what the Android pickers
+ * build their `value` from and return their timestamp in.
+ */
+describe('block form date/time picker, across zones', () => {
+  const DEVICE = 'America/Chicago';
+  const BLOCK = 'Europe/Berlin';
+
+  beforeEach(() => {
+    Settings.defaultZone = DEVICE;
+  });
+  afterEach(() => {
+    Settings.defaultZone = 'system';
   });
 
-  it('reads the same text as a different instant in a different zone', () => {
-    expect(parseLocalInput('2026-08-04 19:30', 'America/New_York')).toBe(
-      Date.UTC(2026, 7, 4, 23, 30),
+  /** What the picker would show for a seed Date: its fields read in the device's zone. */
+  const shown = (d: Date): string => DateTime.fromJSDate(d).toFormat('yyyy-MM-dd HH:mm');
+  /** What the native picker hands back after the user chose these device-local fields. */
+  const pickedInDevice = (text: string): Date =>
+    DateTime.fromFormat(text, 'yyyy-MM-dd HH:mm', { zone: DEVICE }).toJSDate();
+
+  it('seeds the picker with the block zone wall clock, not the device zone one', () => {
+    // 19:30 in Berlin, 12:30 on the phone. The picker must open on 19:30.
+    expect(shown(toPickerDate(Date.UTC(2026, 7, 4, 17, 30), BLOCK))).toBe('2026-08-04 19:30');
+  });
+
+  it('reads the picked wall clock back in the block zone, not the device zone', () => {
+    // 19:30 chosen on a Chicago phone for a Berlin block is 17:30 UTC, not 00:30 the next day.
+    expect(fromPickerDate(pickedInDevice('2026-08-04 19:30'), BLOCK)).toBe(
+      Date.UTC(2026, 7, 4, 17, 30),
     );
   });
 
-  it('rejects text that is not a local datetime', () => {
-    expect(parseLocalInput('', 'Europe/Berlin')).toBeNull();
-    expect(parseLocalInput('tomorrow at 7', 'Europe/Berlin')).toBeNull();
-    expect(parseLocalInput('2026-08-04', 'Europe/Berlin')).toBeNull();
-    expect(parseLocalInput('2026-02-30 10:00', 'Europe/Berlin')).toBeNull();
-    expect(parseLocalInput('2026-08-04 25:00', 'Europe/Berlin')).toBeNull();
+  it('round-trips an instant through the picker unchanged', () => {
+    const at = Date.UTC(2026, 7, 4, 17, 30);
+    expect(fromPickerDate(toPickerDate(at, BLOCK), BLOCK)).toBe(at);
   });
 
-  it('tolerates surrounding whitespace, because a keyboard adds it', () => {
-    expect(parseLocalInput('  2026-08-04 19:30 ', 'Europe/Berlin')).toBe(Date.UTC(2026, 7, 4, 17, 30));
+  it('is a no-op when the device and the block share a zone', () => {
+    const at = Date.UTC(2026, 7, 4, 17, 30);
+    expect(toPickerDate(at, DEVICE).getTime()).toBe(at);
+    expect(fromPickerDate(new Date(at), DEVICE)).toBe(at);
+  });
+
+  it("takes the offset from the block zone's own DST state, not a fixed one", () => {
+    // Berlin ends DST on 25 October 2026, so 09:00 local is +02:00 the day before and +01:00 after.
+    expect(fromPickerDate(pickedInDevice('2026-10-24 09:00'), BLOCK)).toBe(Date.UTC(2026, 9, 24, 7));
+    expect(fromPickerDate(pickedInDevice('2026-10-25 09:00'), BLOCK)).toBe(Date.UTC(2026, 9, 25, 8));
+  });
+
+  it('moves an impossible wall clock forward rather than rejecting the pick', () => {
+    // Berlin springs forward at 02:00 on 29 March 2026, so 02:30 does not exist there.
+    expect(fromPickerDate(pickedInDevice('2026-03-29 02:30'), BLOCK)).toBe(
+      Date.UTC(2026, 2, 29, 1, 30), // 03:30 CEST
+    );
   });
 });
 

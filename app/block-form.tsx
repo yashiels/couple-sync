@@ -1,3 +1,4 @@
+import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -16,7 +17,7 @@ import { ApiError, api, type NewBlock } from '../src/api';
 import { RecurrencePicker } from '../src/components/RecurrencePicker';
 import { useStore } from '../src/store';
 import { fontSize, radius, spacing, touchTarget, useColors } from '../src/theme';
-import { formatLocalInput, parseLocalInput } from '../src/time';
+import { formatLocalDateTime, fromPickerDate, toPickerDate } from '../src/time';
 
 /**
  * The block form, reached from the Calendar tab: the FAB with a `start` prefill, or a tap on your own
@@ -77,10 +78,8 @@ export default function BlockFormScreen() {
   const [title, setTitle] = useState(block?.title ?? '');
   const [type, setType] = useState<BlockRow['type']>(block?.type ?? 'busy');
   const [category, setCategory] = useState<string | null>(block?.category ?? null);
-  const [startText, setStartText] = useState(formatLocalInput(block?.start_utc ?? start, zone));
-  const [endText, setEndText] = useState(
-    formatLocalInput(block?.end_utc ?? start + 3_600_000, zone),
-  );
+  const [startUtc, setStartUtc] = useState(block?.start_utc ?? start);
+  const [endUtc, setEndUtc] = useState(block?.end_utc ?? start + 3_600_000);
   const [rule, setRule] = useState<string | null>(block?.recurrence_rule ?? null);
   const [visibility, setVisibility] = useState<BlockRow['visibility']>(
     block?.visibility ?? 'bothPartners',
@@ -88,13 +87,37 @@ export default function BlockFormScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const startUtc = parseLocalInput(startText, zone);
-  const endUtc = parseLocalInput(endText, zone);
+  /**
+   * Android shows the date and the time as two separate dialogs, so they are chained: the date dialog
+   * hands back the chosen day carrying the seed's hour and minute, and that Date seeds the time dialog.
+   * Both dialogs speak *device* wall clock, so the block's own zone is applied once, at the end — see
+   * toPickerDate/fromPickerDate. Dismissing either dialog changes nothing, which is what cancel means.
+   */
+  function pickDateTime(current: number, apply: (at: number) => void) {
+    DateTimePickerAndroid.open({
+      value: toPickerDate(current, zone),
+      mode: 'date',
+      onValueChange: (_event, day) =>
+        DateTimePickerAndroid.open({
+          value: day,
+          mode: 'time',
+          is24Hour: true, // every time in this app is rendered HH:mm; the dial should match
+
+          onValueChange: (_timeEvent, at) => apply(fromPickerDate(at, zone)),
+        }),
+    });
+  }
+
+  // Moving the start past the end keeps the block's length rather than leaving an interval the save
+  // button will only reject.
+  function applyStart(at: number) {
+    const length = Math.max(endUtc - startUtc, 60_000);
+    setStartUtc(at);
+    if (at >= endUtc) setEndUtc(at + length);
+  }
 
   function localProblem(): string | null {
     if (!title.trim()) return 'Give the block a title.';
-    if (startUtc === null) return 'The start needs to look like 2026-08-04 19:00.';
-    if (endUtc === null) return 'The end needs to look like 2026-08-04 21:00.';
     if (endUtc <= startUtc) return 'The end has to be after the start.';
     return null;
   }
@@ -106,9 +129,7 @@ export default function BlockFormScreen() {
 
   async function onSave() {
     const problem = localProblem();
-    if (problem !== null || startUtc === null || endUtc === null) {
-      return setError(problem ?? 'Check the start and end times.');
-    }
+    if (problem !== null) return setError(problem);
     if (!coupleId) return setError('You are not paired yet.');
 
     const body: NewBlock = {
@@ -203,32 +224,29 @@ export default function BlockFormScreen() {
     </Pressable>
   );
 
-  const field = (label: string, value: string, onChangeText: (v: string) => void, valid: boolean) => (
+  const when = (label: string, at: number, apply: (v: number) => void, problem?: string) => (
     <View style={{ gap: spacing.xs }}>
       <Text style={{ color: colors.text, fontSize: fontSize.label }}>{label}</Text>
-      <TextInput
-        accessibilityLabel={`${label}, as year-month-day hour:minute`}
-        value={value}
-        onChangeText={onChangeText}
-        autoCapitalize="none"
-        autoCorrect={false}
-        placeholder="2026-08-04 19:00"
-        placeholderTextColor={colors.textMuted}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${label} ${formatLocalDateTime(at, zone)}. Opens a date and time picker.`}
+        onPress={() => pickDateTime(at, apply)}
         style={{
           minHeight: touchTarget,
+          justifyContent: 'center',
           paddingHorizontal: spacing.md,
           borderRadius: radius,
           borderWidth: 1,
-          // A word, not only a hue: an invalid field says so under the label.
-          borderColor: valid ? colors.border : colors.danger,
-          color: colors.text,
-          fontSize: fontSize.body,
+          // Words under the row, not just a red edge: the problem has to survive greyscale.
+          borderColor: problem === undefined ? colors.border : colors.danger,
         }}
-      />
-      {valid ? null : (
-        <Text style={{ color: colors.danger, fontSize: fontSize.caption }}>
-          Not a date and time we can read.
+      >
+        <Text style={{ color: colors.text, fontSize: fontSize.body }}>
+          {formatLocalDateTime(at, zone)}
         </Text>
+      </Pressable>
+      {problem === undefined ? null : (
+        <Text style={{ color: colors.danger, fontSize: fontSize.caption }}>{problem}</Text>
       )}
     </View>
   );
@@ -281,15 +299,15 @@ export default function BlockFormScreen() {
         </Text>
       </View>
 
-      {field('Starts', startText, setStartText, startText === '' || startUtc !== null)}
-      {field('Ends', endText, setEndText, endText === '' || endUtc !== null)}
+      {when('Starts', startUtc, applyStart)}
+      {when(
+        'Ends',
+        endUtc,
+        setEndUtc,
+        endUtc <= startUtc ? 'The end has to be after the start.' : undefined,
+      )}
 
-      <RecurrencePicker
-        value={rule}
-        startUtc={startUtc ?? start}
-        zone={zone}
-        onChange={setRule}
-      />
+      <RecurrencePicker value={rule} startUtc={startUtc} zone={zone} onChange={setRule} />
 
       <View style={{ gap: spacing.sm }}>
         <Text style={{ color: colors.text, fontSize: fontSize.label }}>Category</Text>

@@ -117,24 +117,38 @@ export function weekRange(index: number, zone: string): { from: number; to: numb
   return { from: weekStart(index, zone), to: weekStart(index + 1, zone) };
 }
 
-const LOCAL_INPUT = 'yyyy-MM-dd HH:mm';
-
-/**
- * The block form's start/end fields: text, because no date picker is installed and a block is two
- * timestamps, not a wizard.
- *
- * Ceiling: typing a datetime is worse than spinning a wheel. The upgrade path is
- * `@react-native-community/datetimepicker`, which is one dependency and two callbacks — deliberately
- * not paid for yet.
- */
-export function formatLocalInput(at: number, zone: string): string {
-  return DateTime.fromMillis(at, { zone }).toFormat(LOCAL_INPUT);
+/** The block form's start/end rows: the stored instant as wall clock in the block's own zone. */
+export function formatLocalDateTime(at: number, zone: string): string {
+  return DateTime.fromMillis(at, { zone }).toFormat(`${DAY} yyyy, ${TIME}`);
 }
 
-/** Null when the text is not a real local time in `zone`, which is what the form reports as invalid. */
-export function parseLocalInput(text: string, zone: string): number | null {
-  const parsed = DateTime.fromFormat(text.trim(), LOCAL_INPUT, { zone });
-  return parsed.isValid ? parsed.toMillis() : null;
+/**
+ * The two halves of the block form's date/time picker, and the only reason they are not one line each
+ * in the screen: the Android pickers speak *device* wall clock. They read `value`'s local fields and
+ * hand back a timestamp built from the fields the user chose, both in the device's zone
+ * (`DatePickerModule.java:64`, `TimePickerModule.java:65`). A block, meanwhile, is authored in its own
+ * zone — the one the server anchors recurrence to (§0.3) — which on an edit is the block's stored
+ * `timezone` and not the phone's.
+ *
+ * So both directions swap the zone while holding the wall clock still: a 19:00 Berlin block opens the
+ * picker showing 19:00 on a phone in Chicago, and saving it writes 19:00 Berlin rather than 19:00
+ * Chicago. A same-zone device makes both functions a no-op, which is exactly why this needs a test
+ * rather than a look at the screen.
+ *
+ * 'default' is luxon's `Settings.defaultZone` — the device zone on a phone, and what a test overrides
+ * to stand in for a phone somewhere else.
+ *
+ * Ceiling: a wall clock that does not exist on the target side of the swap (the hour a DST spring
+ * forward skips) is moved forward by the gap, because that is what luxon does with an impossible local
+ * time. The alternative is refusing the pick, and a form that rejects 02:30 without being able to say
+ * why is worse than one that saves 03:30.
+ */
+export function toPickerDate(at: number, zone: string): Date {
+  return DateTime.fromMillis(at, { zone }).setZone('default', { keepLocalTime: true }).toJSDate();
+}
+
+export function fromPickerDate(picked: Date, zone: string): number {
+  return DateTime.fromJSDate(picked).setZone(zone, { keepLocalTime: true }).toMillis();
 }
 
 /**

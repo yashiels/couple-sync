@@ -1,13 +1,13 @@
 import * as Localization from 'expo-localization';
-import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ApiError, api } from '../src/api';
+import { ZoneList } from '../src/components/ZoneList';
 import { useStore } from '../src/store';
 import { fontSize, radius, spacing, touchTarget, useColors } from '../src/theme';
 import { formatClock } from '../src/time';
-import { searchZones } from '../src/timezones';
 
 // An emulator commonly reports UTC, and the type allows null, so the fallback is required rather than
 // defensive. UTC is a valid IANA id and the server accepts it.
@@ -20,19 +20,15 @@ export default function TimezoneSetupScreen() {
   const setUser = useStore((s) => s.setUser);
 
   const [selected, setSelected] = useState(detectedZone);
-  const [query, setQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // The local time beside every candidate is the whole point of the list — a wrong pick is obvious
-  // when the clock next to it is not your clock. Ticked once a minute, never once a second.
+  // For the summary card below. Ticked once a minute, never once a second.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(timer);
   }, []);
-
-  const zones = useMemo(() => searchZones(query), [query]);
 
   async function onConfirm() {
     if (!user) return;
@@ -88,66 +84,7 @@ export default function TimezoneSetupScreen() {
         </Text>
       </View>
 
-      <TextInput
-        accessibilityLabel="Search timezones"
-        placeholder="Search for a city or region"
-        placeholderTextColor={colors.textMuted}
-        value={query}
-        onChangeText={setQuery}
-        autoCorrect={false}
-        style={{
-          minHeight: touchTarget,
-          paddingHorizontal: spacing.md,
-          borderRadius: radius,
-          borderWidth: 1,
-          borderColor: colors.border,
-          color: colors.text,
-          fontSize: fontSize.body,
-        }}
-      />
-
-      <FlatList
-        style={{ flex: 1 }}
-        data={zones}
-        keyExtractor={(zone) => zone}
-        keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={
-          <Text
-            style={{ color: colors.textMuted, fontSize: fontSize.body, paddingVertical: spacing.md }}
-          >
-            No timezone matches that. Try a city name, such as Johannesburg.
-          </Text>
-        }
-        renderItem={({ item }) => {
-          const isSelected = item === selected;
-          return (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ selected: isSelected }}
-              onPress={() => setSelected(item)}
-              style={{
-                minHeight: touchTarget,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: spacing.sm,
-                paddingHorizontal: spacing.sm,
-                borderBottomWidth: 1,
-                borderBottomColor: colors.border,
-              }}
-            >
-              {/* The tick, not the tint, is what says "selected" — colour alone is not a state. */}
-              <Text style={{ color: colors.text, fontSize: fontSize.body, flexShrink: 1 }}>
-                {isSelected ? '✓ ' : ''}
-                {item.replace(/_/g, ' ')}
-              </Text>
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.label }}>
-                {formatClock(item, now)}
-              </Text>
-            </Pressable>
-          );
-        }}
-      />
+      <ZoneList selected={selected} onSelect={setSelected} />
 
       {error ? <Text style={{ color: colors.danger, fontSize: fontSize.label }}>{error}</Text> : null}
 
