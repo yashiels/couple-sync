@@ -125,5 +125,7 @@ expo-env.d.ts
 *.key
 *.pem
 *.mobileprovision
+# The real Firebase android config, dropped in from the console. app.config.ts points at this path;
+# CI copies the committed google-services.placeholder.json here before prebuild.
 google-services.json
 GoogleService-Info.plist
