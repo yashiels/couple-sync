@@ -61,6 +61,10 @@ function insertParams(row: BlockRow): unknown[] {
 function ruleProblem(value: unknown): string | null {
   if (typeof value !== 'string' || !value.trim()) return 'invalid_recurrence_rule';
   const rule = value.trim();
+  // FREQ must be stated explicitly. Without it rrulestr silently defaults to YEARLY, so `BYDAY=MO`
+  // parses, passes the SUPPORTED_FREQ check below, and is stored as a rule no client can round-trip
+  // through the recurrence picker.
+  if (!/(^|;)FREQ=/i.test(rule.replace(/^RRULE:/i, ''))) return 'invalid_recurrence_rule';
   let freq: number;
   try {
     // rrulestr for the reject: it throws on a bogus FREQ or BYDAY where RRule.parseString shrugs.

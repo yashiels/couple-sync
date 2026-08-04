@@ -562,6 +562,17 @@ describe('POST /blocks', () => {
     expect(timeblocks).toHaveLength(0);
   });
 
+  it('400s on a rule with no explicit FREQ', async () => {
+    seedPair();
+    // rrulestr defaults a missing FREQ to YEARLY, so these would otherwise be stored as rules the
+    // recurrence picker cannot round-trip.
+    for (const recurrence_rule of ['BYDAY=MO', 'INTERVAL=2', 'COUNT=3', 'RRULE:BYDAY=TU,WE']) {
+      const res = await post(body({ recurrence_rule }));
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: 'invalid_recurrence_rule' });
+    }
+  });
+
   it('400s on an unsupported RRULE FREQ', async () => {
     seedPair();
 
