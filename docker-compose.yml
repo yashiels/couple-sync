@@ -1,0 +1,23 @@
+# Production shape. Coolify builds this file; Traefik terminates TLS in front of it, so the
+# container is never published on a host port. Every value comes from the deploy environment —
+# no secret is ever written here.
+services:
+  api:
+    build: ./backend
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON}
+      # No default: config.ts refuses an unset value and refuses '*'.
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.couple-sync-api.rule=Host(`${API_DOMAIN}`)
+      - traefik.http.routers.couple-sync-api.entrypoints=https
+      - traefik.http.routers.couple-sync-api.tls=true
+      - traefik.http.routers.couple-sync-api.tls.certresolver=letsencrypt
+      - traefik.http.services.couple-sync-api.loadbalancer.server.port=3000

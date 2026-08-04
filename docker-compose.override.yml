@@ -1,0 +1,27 @@
+# Local dev only. Never deployed — Coolify is pointed at docker-compose.yml alone.
+# Run: docker compose -f docker-compose.yml -f docker-compose.override.yml up -d --build
+# FIREBASE_PROJECT_ID and FIREBASE_SERVICE_ACCOUNT_JSON still come from your shell: the boot probe
+# mints a real Google OAuth token, so the api cannot start without a working service account.
+services:
+  api:
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://postgres@db:5432/couple_sync
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8081}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      # Throwaway local data: no password, no volume, gone on `down -v`.
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_DB: couple_sync
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d couple_sync"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
