@@ -23,6 +23,13 @@ Every task's requirements implicitly include this section.
 - **Package manager** is `pnpm` in `backend/` (declared via `packageManager`) and `npm` at the repo root (an `npm`-generated `package-lock.json` already exists there). Never mix.
 - **TypeScript** is `strict` in both projects. `backend/tsconfig.json` additionally sets `noUncheckedIndexedAccess` — the existing engine code depends on it, do not relax it.
 - **Backend module system** is ESM. Relative imports carry a `.js` extension (`import { query } from './db.js'`).
+- **Never use a named ESM import from a CJS-only dependency.** `rrule` has no `exports` map, so
+  `import { RRule } from 'rrule'` resolves under `tsc` and vitest (both read the `module` field) but
+  throws `does not provide an export named 'RRule'` under plain `node dist/…`. That made the built
+  container unbootable while every test stayed green. Use `import pkg from 'rrule'` and destructure.
+  `src/__tests__/boot-esm.test.ts` imports the **built output** in a real node process and statically
+  scans `dist/` for the unsafe form, so this cannot regress — but it only runs after `pnpm build`,
+  which is why every task gate is `pnpm build && pnpm test`, never `pnpm test` alone.
 - **Overlap is computed server-side only.** The client never computes, hashes, or publishes windows. Any client-side interval algebra beyond positioning an already-expanded interval on the week grid is a defect.
 - **Recurrence is expanded server-side too, and the server must hand the client the expanded occurrences.** The client has no `rrule` dependency, so it cannot turn `recurrence_rule: 'FREQ=WEEKLY;BYDAY=TU,WE'` into three rectangles on a week grid. `GET /blocks` therefore takes a `from`/`to` range and returns, per block, an `occurrences: { start_utc, end_utc }[]` array produced by the engine's existing `expandBlock`. Never re-add client-side expansion, and never ship a calendar view that reads `recurrence_rule` directly.
 - **`git commit -am` is banned in this plan.** Most tasks create new files, and `-a` stages only *tracked* modifications, so a new file is silently left out. Every commit step names its paths: `git add <paths> && git commit -m "…"`. This exact failure already cost this project its whole backend directory once — it was untracked, so nothing protected it.

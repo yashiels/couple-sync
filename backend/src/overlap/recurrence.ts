@@ -1,7 +1,13 @@
 import { DateTime } from 'luxon';
-import { RRule } from 'rrule';
+// Default-import then destructure. `rrule` is CJS with no `exports` map, so a named ESM import
+// resolves under tsc and vitest (they read the `module` field) but throws
+// "does not provide an export named 'RRule'" under plain `node dist/...`. That made the built
+// container unbootable while every test stayed green. boot-esm.test.ts guards this.
+import rrulePkg from 'rrule';
 import type { Interval } from './intervals.js';
 import type { Block } from './types.js';
+
+const { RRule } = rrulePkg;
 
 // ---------------------------------------------------------------------------
 // Why the "wall clock space" dance below exists.
