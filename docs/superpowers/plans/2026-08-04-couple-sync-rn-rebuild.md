@@ -1448,7 +1448,11 @@ Expected: `/health` returns 200, and the logs show migrations running before the
 
 - [ ] **Step 5: Prove the fail-fast paths**
 
-Start the api with `CORS_ORIGINS` unset, and again with a garbage service-account value, and again with a *structurally valid but unusable* service account. All three must exit non-zero. This step needs a real service account and outbound Google access — see Human prerequisites. A container that boots healthy in either case is a Task 3 regression — fix it there.
+Start the api with `CORS_ORIGINS` unset; with a garbage service-account value; with a *structurally
+valid but unusable* service account (generate a throwaway RSA key — Google answers `invalid_grant`);
+and with `FIREBASE_PROJECT_ID` not matching the service account's `projectId`. All four must exit
+non-zero, and all four are testable **without** real credentials — only Step 4's 200 from `/health`
+needs them. A container that boots healthy in either case is a Task 3 regression — fix it there.
 
 - [ ] **Step 6: Write `backend/README.md`**
 
@@ -2260,15 +2264,22 @@ What the product is, the two-deployable layout, how to run the backend locally (
 
 Replace the deleted Flutter version. Correct stack, correct commands, the **server-side** overlap architecture, `pnpm` for the backend and `npm` for the app, and the standing decisions from §0. Every command in it must be one you have actually run.
 
-- [ ] **Step 5: Mark the stale docs**
+- [ ] **Step 5: Fix `docs/deployment/coolify.md`, which actively contradicts the code**
+
+It documents `CORS_ORIGINS` as optional and "defaults to `*`" — `config.ts` requires it and rejects
+`*`, so following that doc yields a container that refuses to boot. It also describes a Flutter web
+app, a root `Dockerfile`, and `lib/**` / `pubspec.yaml` watch paths, none of which exist. Rewrite it
+for the current backend or delete it; a deploy doc that produces a dead container is worse than none.
+
+- [ ] **Step 6: Mark the stale docs**
 
 `PRD.md` and `ARCHITECTURE.md` both describe Flutter, Firestore and device-side compute. Add a one-line header to each: superseded by `docs/REBUILD-SPEC.md`, retained for product history only. Leaving them unmarked is how the contradictions in this rebuild started.
 
-- [ ] **Step 6: Verify CI is actually green**
+- [ ] **Step 7: Verify CI is actually green**
 
 Push the branch and confirm both jobs pass. A red pipeline here means an earlier task's tests only ever ran locally.
 
-- [ ] **Step 7: Commit** — `git add .github .githooks README.md CLAUDE.md AGENTS.md PRD.md ARCHITECTURE.md eslint.config.mjs vitest.config.ts && git commit -m "ci: gate backend and app tests; rewrite project docs"`
+- [ ] **Step 8: Commit** — `git add .github .githooks README.md CLAUDE.md AGENTS.md PRD.md ARCHITECTURE.md docs/deployment eslint.config.mjs && git commit -m "ci: gate backend and app tests; rewrite project docs"`
 
 ---
 
