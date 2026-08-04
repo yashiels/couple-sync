@@ -102,3 +102,28 @@ env/*.local.json
 # pipeline / baseline artifacts
 .baseline-*
 *.gate.log
+
+# Expo / React Native
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.metro-health-check*
+*.tsbuildinfo
+.DS_Store
+.kotlin/
+*.orig.*
+
+# Generated native projects (expo prebuild)
+/ios
+/android
+
+# Signing + Firebase credentials (never commit)
+*.jks
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
+google-services.json
+GoogleService-Info.plist

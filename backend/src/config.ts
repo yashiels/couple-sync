@@ -1,75 +1,58 @@
-import dotenv from 'dotenv';
-
-dotenv.config();
+// Env validation. Every problem here is a boot crash, never a warning: the previous build
+// console.warn'ed on bad Firebase credentials and then booted "healthy" while 401-ing every
+// request. Fail loud, fail at start.
 
 function required(name: string): string {
-  const value = process.env[name];
-  if (!value || value.trim() === '') {
-    throw new Error(`Missing required env var: ${name}`);
-  }
-  return value;
+  const v = process.env[name]?.trim();
+  if (!v) throw new Error(`[config] missing required env var ${name}`);
+  return v;
 }
 
-function optional(name: string, fallback: string): string {
-  const value = process.env[name];
-  return value && value.trim() !== '' ? value : fallback;
-}
-
-function parseIntOrDefault(name: string, fallback: number): number {
-  const raw = process.env[name];
-  if (!raw) return fallback;
-  const parsed = Number.parseInt(raw, 10);
-  if (Number.isNaN(parsed)) {
-    throw new Error(`Env var ${name} must be an integer, got: ${raw}`);
-  }
-  return parsed;
-}
-
-function parseCorsOrigins(raw: string): true | string[] {
-  const value = raw.trim();
-  if (value === '*' || value.toLowerCase() === 'true') {
-    return true;
-  }
-
-  const origins = value
+function parseCorsOrigins(): string[] {
+  // No default, and '*' is refused outright. A wildcard here would let any web page drive the API
+  // with a stolen ID token.
+  const raw = required('CORS_ORIGINS');
+  const origins = raw
     .split(',')
-    .map((origin) => origin.trim())
-    .filter((origin) => origin.length > 0);
-
-  return origins.length > 0 ? origins : true;
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (origins.length === 0) throw new Error('[config] CORS_ORIGINS is empty');
+  if (origins.includes('*')) throw new Error('[config] CORS_ORIGINS must not be "*"');
+  return origins;
 }
 
-export interface Config {
-  databaseUrl: string;
-  firebaseProjectId: string;
-  firebaseServiceAccountJson: string;
-  port: number;
-  adminToken: string | null;
-  corsOrigins: true | string[];
+export type ServiceAccount = {
+  projectId: string;
+  clientEmail: string;
+  privateKey: string;
+};
+
+function parseServiceAccount(): ServiceAccount {
+  // Accepts raw JSON or base64-encoded JSON (base64 survives every env-var UI ever built).
+  const raw = required('FIREBASE_SERVICE_ACCOUNT');
+  const json = raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8');
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(json) as Record<string, unknown>;
+  } catch {
+    throw new Error('[config] FIREBASE_SERVICE_ACCOUNT is not valid JSON (raw or base64)');
+  }
+  const projectId = (parsed['project_id'] ?? parsed['projectId']) as string | undefined;
+  const clientEmail = (parsed['client_email'] ?? parsed['clientEmail']) as string | undefined;
+  const privateKey = (parsed['private_key'] ?? parsed['privateKey']) as string | undefined;
+  if (!projectId || !clientEmail || !privateKey) {
+    throw new Error('[config] FIREBASE_SERVICE_ACCOUNT missing project_id/client_email/private_key');
+  }
+  return { projectId, clientEmail, privateKey: privateKey.replace(/\\n/g, '\n') };
 }
 
-let cached: Config | null = null;
-
-export function loadConfig(): Config {
-  if (cached) return cached;
-  cached = {
-    databaseUrl: required('DATABASE_URL'),
-    firebaseProjectId: required('FIREBASE_PROJECT_ID'),
-    firebaseServiceAccountJson: required('FIREBASE_SERVICE_ACCOUNT_JSON'),
-    port: parseIntOrDefault('PORT', 3000),
-    // Optional shared secret guarding POST /admin/* endpoints. When unset,
-    // admin routes are disabled (respond 503). Not the same as Firebase auth
-    // — this is a simple ops escape hatch for manual cron triggers.
-    adminToken: optional('ADMIN_TOKEN', ''),
-    // Browser clients use Authorization headers rather than ambient cookies.
-    // `*` is safe as a default, while Coolify prod can pin this to the web app
-    // domain with a comma-separated allowlist.
-    corsOrigins: parseCorsOrigins(optional('CORS_ORIGINS', '*')),
-  };
-  return cached;
-}
-
-export function getConfig(): Config {
-  if (!cached) return loadConfig();
-  return cached;
-}
+export const config = {
+  port: Number(process.env.PORT ?? 3000),
+  host: process.env.HOST ?? '0.0.0.0',
+  databaseUrl: required('DATABASE_URL'),
+  corsOrigins: parseCorsOrigins(),
+  // Unset is legal; admin routes answer 503 instead of silently running unauthenticated.
+  adminToken: process.env.ADMIN_TOKEN?.trim() || null,
+  serviceAccount: parseServiceAccount(),
+  logLevel: process.env.LOG_LEVEL ?? 'info',
+};

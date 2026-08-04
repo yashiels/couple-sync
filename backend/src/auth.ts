@@ -1,51 +1,47 @@
-import type { FastifyRequest } from 'fastify';
-import admin from 'firebase-admin';
-import { getAuth } from './firebase.js';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { IncomingMessage } from 'node:http';
+import type { DecodedIdToken } from 'firebase-admin/auth';
+import { verifyIdToken } from './firebase.js';
 
-/** Firebase ID token — use the SDK's type, not a hand-rolled subset. */
-export type DecodedIdToken = admin.auth.DecodedIdToken;
-
-export class UnauthorizedError extends Error {
-  statusCode = 401 as const;
-  constructor(message: string) {
-    super(message);
-    this.name = 'UnauthorizedError';
+declare module 'fastify' {
+  interface FastifyRequest {
+    uid: string;
+    tokenClaims: DecodedIdToken;
   }
 }
 
-/**
- * Extract + verify a Firebase ID token from the request.
- *
- * Accepts either:
- *   - `Authorization: Bearer <token>` header (REST routes), or
- *   - `?token=<token>` query param (WebSocket handshake, where browsers
- *     cannot set headers on the WS upgrade).
- *
- * Throws UnauthorizedError (statusCode 401) on missing/invalid token.
- */
-export async function authenticate(request: FastifyRequest): Promise<DecodedIdToken> {
-  const token = extractToken(request);
+// Bearer header is the normal path; `?token=` exists because not every WS client can set headers.
+export function tokenFrom(req: { headers: IncomingMessage['headers']; url?: string }): string | null {
+  const header = req.headers.authorization;
+  if (header?.startsWith('Bearer ')) return header.slice(7).trim() || null;
+  if (req.url) {
+    const q = new URL(req.url, 'http://localhost').searchParams.get('token');
+    if (q) return q.trim() || null;
+  }
+  return null;
+}
+
+export async function verifyRequestToken(req: {
+  headers: IncomingMessage['headers'];
+  url?: string;
+}): Promise<string> {
+  const token = tokenFrom(req);
+  if (!token) throw new Error('missing token');
+  const decoded = await verifyIdToken(token);
+  return decoded.uid;
+}
+
+export async function requireAuth(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const token = tokenFrom(req);
   if (!token) {
-    throw new UnauthorizedError('Missing bearer token');
+    await reply.code(401).send({ error: 'missing_token' });
+    return;
   }
   try {
-    return await getAuth().verifyIdToken(token);
-  } catch (err) {
-    throw new UnauthorizedError(
-      `Invalid Firebase ID token: ${err instanceof Error ? err.message : String(err)}`
-    );
+    const decoded = await verifyIdToken(token);
+    req.uid = decoded.uid;
+    req.tokenClaims = decoded;
+  } catch {
+    await reply.code(401).send({ error: 'invalid_token' });
   }
-}
-
-function extractToken(request: FastifyRequest): string | null {
-  // Header first (REST).
-  const header = request.headers.authorization;
-  if (header && /^Bearer\s+/i.test(header)) {
-    const token = header.replace(/^Bearer\s+/i, '').trim();
-    if (token) return token;
-  }
-  // Query fallback (WS handshake — browsers can't set headers on upgrade).
-  const queryToken = (request.query as Record<string, string> | undefined)?.token;
-  if (queryToken && queryToken.trim() !== '') return queryToken.trim();
-  return null;
 }

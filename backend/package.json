@@ -3,39 +3,34 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Self-hosted backend for Couple Sync (Fastify + ws + Postgres + Firebase Admin).",
-  "main": "dist/index.js",
+  "packageManager": "pnpm@10.26.0",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp -R src/migrations dist/migrations",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
-    "migrate": "tsx src/migrate.ts",
-    "migrate:prod": "node dist/migrate.js",
+    "migrate": "node dist/migrate.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@fastify/cors": "^9.0.1",
-    "@fastify/websocket": "^10.0.1",
-    "dotenv": "^16.4.5",
-    "fastify": "^4.28.1",
-    "firebase-admin": "^12.6.0",
-    "node-cron": "^3.0.3",
-    "pg": "^8.13.0",
-    "pino": "^9.4.0",
+    "@fastify/cors": "^11.0.1",
+    "fastify": "^5.2.1",
+    "firebase-admin": "^13.1.0",
+    "luxon": "^3.7.2",
+    "pg": "^8.13.1",
+    "rrule": "^2.8.1",
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@types/node": "^22.7.5",
-    "@types/node-cron": "^3.0.11",
+    "@types/luxon": "^3.7.1",
+    "@types/node": "^22.10.5",
     "@types/pg": "^8.11.10",
-    "@types/ws": "^8.5.12",
+    "@types/ws": "^8.5.13",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3",
-    "vitest": "^2.1.4"
-  },
-  "engines": {
-    "node": "22"
-  },
-  "packageManager": "pnpm@11.9.0"
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
 }
