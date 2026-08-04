@@ -65,6 +65,25 @@ export function earliestWindow<T extends Pick<OverlapWindow, 'startUtc'>>(
 }
 
 /**
+ * What the Free time screen actually renders: windows that have not finished yet, then the
+ * display-only duration filter (§0.7 — it never changes what the server computes; the 30-minute
+ * minimum is the engine's and is hard-coded there).
+ *
+ * A window whose `endUtc` is already past is expected, not exceptional: `overlaps_latest` is only
+ * recomputed when its input hash changes, so the stored row lags the clock (§9).
+ *
+ * Score order is preserved deliberately — that is what surfaces the good windows first. Anything
+ * showing "next" runs the result through `earliestWindow` instead of reading index 0.
+ */
+export function visibleWindows<T extends Pick<OverlapWindow, 'endUtc' | 'durationMinutes'>>(
+  windows: readonly T[],
+  now: number,
+  minMinutes: number,
+): T[] {
+  return windows.filter((w) => w.endUtc > now && w.durationMinutes >= minMinutes);
+}
+
+/**
  * Where one server-expanded occurrence sits on a 7-column week grid, in the viewer's zone.
  * `dayIndex` is 0-6 from the week start's local day; `topMinutes` is minutes past local midnight.
  *

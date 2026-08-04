@@ -8,6 +8,7 @@ import {
   formatDuration,
   formatWindowRange,
   gridPosition,
+  visibleWindows,
 } from '../time';
 
 function window(startUtc: number, score: number): OverlapWindow {
@@ -24,6 +25,57 @@ describe('earliestWindow', () => {
 
   it('returns null for an empty list', () => {
     expect(earliestWindow([])).toBeNull();
+  });
+});
+
+describe('visibleWindows', () => {
+  const now = Date.UTC(2026, 7, 4, 12);
+  const sized = (startUtc: number, minutes: number, score: number): OverlapWindow => ({
+    startUtc,
+    endUtc: startUtc + minutes * 60_000,
+    durationMinutes: minutes,
+    score,
+    reasonableBoth: true,
+  });
+
+  it('drops a window that has already ended — the stored row lags the clock', () => {
+    const finished = sized(now - 3 * 3_600_000, 60, 50);
+    const upcoming = sized(now + 3_600_000, 60, 20);
+    expect(visibleWindows([finished, upcoming], now, 0)).toEqual([upcoming]);
+  });
+
+  it('keeps a window that is under way but not over', () => {
+    const running = sized(now - 30 * 60_000, 120, 30);
+    expect(visibleWindows([running], now, 0)).toEqual([running]);
+  });
+
+  it('filters on the duration the engine reported, inclusive of the bound', () => {
+    const half = sized(now + 3_600_000, 30, 10);
+    const hour = sized(now + 7_200_000, 60, 10);
+    const two = sized(now + 10_800_000, 120, 10);
+    expect(visibleWindows([half, hour, two], now, 60)).toEqual([hour, two]);
+    expect(visibleWindows([half, hour, two], now, 120)).toEqual([two]);
+    expect(visibleWindows([half, hour, two], now, 0)).toEqual([half, hour, two]);
+  });
+
+  it('keeps score order rather than re-sorting by time', () => {
+    const best = sized(now + 5 * 86_400_000, 180, 90);
+    const soonest = sized(now + 3_600_000, 60, 20);
+    expect(visibleWindows([best, soonest], now, 0)).toEqual([best, soonest]);
+  });
+
+  it('the countdown target is the earliest visible start, never the first element', () => {
+    // Exactly the shape the server sends: score descending, so the best window is days out. Reading
+    // index 0 here is the bug that shipped in the FCM notification body.
+    const ended = sized(now - 86_400_000, 240, 99);
+    const best = sized(now + 5 * 86_400_000, 180, 90);
+    const soonestButShort = sized(now + 3_600_000, 30, 25);
+    const soonestLongEnough = sized(now + 2 * 3_600_000, 60, 22);
+    const list = [ended, best, soonestButShort, soonestLongEnough];
+
+    expect(earliestWindow(visibleWindows(list, now, 0))).toBe(soonestButShort);
+    // With the display-only filter on, the countdown follows what is actually on screen.
+    expect(earliestWindow(visibleWindows(list, now, 60))).toBe(soonestLongEnough);
   });
 });
 
