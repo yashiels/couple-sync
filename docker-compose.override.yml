@@ -1,35 +1,27 @@
-# Local-dev override — auto-merged by `docker compose up` (not used by Coolify,
-# which reads only docker-compose.yml). Adds a bundled Postgres + a localhost
-# port mapping + dev credentials so you can run the full stack locally without
-# a platform proxy.
-#
-# `docker compose up`           → merges this file (api + postgres, localhost:3000)
-# `docker compose -f docker-compose.yml up`  → production layout (api only, env-driven)
+# Local dev only. Never deployed — Coolify is pointed at docker-compose.yml alone.
+# Run: docker compose -f docker-compose.yml -f docker-compose.override.yml up -d --build
+# FIREBASE_PROJECT_ID and FIREBASE_SERVICE_ACCOUNT_JSON still come from your shell: the boot probe
+# mints a real Google OAuth token, so the api cannot start without a working service account.
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: couple
-      POSTGRES_PASSWORD: couple
-      POSTGRES_DB: couplesync
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U couple -d couplesync"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
   api:
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      # Literal dev DATABASE_URL — overrides the base compose's empty default.
-      DATABASE_URL: postgres://couple:couple@postgres:5432/couplesync
     ports:
       - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://postgres@db:5432/couple_sync
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8081}
+    depends_on:
+      db:
+        condition: service_healthy
 
-volumes:
-  pgdata:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      # Throwaway local data: no password, no volume, gone on `down -v`.
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_DB: couple_sync
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d couple_sync"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

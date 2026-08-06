@@ -4,6 +4,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
-    globals: false,
+    // Each file gets its own module registry so the in-memory socket map and fake db
+    // never leak between suites.
+    isolate: true,
   },
 });

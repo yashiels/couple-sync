@@ -1,5 +1,8 @@
 # Manual Setup Steps for Couple Sync
 
+> **Superseded by the Setup section of `README.md`.** Retained for history only — the Blaze plan,
+> Cloud Functions and Firestore steps below no longer apply. Firebase is used for Auth and FCM only.
+
 This document tracks setup steps that require manual console access.
 
 ## STORY-001: Firebase Cost Alerts

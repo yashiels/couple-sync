@@ -1,266 +1,142 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import Fastify, { type FastifyInstance } from 'fastify';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import Fastify from 'fastify';
+import type { DecodedIdToken } from 'firebase-admin/auth';
+import type { IncomingMessage } from 'node:http';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+// firebase.ts initializes the Admin SDK at import, so it is mocked out entirely.
+vi.mock('../firebase.js', () => ({ verifyIdToken: vi.fn() }));
 
-/**
- * Auth routes tests.
- *
- * Mocks:
- *  - firebase.ts -> getAuth().verifyIdToken (the Firebase Admin call)
- *  - db.ts       -> query (the pg pool)
- *
- * Covers deliverable 5: 401 on missing/invalid token; upsert new then existing;
- * FCM token dedup.
- */
+const { verifyIdToken } = await import('../firebase.js');
+const { requireAuth, uidFromRequest } = await import('../auth.js');
+const { registerErrorHandler } = await import('../http.js');
 
-const verifyIdToken = vi.fn();
+const claims = (over: Partial<DecodedIdToken> = {}): DecodedIdToken =>
+  ({
+    uid: 'uid-a',
+    sub: 'uid-a',
+    email: 'a@example.com',
+    name: 'Ada',
+    picture: 'https://example.com/a.png',
+    aud: 'nexion-ai-prod',
+    iss: 'https://securetoken.google.com/nexion-ai-prod',
+    iat: 1,
+    exp: 2,
+    auth_time: 1,
+    firebase: { identities: {}, sign_in_provider: 'google.com' },
+    ...over,
+  }) as DecodedIdToken;
 
-vi.mock('../firebase.js', () => ({
-  getAuth: () => ({ verifyIdToken }),
-  initFirebaseAdmin: vi.fn(),
-  getMessaging: vi.fn(),
-}));
-
-const mockQuery = vi.fn();
-vi.mock('../db.js', () => ({
-  query: (...args: unknown[]) => mockQuery(...args),
-  getPool: vi.fn(() => ({ query: mockQuery, end: vi.fn() })),
-  endPool: vi.fn(),
-}));
-
-import { authRoutes, upsertUser, addFcmToken } from '../routes/auth.js';
-
-const UID = 'uid-abc-123';
-const EMAIL = 'alex@example.com';
-const NAME = 'Alex Doe';
-const PICTURE = 'https://img.example.com/alex.png';
-const FCM = 'fcm-token-AAAA';
-
-const decodedToken = {
-  uid: UID,
-  email: EMAIL,
-  email_verified: true,
-  name: NAME,
-  picture: PICTURE,
-  firebase: { sign_in_provider: 'password' },
-};
-
-function makeUserRow(overrides: Partial<{
-  uid: string;
-  email: string | null;
-  display_name: string | null;
-  photo_url: string | null;
-  couple_id: string | null;
-}> = {}) {
-  return {
-    uid: UID,
-    email: EMAIL,
-    display_name: NAME,
-    photo_url: PICTURE,
-    couple_id: null,
-    ...overrides,
-  };
+function app() {
+  const a = Fastify();
+  registerErrorHandler(a);
+  a.get('/me', { preHandler: requireAuth }, async (req) => ({
+    uid: req.uid,
+    email: req.claims.email,
+    name: req.claims.name as string | undefined,
+    picture: req.claims.picture,
+  }));
+  return a;
 }
 
-async function buildApp(): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false });
-  await app.register(authRoutes);
-  return app;
-}
+// uidFromRequest takes a raw IncomingMessage off the WS upgrade, not a FastifyRequest.
+const upgrade = (headers: Record<string, string>, url = '/sync') =>
+  ({ headers, url }) as unknown as IncomingMessage;
 
 beforeEach(() => {
-  verifyIdToken.mockReset();
-  mockQuery.mockReset();
+  vi.mocked(verifyIdToken).mockReset();
 });
 
-describe('POST /auth/verify', () => {
-  it('returns 401 when the Authorization header is missing', async () => {
-    const app = await buildApp();
-    const res = await app.inject({ method: 'POST', url: '/auth/verify' });
+describe('requireAuth', () => {
+  it('401s with no Authorization header', async () => {
+    const res = await app().inject({ method: 'GET', url: '/me' });
     expect(res.statusCode).toBe(401);
-    const body = res.json();
-    expect(body.error).toBe('unauthorized');
+    expect(res.json()).toEqual({ error: 'missing_token' });
     expect(verifyIdToken).not.toHaveBeenCalled();
-    expect(mockQuery).not.toHaveBeenCalled();
-    await app.close();
   });
 
-  it('returns 401 when verifyIdToken rejects (invalid token)', async () => {
-    verifyIdToken.mockRejectedValue(new Error('Firebase ID token has expired.'));
-    const app = await buildApp();
-    const res = await app.inject({
-      method: 'POST',
-      url: '/auth/verify',
-      headers: { authorization: 'Bearer expired-or-tampered' },
+  it('401s on a malformed Authorization header', async () => {
+    const res = await app().inject({
+      method: 'GET',
+      url: '/me',
+      headers: { authorization: 'abc.def.ghi' },
     });
     expect(res.statusCode).toBe(401);
-    const body = res.json();
-    expect(body.error).toBe('unauthorized');
-    expect(body.message).toMatch(/expired/i);
-    expect(verifyIdToken).toHaveBeenCalledTimes(1);
-    expect(mockQuery).not.toHaveBeenCalled();
-    await app.close();
+    expect(verifyIdToken).not.toHaveBeenCalled();
   });
 
-  it('upserts a new user and returns it with coupleId null', async () => {
-    verifyIdToken.mockResolvedValue(decodedToken);
-    mockQuery.mockResolvedValue({ rows: [makeUserRow({ couple_id: null })] });
-    const app = await buildApp();
-
-    const res = await app.inject({
-      method: 'POST',
-      url: '/auth/verify',
-      headers: { authorization: 'Bearer valid-id-token' },
-    });
-
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.user).toEqual({
-      uid: UID,
-      email: EMAIL,
-      display_name: NAME,
-      photo_url: PICTURE,
-      couple_id: null,
-    });
-
-    // Verify the upsert SQL + params.
-    expect(mockQuery).toHaveBeenCalledTimes(1);
-    const [sql, params] = mockQuery.mock.calls[0];
-    expect(sql).toMatch(/INSERT INTO users/);
-    expect(sql).toMatch(/ON CONFLICT \(uid\) DO UPDATE/);
-    expect(params).toEqual([UID, EMAIL, NAME, PICTURE, expect.any(Number)]);
-    await app.close();
-  });
-
-  it('refreshes profile fields on re-login and returns the existing coupleId', async () => {
-    verifyIdToken.mockResolvedValue(decodedToken);
-    mockQuery.mockResolvedValue({
-      rows: [makeUserRow({ couple_id: 'cpl-xyz', email: 'new@example.com' })],
-    });
-    const app = await buildApp();
-
-    const res = await app.inject({
-      method: 'POST',
-      url: '/auth/verify',
-      headers: { authorization: 'Bearer valid-id-token' },
-    });
-
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.user.couple_id).toBe('cpl-xyz');
-    // ON CONFLICT path preserves couple_id; the RETURNING row reflects the
-    // stored state, not the token. Email refresh is driven by EXCLUDED.
-    expect(mockQuery).toHaveBeenCalledTimes(1);
-    const sql = mockQuery.mock.calls[0][0] as string;
-    expect(sql).toMatch(/SET email = EXCLUDED\.email/);
-    await app.close();
-  });
-});
-
-describe('POST /auth/fcm-token', () => {
-  it('returns 401 without a bearer token', async () => {
-    const app = await buildApp();
-    const res = await app.inject({
-      method: 'POST',
-      url: '/auth/fcm-token',
-      payload: { token: FCM },
+  it('401s when verifyIdToken rejects', async () => {
+    vi.mocked(verifyIdToken).mockRejectedValue(new Error('expired'));
+    const res = await app().inject({
+      method: 'GET',
+      url: '/me',
+      headers: { authorization: 'Bearer stale' },
     });
     expect(res.statusCode).toBe(401);
-    expect(mockQuery).not.toHaveBeenCalled();
-    await app.close();
+    expect(res.json()).toEqual({ error: 'invalid_token' });
   });
 
-  it('returns 400 when the body has no token', async () => {
-    verifyIdToken.mockResolvedValue(decodedToken);
-    const app = await buildApp();
-    const res = await app.inject({
-      method: 'POST',
-      url: '/auth/fcm-token',
-      headers: { authorization: 'Bearer valid-id-token' },
-      payload: {},
+  it('sets req.uid from a valid token', async () => {
+    vi.mocked(verifyIdToken).mockResolvedValue(claims());
+    const res = await app().inject({
+      method: 'GET',
+      url: '/me',
+      headers: { authorization: 'Bearer good' },
     });
-    expect(res.statusCode).toBe(400);
-    expect(mockQuery).not.toHaveBeenCalled();
-    await app.close();
-  });
-
-  it('appends the FCM token with dedup (array_remove then ||)', async () => {
-    verifyIdToken.mockResolvedValue(decodedToken);
-    mockQuery.mockResolvedValue({ rows: [] });
-    const app = await buildApp();
-
-    const res = await app.inject({
-      method: 'POST',
-      url: '/auth/fcm-token',
-      headers: { authorization: 'Bearer valid-id-token' },
-      payload: { token: FCM },
-    });
-
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ ok: true });
-    expect(mockQuery).toHaveBeenCalledTimes(1);
-    const [sql, params] = mockQuery.mock.calls[0];
-    expect(sql).toMatch(/array_remove\(fcm_tokens, \$2\)/);
-    expect(sql).toMatch(/\|\| ARRAY\[\$2\]/);
-    expect(params).toEqual([UID, FCM]);
-    await app.close();
+    expect(res.json().uid).toBe('uid-a');
+    expect(verifyIdToken).toHaveBeenCalledWith('good');
+  });
+
+  it('sets req.claims with email, name and picture from the decoded token', async () => {
+    // Task 6's /auth/verify upsert reads these off req.claims; a narrowed {uid} would lose them.
+    vi.mocked(verifyIdToken).mockResolvedValue(claims());
+    const res = await app().inject({
+      method: 'GET',
+      url: '/me',
+      headers: { authorization: 'Bearer good' },
+    });
+    expect(res.json()).toEqual({
+      uid: 'uid-a',
+      email: 'a@example.com',
+      name: 'Ada',
+      picture: 'https://example.com/a.png',
+    });
   });
 });
 
-describe('upsertUser / addFcmToken units', () => {
-  it('upsertUser passes decoded fields through and returns the stored row', async () => {
-    mockQuery.mockResolvedValue({ rows: [makeUserRow()] });
-    const row = await upsertUser(decodedToken);
-    expect(row).toEqual(makeUserRow());
-    const params = mockQuery.mock.calls[0][1] as unknown[];
-    expect(params[0]).toBe(UID);
-    expect(params[1]).toBe(EMAIL);
-    expect(params[2]).toBe(NAME);
-    expect(params[3]).toBe(PICTURE);
-  });
-
-  it('upsertUser INSERT omits timezone so the column default applies', async () => {
-    mockQuery.mockResolvedValue({ rows: [makeUserRow()] });
-    await upsertUser(decodedToken);
-    const [sql] = mockQuery.mock.calls[0];
-    expect(sql).toMatch(/INSERT INTO users/);
-    // timezone must not be set explicitly — the DB column default ('') applies,
-    // which keeps new signups in the timezone-onboarding flow. If someone adds
-    // timezone to the INSERT (e.g. 'UTC'), this assertion fails.
-    expect(sql).not.toMatch(/timezone/i);
-  });
-
-  it('addFcmToken dedups by removing-then-appending', async () => {
-    mockQuery.mockResolvedValue({ rows: [] });
-    await addFcmToken(UID, FCM);
-    expect(mockQuery).toHaveBeenCalledTimes(1);
-    const [sql, params] = mockQuery.mock.calls[0];
-    expect(sql).toMatch(/array_remove/);
-    expect(params).toEqual([UID, FCM]);
-  });
-});
-
-describe('users.timezone column default', () => {
-  // The DB pool is mocked across this suite, so the SQL column default
-  // can't be exercised through upsertUser + a SELECT here. The fix lives
-  // in the migration file, so this test asserts it directly: the default
-  // must be '' (not 'UTC') so new signups hit the timezone-onboarding
-  // guard (hasTimezone is false on ''). upsertUser's INSERT omits the
-  // timezone column, so the column default is exactly what new rows get.
-  it("defaults new users to '' so the onboarding guard fires (not 'UTC')", () => {
-    const sql = readFileSync(
-      join(__dirname, '..', 'migrations', '001_init.sql'),
-      'utf8',
+describe('uidFromRequest', () => {
+  it('reads the token from the Authorization header on a WS upgrade', async () => {
+    vi.mocked(verifyIdToken).mockResolvedValue(claims());
+    await expect(uidFromRequest(upgrade({ authorization: 'Bearer header-tok' }))).resolves.toBe(
+      'uid-a',
     );
-    const usersTzLine = sql
-      .split('\n')
-      .find((l) => /^\s*timezone\s+TEXT\s+NOT\s+NULL\s+DEFAULT/i.test(l));
-    expect(usersTzLine).toBeDefined();
-    expect(usersTzLine!).toMatch(/DEFAULT ''/);
-    expect(usersTzLine!).not.toMatch(/DEFAULT 'UTC'/);
+    expect(verifyIdToken).toHaveBeenCalledWith('header-tok');
+  });
+
+  it('falls back to ?token= on a WS upgrade when no header is present', async () => {
+    vi.mocked(verifyIdToken).mockResolvedValue(claims());
+    await expect(uidFromRequest(upgrade({}, '/sync?token=query-tok'))).resolves.toBe('uid-a');
+    expect(verifyIdToken).toHaveBeenCalledWith('query-tok');
+  });
+
+  it('prefers the header over ?token= when both are present', async () => {
+    vi.mocked(verifyIdToken).mockResolvedValue(claims());
+    await uidFromRequest(upgrade({ authorization: 'Bearer header-tok' }, '/sync?token=query-tok'));
+    expect(verifyIdToken).toHaveBeenCalledWith('header-tok');
+  });
+
+  it('throws 401 when neither is present', async () => {
+    await expect(uidFromRequest(upgrade({}, '/sync'))).rejects.toMatchObject({
+      status: 401,
+      code: 'missing_token',
+    });
+  });
+
+  it('throws 401 when verifyIdToken rejects', async () => {
+    vi.mocked(verifyIdToken).mockRejectedValue(new Error('expired'));
+    await expect(uidFromRequest(upgrade({ authorization: 'Bearer stale' }))).rejects.toMatchObject({
+      status: 401,
+      code: 'invalid_token',
+    });
   });
 });

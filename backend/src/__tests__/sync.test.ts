@@ -1,177 +1,251 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import Fastify, { type FastifyInstance } from 'fastify';
+import type { DecodedIdToken } from 'firebase-admin/auth';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { WebSocket } from 'ws';
+import type { WsMessage } from '../wire.js';
 
-/**
- * V8 — `authorizeOverlapMessage` (the computedBy === socket-uid assertion).
- *
- * This is the security boundary that prevents a client from forging another
- * uid as the overlap writer. The WS handler calls this before persisting or
- * pushing FCM; a mismatched `computedBy` must skip both.
- *
- * We mock ../overlap.js so parseOverlapMessage is a passthrough and we can
- * feed arbitrary envelopes; handleOverlapMessage is NOT exercised here (it
- * has its own suite in overlap.test.ts). The goal is to prove the gate.
- */
+// A real ws client against a real server on an ephemeral port. A fake socket would hide everything
+// that actually matters here: the upgrade handshake, the close code, and the registry side effects.
+vi.mock('../firebase.js', () => ({ verifyIdToken: vi.fn() }));
+vi.mock('../db.js', () => ({ query: vi.fn() }));
 
-vi.mock('../firebase.js', () => ({
-  getAuth: () => ({ verifyIdToken: vi.fn() }),
-  initFirebaseAdmin: vi.fn(),
-  getMessaging: vi.fn(),
-}));
+const { verifyIdToken } = await import('../firebase.js');
+const { query } = await import('../db.js');
+const { attachSyncServer } = await import('../sync.js');
+// The real registry: this suite's whole job is proving sync.ts keeps it honest.
+const { isOnline, sendTo } = await import('../sockets.js');
 
-vi.mock('../config.js', () => ({
-  getConfig: () => ({
-    databaseUrl: 'postgres://test',
-    firebaseProjectId: 'test',
-    firebaseServiceAccountJson: '{}',
-    domain: 'api.test',
-    port: 3000,
-    adminToken: '',
-  }),
-  loadConfig: () => ({
-    databaseUrl: 'postgres://test',
-    firebaseProjectId: 'test',
-    firebaseServiceAccountJson: '{}',
-    domain: 'api.test',
-    port: 3000,
-    adminToken: '',
-  }),
-}));
+let app: FastifyInstance;
+let url: string;
+/** Every client a test opened, closed in afterEach so the registry never leaks across tests. */
+let clients: WebSocket[] = [];
+let coupleId: string | null = 'c1';
 
-vi.mock('../db.js', () => ({
-  query: vi.fn(),
-  getPool: () => ({ query: vi.fn(), connect: () => ({ query: vi.fn(), release: vi.fn() }) }),
-  endPool: vi.fn(),
-}));
+beforeAll(async () => {
+  // `good-<uid>` verifies to that uid; anything else is a rejected token.
+  vi.mocked(verifyIdToken).mockImplementation(async (token: string) => {
+    if (!token.startsWith('good-')) throw new Error('Decoding Firebase ID token failed');
+    const uid = token.slice('good-'.length);
+    return { uid, sub: uid } as DecodedIdToken;
+  });
+  vi.mocked(query).mockImplementation((async (sql: string) => {
+    if (/SELECT couple_id FROM users WHERE uid = \$1/.test(sql)) return [{ couple_id: coupleId }];
+    throw new Error(`unexpected statement on the WS path: ${sql}`);
+  }) as typeof query);
 
-import { authorizeOverlapMessage, membershipCheck } from '../routes/sync.js';
-import { query } from '../db.js';
+  app = Fastify();
+  attachSyncServer(app);
+  await app.listen({ port: 0, host: '127.0.0.1' });
+  const addr = app.server.address();
+  if (addr === null || typeof addr === 'string') throw new Error('no ephemeral port');
+  url = `ws://127.0.0.1:${addr.port}/sync`;
+});
 
-const SOCKET_UID = 'uid-alex';
+afterAll(async () => {
+  await app.close();
+});
 
-function overlapEnvelope(overrides: Record<string, unknown> = {}) {
-  return {
-    t: 'overlap',
-    coupleId: 'cpl-1',
-    windows: [{ startUtc: 0, endUtc: 60000, durationMinutes: 1, score: 0.5, reasonableBoth: true }],
-    inputHash: 'hash-1',
-    computedBy: SOCKET_UID,
-    ...overrides,
-  };
+beforeEach(() => {
+  coupleId = 'c1';
+  vi.mocked(query).mockClear();
+});
+
+afterEach(async () => {
+  for (const c of clients) c.close();
+  clients = [];
+  // The registry is cleaned by the server's 'close' handler, which lands a tick later.
+  await settle();
+});
+
+function connect(token: string | null, via: 'header' | 'query' = 'header'): WebSocket {
+  const ws =
+    token === null
+      ? new WebSocket(url)
+      : via === 'header'
+        ? new WebSocket(url, { headers: { authorization: `Bearer ${token}` } })
+        : new WebSocket(`${url}?token=${token}`);
+  clients.push(ws);
+  return ws;
 }
 
-describe('authorizeOverlapMessage', () => {
-  it('accepts a message whose computedBy matches the socket uid', () => {
-    const out = authorizeOverlapMessage(overlapEnvelope(), SOCKET_UID);
-    expect(out).not.toBeNull();
-    expect(out?.msg.computedBy).toBe(SOCKET_UID);
-    expect(out?.msg.coupleId).toBe('cpl-1');
+/** Resolves with the next JSON frame; rejects if the socket closes first. */
+function nextMessage(ws: WebSocket): Promise<WsMessage> {
+  return new Promise((resolve, reject) => {
+    ws.once('message', (data) => resolve(JSON.parse(String(data)) as WsMessage));
+    ws.once('close', (code) => reject(new Error(`closed before any message: ${code}`)));
+  });
+}
+
+function closeCode(ws: WebSocket): Promise<number> {
+  return new Promise((resolve) => {
+    ws.once('close', (code) => resolve(code));
+  });
+}
+
+/** Lets the server finish whatever it started — nothing here waits longer than a few macrotasks. */
+const settle = () => new Promise((res) => setTimeout(res, 30));
+
+/** Resolves only if NO frame arrives, which is what "silently ignored" means. */
+async function expectNothingBack(ws: WebSocket): Promise<void> {
+  let got: string | null = null;
+  const onMessage = (d: unknown) => {
+    got = String(d);
+  };
+  ws.on('message', onMessage);
+  await settle();
+  ws.off('message', onMessage);
+  expect(got).toBeNull();
+}
+
+describe('the /sync upgrade', () => {
+  it('closes with 4001 when no token is supplied', async () => {
+    await expect(closeCode(connect(null))).resolves.toBe(4001);
   });
 
-  it('rejects a forged computedBy (mismatched uid) — returns null', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const out = authorizeOverlapMessage(
-      overlapEnvelope({ computedBy: 'uid-someone-else' }),
-      SOCKET_UID
-    );
-    expect(out).toBeNull();
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0][0]).toContain('uid-someone-else');
-    warn.mockRestore();
+  it('closes with 4001 when verifyIdToken rejects', async () => {
+    await expect(closeCode(connect('rubbish', 'query'))).resolves.toBe(4001);
   });
 
-  it('rejects when computedBy is empty (even if socket uid is also empty — envelope parse rejects first)', () => {
-    // parseOverlapMessage rejects empty computedBy, so this never reaches the
-    // uid comparison. Confirm the gate still returns null.
-    const out = authorizeOverlapMessage(
-      overlapEnvelope({ computedBy: '' }),
-      SOCKET_UID
-    );
-    expect(out).toBeNull();
+  it('accepts a token from the Authorization header on the upgrade', async () => {
+    const ws = connect('good-u-header', 'header');
+    await expect(nextMessage(ws)).resolves.toMatchObject({ t: 'hello', uid: 'u-header' });
   });
 
-  it('rejects a non-overlap envelope (wrong t) — returns null', () => {
-    const out = authorizeOverlapMessage({ t: 'block:set', block: {} }, SOCKET_UID);
-    expect(out).toBeNull();
+  it('accepts a token from ?token= when no header is present', async () => {
+    const ws = connect('good-u-query', 'query');
+    await expect(nextMessage(ws)).resolves.toMatchObject({ t: 'hello', uid: 'u-query' });
   });
 
-  it('rejects a malformed envelope (missing coupleId) — returns null', () => {
-    const out = authorizeOverlapMessage(
-      { t: 'overlap', windows: [], inputHash: 'h', computedBy: SOCKET_UID },
-      SOCKET_UID
-    );
-    expect(out).toBeNull();
-  });
-
-  it('does not accept a partner-uid computedBy even when both are couple members', () => {
-    // The authed socket is uid-alex; the partner is uid-sam. A message
-    // claiming computedBy=uid-sam must be rejected — only the caller's own
-    // uid is valid as the writer.
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const out = authorizeOverlapMessage(
-      overlapEnvelope({ computedBy: 'uid-sam' }),
-      SOCKET_UID
-    );
-    expect(out).toBeNull();
-    expect(warn).toHaveBeenCalled();
-    warn.mockRestore();
+  it('closes with 1011, not 4001, when the couple lookup fails', async () => {
+    // A database blip is not an auth failure; 4001 would send the app back through sign-in.
+    vi.mocked(query).mockRejectedValueOnce(new Error('ECONNREFUSED 127.0.0.1:5432'));
+    await expect(closeCode(connect('good-u-dberr'))).resolves.toBe(1011);
   });
 });
 
-describe('membershipCheck (WS overlap couple-membership gate)', () => {
-  // V9 — the WS overlap path must verify the socket uid is a member of the
-  // targeted couple BEFORE handleOverlapMessage persists or pushes. This
-  // closes the hole where any authed user who knows a couple UUID could
-  // overwrite overlaps_latest + trigger FCM to a real member.
-  beforeEach(() => {
-    (query as ReturnType<typeof vi.fn>).mockReset();
+describe('hello', () => {
+  it('sends hello with uid and couple_id immediately on connect', async () => {
+    const ws = connect('good-u1');
+    await expect(nextMessage(ws)).resolves.toEqual({ t: 'hello', uid: 'u1', couple_id: 'c1' });
   });
 
-  it('returns true when the uid is a member of the couple (user_a_uid)', async () => {
-    (query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      rows: [{ id: 'cpl-1', user_a_uid: SOCKET_UID, user_b_uid: 'uid-sam', status: 'active' }],
+  it('reads couple_id live from the database, because the app treats it as authoritative', async () => {
+    // A device that missed the `pairing` broadcast reconciles from this value, so a cached or
+    // token-derived couple id would leave it permanently unpaired.
+    coupleId = 'c-paired-while-offline';
+    const ws = connect('good-u2');
+
+    await expect(nextMessage(ws)).resolves.toEqual({
+      t: 'hello',
+      uid: 'u2',
+      couple_id: 'c-paired-while-offline',
     });
-    const ok = await membershipCheck('cpl-1', SOCKET_UID);
-    expect(ok).toBe(true);
+    expect(vi.mocked(query).mock.calls[0]?.[1]).toEqual(['u2']);
   });
 
-  it('returns true when the uid is the other member (user_b_uid)', async () => {
-    (query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      rows: [{ id: 'cpl-1', user_a_uid: 'uid-sam', user_b_uid: SOCKET_UID, status: 'active' }],
-    });
-    const ok = await membershipCheck('cpl-1', SOCKET_UID);
-    expect(ok).toBe(true);
+  it('sends couple_id null for an unpaired user', async () => {
+    coupleId = null;
+    const ws = connect('good-u3');
+    await expect(nextMessage(ws)).resolves.toEqual({ t: 'hello', uid: 'u3', couple_id: null });
+  });
+});
+
+describe('the socket registry', () => {
+  it('registers the socket so sendTo reaches it', async () => {
+    const ws = connect('good-u4');
+    await nextMessage(ws);
+
+    const inbound = nextMessage(ws);
+    expect(sendTo('u4', { t: 'unpair', couple_id: 'c1' })).toBe(true);
+    await expect(inbound).resolves.toEqual({ t: 'unpair', couple_id: 'c1' });
   });
 
-  it('returns false (not 403 throw) when the uid is NOT a member — no crash', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    (query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      rows: [{ id: 'cpl-1', user_a_uid: 'uid-sam', user_b_uid: 'uid-other', status: 'active' }],
-    });
-    const ok = await membershipCheck('cpl-1', SOCKET_UID);
-    expect(ok).toBe(false);
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0][0]).toContain(SOCKET_UID);
-    expect(warn.mock.calls[0][0]).toContain('cpl-1');
-    warn.mockRestore();
+  it('unregisters on close, after which isOnline is false', async () => {
+    const ws = connect('good-u5');
+    await nextMessage(ws);
+    expect(isOnline('u5')).toBe(true);
+
+    ws.close();
+    await settle();
+
+    expect(isOnline('u5')).toBe(false);
+    expect(sendTo('u5', { t: 'unpair', couple_id: 'c1' })).toBe(false);
   });
 
-  it('returns false when the couple does not exist (no existence leak, no crash)', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    (query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ rows: [] });
-    const ok = await membershipCheck('cpl-missing', SOCKET_UID);
-    expect(ok).toBe(false);
-    expect(warn).toHaveBeenCalledTimes(1);
-    warn.mockRestore();
+  it('supports two concurrent sockets for the same uid', async () => {
+    const phone = connect('good-u6');
+    const tablet = connect('good-u6');
+    await Promise.all([nextMessage(phone), nextMessage(tablet)]);
+
+    const both = Promise.all([nextMessage(phone), nextMessage(tablet)]);
+    expect(sendTo('u6', { t: 'blocks:changed', couple_id: 'c1' })).toBe(true);
+    await expect(both).resolves.toEqual([
+      { t: 'blocks:changed', couple_id: 'c1' },
+      { t: 'blocks:changed', couple_id: 'c1' },
+    ]);
+
+    // One device signing out must not take the other offline.
+    phone.close();
+    await settle();
+    expect(isOnline('u6')).toBe(true);
+  });
+});
+
+describe('inbound frames', () => {
+  it('silently ignores an inbound message with an unrecognised t', async () => {
+    const ws = connect('good-u7');
+    await nextMessage(ws);
+
+    ws.send(JSON.stringify({ t: 'some:future:message', payload: 1 }));
+    await expectNothingBack(ws);
+
+    // Dropped, not fatal: forward-compat means the socket survives.
+    expect(ws.readyState).toBe(WebSocket.OPEN);
+    expect(isOnline('u7')).toBe(true);
   });
 
-  it('returns false on a DB error without crashing the server', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    (query as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('connection refused'));
-    // membershipCheck swallows ALL throws (incl. DB errors) so a single bad
-    // message never kills the WS connection. The message is skipped (false).
-    const ok = await membershipCheck('cpl-1', SOCKET_UID);
-    expect(ok).toBe(false);
-    expect(warn).toHaveBeenCalledTimes(1);
-    warn.mockRestore();
+  it('ignores an inbound overlap message — clients no longer publish windows', async () => {
+    const ws = connect('good-u8');
+    await nextMessage(ws);
+    const queriesAfterHello = vi.mocked(query).mock.calls.length;
+
+    ws.send(
+      JSON.stringify({
+        t: 'overlap',
+        couple_id: 'c1',
+        computed_at: Date.now(),
+        windows: [
+          { startUtc: 1, endUtc: 2, durationMinutes: 60, score: 99, reasonableBoth: true },
+        ],
+      }),
+    );
+    await expectNothingBack(ws);
+
+    // No statement ran, so nothing was stored: the device-computes-overlap path is gone and the
+    // server must not honour it even when an old build still speaks it.
+    expect(vi.mocked(query).mock.calls.length).toBe(queriesAfterHello);
+    // Not fanned out either — the partner sees nothing.
+    expect(ws.readyState).toBe(WebSocket.OPEN);
+  });
+
+  it('ignores a garbage frame that is not even JSON', async () => {
+    const ws = connect('good-u9');
+    await nextMessage(ws);
+
+    ws.send('}{not json');
+    await expectNothingBack(ws);
+
+    expect(ws.readyState).toBe(WebSocket.OPEN);
+    expect(isOnline('u9')).toBe(true);
+  });
+
+  it('responds to a ping with a pong', async () => {
+    // Protocol-level keepalive, answered by ws itself — the only thing a client may send.
+    const ws = connect('good-u10');
+    await nextMessage(ws);
+
+    const pong = new Promise((res) => ws.once('pong', res));
+    ws.ping();
+    await expect(pong).resolves.toBeDefined();
   });
 });

@@ -1,27 +1,43 @@
 import pg from 'pg';
-import { getConfig } from './config.js';
+import { config } from './config.js';
 
-const { Pool } = pg;
+// BIGINT columns are all UTC epoch millis, which fit in a JS double. Parse them as numbers so the
+// wire format is `number` end to end instead of pg's default string.
+pg.types.setTypeParser(pg.types.builtins.INT8, (v) => Number(v));
 
-let pool: pg.Pool | null = null;
+export const pool = new pg.Pool({ connectionString: config.databaseUrl, max: 10 });
 
-export function getPool(): pg.Pool {
-  if (pool) return pool;
-  const config = getConfig();
-  pool = new Pool({ connectionString: config.databaseUrl });
-  return pool;
+export type Querier = {
+  query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
+};
+
+export async function query<T = Record<string, unknown>>(
+  sql: string,
+  params: unknown[] = [],
+): Promise<T[]> {
+  const res = await pool.query(sql, params);
+  return res.rows as T[];
 }
 
-export async function query<T extends pg.QueryResultRow = any>(
-  text: string,
-  params?: readonly unknown[]
-): Promise<pg.QueryResult<T>> {
-  return getPool().query<T>(text, params as any);
-}
-
-export async function endPool(): Promise<void> {
-  if (pool) {
-    await pool.end();
-    pool = null;
+export async function withTx<T>(fn: (q: Querier) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const out = await fn({
+      query: async <R>(sql: string, params: unknown[] = []) =>
+        (await client.query(sql, params)).rows as R[],
+    });
+    await client.query('COMMIT');
+    return out;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
   }
+}
+
+// Boot gate. A container that cannot reach Postgres must crash, not report healthy and 500 later.
+export async function assertReachable(): Promise<void> {
+  await query('SELECT 1');
 }

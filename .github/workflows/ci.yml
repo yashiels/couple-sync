@@ -1,38 +1,85 @@
-name: "CI: PR Checks"
+name: "CI"
+
+# Both jobs gate PRs. The previous CI ran static analysis only and skipped the test suite; that is
+# how 3,000+ lines of tests ended up ungated. Tests run here or they run nowhere.
 
 on:
-  pull_request:
-    branches: [main]
   push:
     branches: [main]
-  workflow_dispatch:  # allow manual trigger
+  pull_request:
 
-# Cancel older in-progress runs of the same ref when a new one starts.
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: false
+permissions:
+  contents: read
 
-env:
-  # Future-proof: force JS actions to Node 24 (Node 20 forced switch on 2026-06-02)
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
-
-# CI runs static analysis only. Tests (flutter test, backend vitest) and the
-# build / Maestro UI-test pipeline were removed — they relied on self-hosted
-# runners (android-label) that aren't provisioned. Run tests locally:
-#   flutter test  |  cd backend && pnpm test
-# Re-add cloud-runner test jobs when ready (ubuntu-latest + subosito/flutter-action / pnpm).
 jobs:
-  analyze:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
-    name: Analyze
+  backend:
+    name: Backend (build + test)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # Throwaway CI database, reachable only from this job's containers — same trust auth as
+          # docker-compose.override.yml, so there is no credential here to leak or rotate.
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: couple_sync_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d couple_sync_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v6
-      - uses: subosito/flutter-action@v2
+
+      # Before setup-node: `cache: pnpm` needs the pnpm binary to resolve the store path.
+      # package_json_file is not optional here — the action reads the pnpm version from
+      # `packageManager`, and the *root* package.json (its default) is the npm project, which has no
+      # such field. Without this the action fails before pnpm is even installed.
+      - uses: pnpm/action-setup@v6
         with:
-          channel: stable
-      - name: Fix Flutter git ownership
-        run: git config --global --add safe.directory "$(dirname "$(dirname "$(which flutter)")")"
-      - run: flutter pub get
-      - run: flutter analyze --no-fatal-infos
+          package_json_file: backend/package.json
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      # build BEFORE test, always: src/__tests__/boot-esm.test.ts imports the built output to catch
+      # CJS/ESM interop breakage, and silently skips when dist/ is absent.
+      - run: pnpm build
+
+      # Without TEST_DATABASE_URL the 7 migration tests skip instead of running — they are the only
+      # ones that touch a real Postgres, so a typo'd column name is invisible without it.
+      - run: pnpm test
+        env:
+          TEST_DATABASE_URL: postgres://postgres@localhost:5432/couple_sync_test
+
+  app:
+    name: App (typecheck + lint + test + prebuild)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      # No backend dependencies are installed here. tsconfig.json pulls in backend/src/wire.ts, whose
+      # type-only dependency graph reaches nothing that needs them.
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npm test
+
+      # CI-only: app.config.ts points at the real, gitignored google-services.json on purpose, so a
+      # device build can never silently consume a fake config. prebuild is what catches a broken
+      # app.config.ts or config plugin — without it, both land with CI fully green.
+      - run: cp google-services.placeholder.json google-services.json
+      - run: npx expo prebuild --platform android --no-install

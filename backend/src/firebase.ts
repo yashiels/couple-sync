@@ -1,42 +1,44 @@
-import admin from 'firebase-admin';
-import { getConfig } from './config.js';
+import { cert, initializeApp } from 'firebase-admin/app';
+import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
+import { getMessaging, type BaseMessage } from 'firebase-admin/messaging';
+import { config } from './config.js';
 
-let initialized = false;
+// cert() throws on a structurally broken service account, and that throw is deliberately uncaught:
+// a container with bad credentials must not boot.
+const credential = cert(config.firebaseServiceAccount);
+const app = initializeApp({ credential, projectId: config.firebaseProjectId });
+
+/** firebase-admin's full claim set. Never narrow it — req.claims is typed DecodedIdToken and
+ *  routes read email/name/picture off it. */
+export function verifyIdToken(token: string): Promise<DecodedIdToken> {
+  return getAuth(app).verifyIdToken(token);
+}
 
 /**
- * Initialise Firebase Admin SDK for Auth token verification + FCM.
- * Reads the service account JSON from the FIREBASE_SERVICE_ACCOUNT_JSON env
- * var (a stringified JSON key from the Firebase console).
+ * Boot probe. Fatal, never a warning.
  *
- * Soft-fails on missing/invalid config so the skeleton can boot in dev
- * without a live Firebase project; routes that need admin will throw on use.
+ * Do NOT probe with verifyIdToken('not-a-token'): firebase-admin rejects a malformed JWT while
+ * *decoding* it, before the credential is ever used, so that probe passes with a completely bogus
+ * private key — the exact false confidence the previous build shipped. getAccessToken() mints a
+ * real OAuth2 access token from Google, so it fails on an unusable key.
  */
-export function initFirebaseAdmin(): void {
-  if (initialized) return;
-  const config = getConfig();
-  try {
-    const serviceAccount = JSON.parse(config.firebaseServiceAccountJson);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      projectId: config.firebaseProjectId,
-    });
-    initialized = true;
-  } catch (err) {
-    // Don't crash the skeleton in dev. Auth/FCM routes will throw later.
-    // eslint-disable-next-line no-console
-    console.warn(
-      '[firebase] Failed to init Firebase Admin from FIREBASE_SERVICE_ACCOUNT_JSON:',
-      err instanceof Error ? err.message : String(err)
+export async function assertCredentials(): Promise<void> {
+  // Checked first because it needs no network. Right key, wrong project is a silent
+  // misconfiguration in which every token verification fails on audience.
+  if (config.firebaseServiceAccount.projectId !== config.firebaseProjectId) {
+    throw new Error(
+      `[firebase] FIREBASE_PROJECT_ID (${config.firebaseProjectId}) does not match the service account projectId (${String(config.firebaseServiceAccount.projectId)})`,
     );
   }
+  await credential.getAccessToken();
 }
 
-export function getAuth(): admin.auth.Auth {
-  if (!initialized) initFirebaseAdmin();
-  return admin.auth();
-}
-
-export function getMessaging(): admin.messaging.Messaging {
-  if (!initialized) initFirebaseAdmin();
-  return admin.messaging();
+/** One message per token, so one dead token cannot fail the batch. errorCode is null on success. */
+export async function sendEach(
+  tokens: string[],
+  payload: BaseMessage,
+): Promise<{ token: string; errorCode: string | null }[]> {
+  if (tokens.length === 0) return [];
+  const res = await getMessaging(app).sendEach(tokens.map((token) => ({ ...payload, token })));
+  return res.responses.map((r, i) => ({ token: tokens[i]!, errorCode: r.error?.code ?? null }));
 }

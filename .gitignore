@@ -102,3 +102,30 @@ env/*.local.json
 # pipeline / baseline artifacts
 .baseline-*
 *.gate.log
+
+# Expo / React Native
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.metro-health-check*
+*.tsbuildinfo
+.DS_Store
+.kotlin/
+*.orig.*
+
+# Generated native projects (expo prebuild)
+/ios
+/android
+
+# Signing + Firebase credentials (never commit)
+*.jks
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
+# The real Firebase android config, dropped in from the console. app.config.ts points at this path;
+# CI copies the committed google-services.placeholder.json here before prebuild.
+google-services.json
+GoogleService-Info.plist
