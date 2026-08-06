@@ -1,8 +1,11 @@
 import {
+  connectAuthEmulator,
+  createUserWithEmailAndPassword,
   getAuth,
   GoogleAuthProvider,
   onAuthStateChanged,
   signInWithCredential,
+  signInWithEmailAndPassword,
   signOut as firebaseSignOut,
 } from '@react-native-firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
@@ -23,12 +26,37 @@ export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly
  * connected; there is no later escalation step and no connect screen. Throws on a missing web client
  * id so the failure is a startup error rather than a sign-in that never resolves.
  */
+/** True only in an E2E build (EXPO_PUBLIC_E2E=1). Everything Google is bypassed when set. */
+export function isE2E(): boolean {
+  return (Constants.expoConfig?.extra as { e2e?: boolean } | undefined)?.e2e === true;
+}
+
 export function configureGoogleSignIn(): void {
+  if (isE2E()) {
+    // No Google in E2E: point Firebase Auth at the emulator. 10.0.2.2 is the Android emulator's
+    // alias for the host machine, where the Firebase Auth emulator listens.
+    connectAuthEmulator(getAuth(), 'http://10.0.2.2:9099');
+    return;
+  }
   const extra = Constants.expoConfig?.extra as { googleWebClientId?: string } | undefined;
   if (!extra?.googleWebClientId) {
     throw new Error('GOOGLE_WEB_CLIENT_ID is not set — copy .env.example to .env (the WEB client id)');
   }
   GoogleSignin.configure({ webClientId: extra.googleWebClientId, scopes: [CALENDAR_SCOPE] });
+}
+
+/**
+ * E2E sign-in: create-or-sign-in a seeded test user against the Auth emulator, then fall through to
+ * the exact same downstream path (auth listener -> /auth/verify) a real Google sign-in uses. No
+ * calendar scope is granted, so sync() returns 'scope-missing' and E2E exercises manual blocks only.
+ */
+export async function signInForE2E(email: string, password = 'e2e-password'): Promise<void> {
+  const auth = getAuth();
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+  } catch {
+    await createUserWithEmailAndPassword(auth, email, password);
+  }
 }
 
 /** Resolves without signing in when the user cancels — cancellation is not an error. */

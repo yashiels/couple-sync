@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
-import { signInWithGoogle } from '../src/auth';
+import { isE2E, signInForE2E, signInWithGoogle } from '../src/auth';
 import { fontSize, radius, spacing, touchTarget, useColors } from '../src/theme';
 
 /**
@@ -20,8 +20,13 @@ export default function AuthScreen() {
     setError(null);
     try {
       // Resolves without signing in when the user cancels; the auth listener in _layout does the
-      // rest when it does succeed.
-      await signInWithGoogle();
+      // rest when it does succeed. In an E2E build there is no Google — a seeded emulator user
+      // signs in through the identical downstream path.
+      if (isE2E()) {
+        await signInForE2E('u1@e2e.test');
+      } else {
+        await signInWithGoogle();
+      }
     } catch (err) {
       // The native cause is kept verbatim underneath the sentence on purpose: the two failures that
       // actually happen here are a missing SHA-1 fingerprint and a Play-services-less device, and
@@ -51,6 +56,7 @@ export default function AuthScreen() {
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ disabled: busy }}
+        testID="signin-button"
         disabled={busy}
         onPress={() => void onPress()}
         style={{
@@ -68,7 +74,7 @@ export default function AuthScreen() {
           <ActivityIndicator color={colors.accentText} />
         ) : (
           <Text style={{ color: colors.accentText, fontSize: fontSize.body }}>
-            Continue with Google
+            {isE2E() ? 'E2E sign in' : 'Continue with Google'}
           </Text>
         )}
       </Pressable>

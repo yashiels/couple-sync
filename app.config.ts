@@ -41,6 +41,9 @@ const config: ExpoConfig = {
   extra: {
     apiBaseUrl: process.env.API_BASE_URL,
     googleWebClientId: process.env.GOOGLE_WEB_CLIENT_ID,
+    // E2E builds only: swaps Google Sign-In for the Firebase Auth emulator (no real Google, which
+    // cannot be automated in an emulator). Never set in a real build.
+    e2e: process.env.EXPO_PUBLIC_E2E === '1',
   },
 };
 
