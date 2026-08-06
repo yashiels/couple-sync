@@ -1,183 +1,325 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
+import type { DecodedIdToken } from 'firebase-admin/auth';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Querier } from '../db.js';
+import { computeInputHash } from '../overlap/index.js';
+import type { OverlapWindow } from '../overlap/types.js';
+import { toEngineBlock, type BlockRow, type CoupleRow, type UserRow } from '../wire.js';
 
-/**
- * V8 — GET /overlaps/latest route tests.
- *
- * Covers:
- *  - 401 when no bearer token
- *  - 400 when coupleId query param missing
- *  - 403 when caller is not a member of the couple
- *  - 404 when no stored overlap row exists (Flutter maps → null)
- *  - 200 with the stored row, camelCase wire shape, on the happy path
- *
- * Mocks mirror blocks.test.ts: firebase verifyIdToken, db query, and the
- * assertMember couple lookup (which reads from couples via db.query).
- */
+// The REAL overlapService and the REAL engine: this route's whole job is the dedup/recompute
+// decision, and a mocked refreshOverlap would assert nothing about it.
+vi.mock('../firebase.js', () => ({ verifyIdToken: vi.fn() }));
+vi.mock('../db.js', () => ({ query: vi.fn(), withTx: vi.fn() }));
+vi.mock('../sockets.js', () => ({ sendTo: vi.fn(() => false) }));
+vi.mock('../push.js', () => ({ pushOverlapChanged: vi.fn(async () => {}) }));
 
-const verifyIdToken = vi.fn();
+const { verifyIdToken } = await import('../firebase.js');
+const { query, withTx } = await import('../db.js');
+const { pushOverlapChanged } = await import('../push.js');
+const { registerErrorHandler } = await import('../http.js');
+const overlapsRoutes = (await import('../routes/overlaps.js')).default;
 
-vi.mock('../firebase.js', () => ({
-  getAuth: () => ({ verifyIdToken }),
-  initFirebaseAdmin: vi.fn(),
-  getMessaging: vi.fn(),
-}));
+const JHB = 'Africa/Johannesburg';
+const NY = 'America/New_York';
+const NOW = Date.parse('2026-06-03T10:00:00Z');
+const HOUR = 3_600_000;
+const DAY = 86_400_000;
 
-vi.mock('../config.js', () => ({
-  getConfig: () => ({
-    databaseUrl: 'postgres://test',
-    firebaseProjectId: 'test',
-    firebaseServiceAccountJson: '{}',
-    domain: 'api.test',
-    port: 3000,
-    adminToken: '',
-  }),
-  loadConfig: () => ({
-    databaseUrl: 'postgres://test',
-    firebaseProjectId: 'test',
-    firebaseServiceAccountJson: '{}',
-    domain: 'api.test',
-    port: 3000,
-    adminToken: '',
-  }),
-}));
+interface Stored {
+  couple_id: string;
+  windows: OverlapWindow[];
+  computed_at: number;
+  input_hash: string;
+}
 
-const mockQuery = vi.fn();
+const users = new Map<string, UserRow>();
+const couples = new Map<string, CoupleRow>();
+let timeblocks: BlockRow[] = [];
+const overlaps = new Map<string, Stored>();
+let events: string[] = [];
 
-vi.mock('../db.js', () => ({
-  query: (...args: unknown[]) => mockQuery(...args),
-  getPool: () => ({ query: mockQuery, connect: () => ({ query: mockQuery, release: vi.fn() }) }),
-  endPool: vi.fn(),
-}));
+function seedUser(uid: string, over: Partial<UserRow> = {}): UserRow {
+  const row: UserRow = {
+    uid,
+    email: `${uid}@example.com`,
+    display_name: null,
+    photo_url: null,
+    timezone: JHB,
+    couple_id: 'c1',
+    show_late_night_windows: false,
+    notifications_enabled: true,
+    fcm_tokens: [`tok-${uid}`],
+    created_at: 1,
+    ...over,
+  };
+  users.set(uid, row);
+  return row;
+}
 
-vi.mock('../routes/sync.js', () => ({
-  sendToCouple: vi.fn(),
-  sendToUid: vi.fn(),
-  sockets: new Map(),
-  coupleMembers: new Map(),
-  authorizeOverlapMessage: vi.fn(),
-}));
-
-import { overlapRoutes } from '../routes/overlaps.js';
-
-const UID = 'uid-alex';
-const PARTNER = 'uid-sam';
-const COUPLE_ID = 'cpl-1';
-
-const decodedToken = { uid: UID, email: 'alex@example.com', email_verified: true };
-
-function makeCoupleRow(overrides: Record<string, unknown> = {}) {
-  return {
-    id: COUPLE_ID,
-    user_a_uid: UID,
-    user_b_uid: PARTNER,
+function seedPair(): CoupleRow {
+  const couple: CoupleRow = {
+    id: 'c1',
+    user_a_uid: 'uid-a',
+    user_b_uid: 'uid-b',
     status: 'active',
-    paired_at: 1000,
-    created_at: 900,
-    unpair_history: [],
-    ...overrides,
+    paired_at: 1,
+    created_at: 1,
   };
+  couples.set(couple.id, couple);
+  seedUser('uid-a');
+  seedUser('uid-b', { timezone: NY });
+  return couple;
 }
 
-function makeOverlapRow(overrides: Record<string, unknown> = {}) {
-  return {
-    couple_id: COUPLE_ID,
-    windows: [{ startUtc: 1000, endUtc: 960000, durationMinutes: 15, score: 0.9, reasonableBoth: true }],
-    computed_at: 5000,
-    input_hash: 'hash-abc',
-    computed_by: UID,
-    ...overrides,
+function seedBlock(id: string, over: Partial<BlockRow> = {}): BlockRow {
+  const row: BlockRow = {
+    id,
+    couple_id: 'c1',
+    user_id: 'uid-a',
+    title: 'gym',
+    type: 'busy',
+    category: null,
+    start_utc: NOW + DAY,
+    end_utc: NOW + DAY + HOUR,
+    timezone: JHB,
+    recurrence_rule: null,
+    source: 'manual',
+    visibility: 'bothPartners',
+    created_at: 1,
+    ...over,
   };
+  timeblocks.push(row);
+  return row;
 }
 
-async function buildApp(): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false });
-  await app.register(overlapRoutes);
-  return app;
+/** The hash overlapService would compute for the seeded state at `now`. */
+function hashFor(now = NOW): string {
+  const couple = couples.get('c1')!;
+  const a = users.get(couple.user_a_uid)!;
+  const b = users.get(couple.user_b_uid)!;
+  const blocks = timeblocks.filter((x) => x.couple_id === couple.id);
+  return computeInputHash({
+    blocksA: blocks.filter((x) => x.user_id === a.uid).map(toEngineBlock),
+    blocksB: blocks.filter((x) => x.user_id === b.uid).map(toEngineBlock),
+    timezoneA: a.timezone!,
+    timezoneB: b.timezone!,
+    prefsA: { showLateNightWindows: a.show_late_night_windows },
+    prefsB: { showLateNightWindows: b.show_late_night_windows },
+    now,
+  });
 }
 
-function authHeader(): Record<string, string> {
-  return { authorization: 'Bearer valid-id-token' };
+const sentinel: OverlapWindow = {
+  startUtc: NOW + 2 * DAY,
+  endUtc: NOW + 2 * DAY + 3 * HOUR,
+  durationMinutes: 180,
+  score: 42,
+  reasonableBoth: true,
+};
+
+function store(over: Partial<Stored> = {}): Stored {
+  const row: Stored = {
+    couple_id: 'c1',
+    windows: [sentinel],
+    computed_at: NOW - 5 * HOUR,
+    input_hash: hashFor(),
+    ...over,
+  };
+  overlaps.set(row.couple_id, row);
+  return row;
 }
+
+async function runInTx(sql: string, params: unknown[]): Promise<Record<string, unknown>[]> {
+  events.push(sql.replace(/\s+/g, ' ').trim());
+  if (sql.includes('pg_advisory_xact_lock')) return [];
+  if (sql.includes('WITH cp AS')) {
+    const couple = couples.get(String(params[0])) ?? null;
+    return [
+      {
+        couple,
+        users: couple
+          ? [users.get(couple.user_a_uid), users.get(couple.user_b_uid)].filter(Boolean)
+          : null,
+        blocks: timeblocks.filter((b) => b.couple_id === params[0]),
+        stored: overlaps.get(String(params[0])) ?? null,
+      },
+    ];
+  }
+  if (sql.includes('INSERT INTO overlaps_latest')) {
+    const [coupleId, windows, computedAt, hash] = params as [string, string, number, string];
+    overlaps.set(coupleId, {
+      couple_id: coupleId,
+      windows: JSON.parse(windows) as OverlapWindow[],
+      computed_at: computedAt,
+      input_hash: hash,
+    });
+    return [];
+  }
+  throw new Error(`unrouted tx statement: ${sql}`);
+}
+
+async function fakeTx<T>(fn: (q: Querier) => Promise<T>): Promise<T> {
+  return fn({ query: async <R>(sql: string, params: unknown[] = []) => (await runInTx(sql, params)) as R[] });
+}
+
+async function poolQuery(sql: string, params: unknown[] = []): Promise<Record<string, unknown>[]> {
+  if (/SELECT \* FROM couples WHERE id = \$1/.test(sql)) {
+    const row = couples.get(String(params[0]));
+    return row ? [{ ...row }] : [];
+  }
+  throw new Error(`unrouted pool statement: ${sql}`);
+}
+
+function app(): FastifyInstance {
+  const a = Fastify();
+  registerErrorHandler(a);
+  void a.register(overlapsRoutes);
+  return a;
+}
+
+const as = (uid: string) => ({ authorization: `Bearer ${uid}` });
+
+const latest = (uid = 'uid-a', coupleId = 'c1') =>
+  app().inject({
+    method: 'GET',
+    url: `/overlaps/latest?coupleId=${coupleId}`,
+    headers: as(uid),
+  });
+
+interface Body {
+  couple_id: string;
+  windows: OverlapWindow[];
+  computed_at: number;
+}
+
+const wrote = () => events.filter((e) => e.includes('INSERT INTO overlaps_latest')).length;
 
 beforeEach(() => {
-  verifyIdToken.mockReset();
-  mockQuery.mockReset();
-  verifyIdToken.mockResolvedValue(decodedToken);
+  vi.clearAllMocks();
+  users.clear();
+  couples.clear();
+  overlaps.clear();
+  timeblocks = [];
+  events = [];
+  vi.spyOn(Date, 'now').mockReturnValue(NOW);
+  vi.mocked(verifyIdToken).mockImplementation(
+    async (token: string) => ({ uid: token, sub: token }) as DecodedIdToken,
+  );
+  vi.mocked(query).mockImplementation(poolQuery as typeof query);
+  vi.mocked(withTx).mockImplementation(fakeTx as typeof withTx);
 });
 
 describe('GET /overlaps/latest', () => {
-  it('returns 401 when no bearer token', async () => {
-    verifyIdToken.mockRejectedValue(new Error('bad token'));
-    const app = await buildApp();
-    const res = await app.inject({ method: 'GET', url: `/overlaps/latest?coupleId=${COUPLE_ID}` });
-    expect(res.statusCode).toBe(401);
+  it('403s for a non-member', async () => {
+    seedPair();
+    store();
+
+    const stranger = await latest('uid-x');
+    const ghost = await latest('uid-a', 'c-nope');
+
+    expect(stranger.statusCode).toBe(403);
+    expect(ghost.statusCode).toBe(403);
+    expect(ghost.body).toBe(stranger.body);
+    expect(wrote()).toBe(0);
   });
 
-  it('returns 400 when coupleId query param is missing', async () => {
-    const app = await buildApp();
-    const res = await app.inject({ method: 'GET', url: '/overlaps/latest', headers: authHeader() });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error).toBe('bad_request');
-  });
+  it('returns the stored windows when the recomputed hash matches', async () => {
+    seedPair();
+    seedBlock('b1');
+    const stored = store();
 
-  it('returns 403 when caller is not a member of the couple', async () => {
-    // assertMember → couple exists but caller is not a member.
-    mockQuery.mockResolvedValueOnce({
-      rows: [makeCoupleRow({ user_a_uid: 'someone-else', user_b_uid: 'partner-else' })],
-    });
-    const app = await buildApp();
-    const res = await app.inject({
-      method: 'GET',
-      url: `/overlaps/latest?coupleId=${COUPLE_ID}`,
-      headers: authHeader(),
-    });
-    expect(res.statusCode).toBe(403);
-    expect(res.json().error).toBe('forbidden');
-  });
+    const res = await latest('uid-a');
 
-  it('returns 403 when the couple does not exist (no existence leak)', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [] });
-    const app = await buildApp();
-    const res = await app.inject({
-      method: 'GET',
-      url: `/overlaps/latest?coupleId=${COUPLE_ID}`,
-      headers: authHeader(),
-    });
-    expect(res.statusCode).toBe(403);
-  });
-
-  it('returns 404 when no stored overlap row exists', async () => {
-    // assertMember ok, then overlaps_latest SELECT returns 0 rows.
-    mockQuery
-      .mockResolvedValueOnce({ rows: [makeCoupleRow()] }) // couples lookup (assertMember)
-      .mockResolvedValueOnce({ rows: [] }); // overlaps_latest SELECT
-    const app = await buildApp();
-    const res = await app.inject({
-      method: 'GET',
-      url: `/overlaps/latest?coupleId=${COUPLE_ID}`,
-      headers: authHeader(),
-    });
-    expect(res.statusCode).toBe(404);
-    expect(res.json().error).toBe('not_found');
-  });
-
-  it('returns 200 with the stored row in camelCase wire shape', async () => {
-    const row = makeOverlapRow();
-    mockQuery
-      .mockResolvedValueOnce({ rows: [makeCoupleRow()] }) // assertMember
-      .mockResolvedValueOnce({ rows: [row] }); // overlaps_latest SELECT
-    const app = await buildApp();
-    const res = await app.inject({
-      method: 'GET',
-      url: `/overlaps/latest?coupleId=${COUPLE_ID}`,
-      headers: authHeader(),
-    });
     expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.windows).toEqual(row.windows);
-    expect(body.computedAt).toBe(5000);
-    expect(body.inputHash).toBe('hash-abc');
-    expect(body.computedBy).toBe(UID);
+    expect(res.json<Body>()).toEqual({
+      couple_id: 'c1',
+      windows: [sentinel],
+      computed_at: stored.computed_at,
+    });
+  });
+
+  it('does not write to the database when the hash matches', async () => {
+    seedPair();
+    seedBlock('b1');
+    store();
+
+    await latest('uid-a');
+
+    expect(wrote()).toBe(0);
+    expect(overlaps.get('c1')?.windows).toEqual([sentinel]);
+    expect(pushOverlapChanged).not.toHaveBeenCalled();
+  });
+
+  it('recomputes and returns fresh windows when the stored hash is stale', async () => {
+    seedPair();
+    seedBlock('b1');
+    store({ input_hash: 'stale-hash' });
+
+    const res = await latest('uid-a');
+
+    const body = res.json<Body>();
+    expect(wrote()).toBe(1);
+    expect(body.computed_at).toBe(NOW);
+    expect(body.windows).not.toEqual([sentinel]);
+    expect(body.windows.length).toBeGreaterThan(0);
+    expect(overlaps.get('c1')?.input_hash).toBe(hashFor());
+  });
+
+  it('recomputes when the hour bucket rolled over even though no block changed', async () => {
+    seedPair();
+    seedBlock('b1');
+    // Same blocks, same prefs — only the hour bucket differs, which is exactly the staleness the
+    // read path exists to fix (§3: no cron).
+    const stored = store({ input_hash: hashFor(NOW - HOUR), computed_at: NOW - HOUR });
+    expect(stored.input_hash).not.toBe(hashFor(NOW));
+
+    const res = await latest('uid-a');
+
+    expect(wrote()).toBe(1);
+    expect(res.json<Body>().computed_at).toBe(NOW);
+    expect(overlaps.get('c1')?.input_hash).toBe(hashFor(NOW));
+  });
+
+  it('computes and UPSERTS for a couple that has never computed', async () => {
+    seedPair();
+
+    const res = await latest('uid-a');
+
+    // Two block-less partners legitimately have windows; an empty response would be a lie.
+    const body = res.json<Body>();
+    expect(body.windows.length).toBeGreaterThan(0);
+    expect(wrote()).toBe(1);
+    expect(overlaps.get('c1')).toMatchObject({ computed_at: NOW, input_hash: hashFor() });
+  });
+
+  it('passes the requesting uid as triggeredBy, so a read never pushes to the reader', async () => {
+    seedPair();
+    seedBlock('b1');
+    store({ input_hash: 'stale-hash' });
+
+    // Nobody has a live socket (sendTo is mocked false), so only triggeredBy suppresses a push.
+    await latest('uid-a');
+
+    expect(pushOverlapChanged).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(pushOverlapChanged).mock.calls[0]?.[0]).toBe('uid-b');
+  });
+
+  it('accepts a window whose durationMinutes is 1560', async () => {
+    seedPair();
+    seedBlock('b1');
+    // 26 h — reachable on a fall-back day, and the engine's stated ceiling (§2).
+    const long: OverlapWindow = {
+      startUtc: NOW + DAY,
+      endUtc: NOW + DAY + 1560 * 60_000,
+      durationMinutes: 1560,
+      score: 7,
+      reasonableBoth: false,
+    };
+    store({ windows: [long] });
+
+    const res = await latest('uid-a');
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<Body>().windows).toEqual([long]);
   });
 });

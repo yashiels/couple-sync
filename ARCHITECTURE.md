@@ -1,5 +1,9 @@
 # ARCHITECTURE.md
 
+> **Superseded by `docs/REBUILD-SPEC.md`.** Retained for product history only — the stack, data model
+> and architecture described below (Flutter, Firestore, device-side overlap) are no longer what is
+> built. In particular, **the backend computes overlap now, not the device.**
+
 ## System Overview
 
 Couple Sync v1 is a mobile app for long-distance couples to find mutual free time across timezones. The architecture prioritizes real-time sync, privacy, and low operational cost. The **device computes overlap**; the server only validates, stores, and fans out.

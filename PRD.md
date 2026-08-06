@@ -1,5 +1,9 @@
 # Couple Schedule - Product Requirements Document
 
+> **Superseded by `docs/REBUILD-SPEC.md`.** Retained for product history only — the stack, data model
+> and architecture described below (Flutter, Firestore, device-side overlap) are no longer what is
+> built. Do not use this file as a source of truth.
+
 ## Overview
 
 **Couple Schedule** is a mobile app (iOS + Android) that helps long-distance couples find mutual free time by intelligently combining their calendars, custom time blocks, and timezone data to surface available windows for quality time together.

@@ -1,31 +1,23 @@
-# Production / managed-platform compose (Coolify, Traefik, etc.).
-#
-# - No Caddy: the platform reverse proxy (Traefik on Coolify) terminates TLS.
-# - No host port binding: the api container only `expose`s 3000; the platform
-#   proxy routes to it. The traefik label tells the proxy which port to hit.
-# - No bundled Postgres: provision Postgres as a separate managed resource on
-#   the platform and inject DATABASE_URL here. (For a self-contained local
-#   stack with a bundled postgres + localhost port, see docker-compose.override.yml.)
-# - All runtime config is injected via environment — no committed .env.
-#
-# Coolify: set DATABASE_URL, FIREBASE_PROJECT_ID, FIREBASE_SERVICE_ACCOUNT_JSON,
-# and optionally ADMIN_TOKEN/CORS_ORIGINS in the service's Environment panel.
+# Production shape. Coolify builds this file; Traefik terminates TLS in front of it, so the
+# container is never published on a host port. Every value comes from the deploy environment —
+# no secret is ever written here.
 services:
   api:
     build: ./backend
-    environment:
-      # `${VAR:-}` (not `${VAR:?}`) so the local-dev override can supply a
-      # literal DATABASE_URL without a parse-time failure. If the platform
-      # doesn't inject a required var, src/config.ts fails fast at app start.
-      DATABASE_URL: ${DATABASE_URL:-}
-      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
-      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
-      PORT: 3000
-      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
-      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+    restart: unless-stopped
     expose:
       - "3000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON}
+      # No default: config.ts refuses an unset value and refuses '*'.
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
     labels:
-      # Tell the platform proxy (Traefik) which container port to route to.
-      - traefik.http.services.api.loadbalancer.server.port=3000
-    restart: unless-stopped
+      - traefik.enable=true
+      - traefik.http.routers.couple-sync-api.rule=Host(`${API_DOMAIN}`)
+      - traefik.http.routers.couple-sync-api.entrypoints=https
+      - traefik.http.routers.couple-sync-api.tls=true
+      - traefik.http.routers.couple-sync-api.tls.certresolver=letsencrypt
+      - traefik.http.services.couple-sync-api.loadbalancer.server.port=3000
