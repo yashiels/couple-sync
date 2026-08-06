@@ -13,7 +13,7 @@ const config: ExpoConfig = {
   // already follows the system setting, which is all useColors() in src/theme.ts reads.
   icon: './assets/icon.png',
   android: {
-    package: 'money.stitch.couplesync',
+    package: 'dev.yashiel.couplesync',
     // The *real* file: a developer drops it in from the Firebase console and it stays gitignored.
     // CI copies google-services.placeholder.json to this path immediately before prebuild. Pointing
     // this at the placeholder permanently would keep CI green while a device build consumed a fake
@@ -27,7 +27,7 @@ const config: ExpoConfig = {
   },
   // iOS is not built, tested, or shipped in v1 — Android only. The bundle id is reserved here so the
   // app identity does not change if iOS is ever picked up.
-  ios: { bundleIdentifier: 'money.stitch.couplesync' },
+  ios: { bundleIdentifier: 'dev.yashiel.couplesync' },
   plugins: [
     'expo-router',
     '@react-native-firebase/app',
