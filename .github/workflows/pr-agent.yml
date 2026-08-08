@@ -8,6 +8,13 @@ permissions:
   issues: write
   pull-requests: write
   contents: read
+
+# Scope per-PR so a superseded review (new push / new comment on the same PR) cancels, while
+# reviews on different PRs never contend. Keyed off pull_request or issue_comment payloads.
+concurrency:
+  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
 jobs:
   review:
     uses: skynergroup/.github/.github/workflows/pr-agent.yml@main

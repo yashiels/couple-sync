@@ -1,4 +1,4 @@
-name: "CI"
+name: "CI: Backend & App"
 
 # Both jobs gate PRs. The previous CI ran static analysis only and skipped the test suite; that is
 # how 3,000+ lines of tests ended up ungated. Tests run here or they run nowhere.
@@ -11,10 +11,15 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     name: Backend (build + test)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16
@@ -40,7 +45,7 @@ jobs:
       # package_json_file is not optional here — the action reads the pnpm version from
       # `packageManager`, and the *root* package.json (its default) is the npm project, which has no
       # such field. Without this the action fails before pnpm is even installed.
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           package_json_file: backend/package.json
       - uses: actions/setup-node@v6
@@ -64,6 +69,7 @@ jobs:
   app:
     name: App (typecheck + lint + test + prebuild)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6

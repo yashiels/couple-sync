@@ -1,4 +1,4 @@
-name: "Admin: Rebase PRs"
+name: "CI: Rebase PRs"
 
 # Automatically rebases open PRs when main advances, and rebases a single PR
 # on demand when someone comments "/rebase" on it.
@@ -17,12 +17,19 @@ permissions:
   contents: read
   pull-requests: write
 
+# Rebases are idempotent (force-with-lease), so a superseded run may cancel. Key by event +
+# PR number so push-triggered sweeps and per-PR /rebase comments never cancel each other.
+concurrency:
+  group: rebase-prs-${{ github.event_name }}-${{ github.event.issue.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ── Triggered by push to main ─────────────────────────────────────────────
   rebase-all:
     name: Rebase out-of-date PRs
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
         with:
@@ -72,6 +79,7 @@ jobs:
       github.event.issue.pull_request != null &&
       contains(github.event.comment.body, '/rebase')
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
         with:
