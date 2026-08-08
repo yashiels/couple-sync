@@ -1,9 +1,9 @@
 # 1Password-injectable template for the Fastify backend env (backend/.env), for LOCAL dev.
 # Resolve with:  op inject -i backend/.env.tpl -o backend/.env
 #
-# Secrets are 1Password references, useless without the Nexion vault. They point at the canonical
-# item "couple-sync (Atlas deploy)" (referenced by UUID because its title has spaces) — the single
-# source of truth for backend secrets, also used by the Atlas deploy. Nothing here is a secret value.
+# Secrets are 1Password references, useless without the Nexion vault. They point at the single
+# "couple-sync" item (referenced by UUID) — the one source of truth for all couple-sync secrets,
+# also used by the Atlas deploy. Nothing here is a secret value.
 #
 # In production (Atlas) these come from ~/apps/couple-sync/.env, not this file.
 

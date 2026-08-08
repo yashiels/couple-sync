@@ -4,7 +4,7 @@ name: Android Release
 # Trigger: push a version tag (v1.0.0, ...) or run manually.
 #
 # Required repo secrets:
-#   ANDROID_KEYSTORE_BASE64   base64 of the release keystore (in 1Password: Nexion → "couple-sync Android release keystore")
+#   ANDROID_KEYSTORE_BASE64   base64 of the release keystore (in 1Password: Nexion → "couple-sync", field keystore_base64)
 #   ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD
 #   GOOGLE_SERVICES_JSON      base64 of the REAL google-services.json (download after enabling Google sign-in). If unset, a
 #                             placeholder is used and Google Sign-In will NOT work — the build still succeeds so CI stays green.
