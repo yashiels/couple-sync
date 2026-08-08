@@ -10,7 +10,7 @@ name: Android Release
 #                             placeholder is used and Google Sign-In will NOT work — the build still succeeds so CI stays green.
 #   GOOGLE_WEB_CLIENT_ID      Web OAuth client id (from the Firebase Google provider). Embedded into the app at build time.
 # Non-secret:
-#   API_BASE_URL defaults to https://couple-sync.yashiel.dev
+#   API_BASE_URL defaults to https://api.couple-sync.yashiel.dev
 
 on:
   push:
@@ -28,7 +28,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      API_BASE_URL: https://couple-sync.yashiel.dev
+      API_BASE_URL: https://api.couple-sync.yashiel.dev
       GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v4

@@ -10,7 +10,7 @@ device, so there is no web app, no root `Dockerfile`, and nothing that builds fr
 - Build pack: **Docker Compose**
 - Compose file: `/docker-compose.yml` — it builds `./backend/Dockerfile` and carries the Traefik
   labels, so the container is never published on a host port and Traefik terminates TLS in front.
-- Domain: `https://api-couple-sync.bumblebeefoundation.co.za`
+- Domain: `https://api.couple-sync.yashiel.dev`
 - Repository `yashiels/couple-sync`, branch `main`, auto deploy enabled.
 - Watch paths:
 
@@ -50,7 +50,7 @@ separate migration step.
 ## Verify a deploy
 
 ```bash
-curl https://api-couple-sync.bumblebeefoundation.co.za/health
+curl https://api.couple-sync.yashiel.dev/health
 ```
 
 If the container is restarting, read its logs first: a fail-fast boot names the exact variable or the
