@@ -90,7 +90,7 @@ prebuild) and runs exactly the commands above. A locally-skipped test is a red p
 | `backend/src/overlap/` | pure overlap engine (`types.ts` has zero imports; `index.ts` reaches `rrule`) |
 | `backend/src/routes/` | Fastify routes; `wire.ts` = shared wire types; `firebase.ts` = Admin SDK boot |
 | `backend/src/migrations/` | idempotent DDL, re-run on every boot (no version table) |
-| `docs/deployment/coolify.md` | the live deployment doc (backend only) |
+| `docs/deployment/deploy.md` | the live deployment doc (backend only) |
 | `e2e/` | maestro flows + `seed-partner.mjs` |
 
 ## Gotchas
@@ -116,7 +116,7 @@ prebuild) and runs exactly the commands above. A locally-skipped test is a red p
   Both Firebase API keys are restricted to package `dev.yashiel.couplesync` + release/debug SHA-1.
 - **Never commit** the real `google-services.json` (gitignored; CI copies the placeholder), the release
   keystore, a service-account key, or any `.env`. The service-account JSON is the only true secret.
-- Canonical API host: **`https://api.couple-sync.yashiel.dev`** (WS derived: `wss://…/sync`).
+- Canonical API host: **`https://couple-sync.yashiel.dev`** (WS derived: `wss://…/sync`).
 
 ## Do not
 
@@ -147,7 +147,8 @@ commit-msg hook (Yash's Conventional Commit policy) **requires** the `#<issue>` 
 ## Related Repositories
 
 Self-contained monorepo — the app and its backend both live here; there are no sibling **code** repos
-to read. Deploy target is Coolify on the `launchpad` host (see `docs/deployment/coolify.md`); shared
+to read. Deploy target is a self-hosted Docker host via a CI-published GHCR image + Cloudflare Tunnel
+(see `docs/deployment/deploy.md`); shared
 agent tooling lives in `yashiels/agent-scripts` (skills/scripts, not a runtime dependency).
 
 <!-- Human-only notes (stripped before the model sees this file):

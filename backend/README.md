@@ -47,9 +47,9 @@ pnpm build && DATABASE_URL=postgres://… node dist/migrate.js
 
 ## Deploy
 
-Push to `main`. Coolify builds `backend/Dockerfile` via `docker-compose.yml` and Traefik terminates
-TLS in front of it, so the container is never published on a host port. Env vars come from the
-Coolify app's environment. See `docs/deployment/coolify.md`.
+Push to `main`. CI builds `backend/Dockerfile` and publishes it to GHCR; a self-hosted Docker host
+pulls the image and runs it behind a Cloudflare Tunnel (TLS at the edge, no public host port). Env
+vars come from the deploy host's environment. See `docs/deployment/deploy.md`.
 
 ## Tests
 

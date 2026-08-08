@@ -55,7 +55,7 @@ fails loudly rather than pointing at localhost or hanging a sign-in.
 | `API_BASE_URL` | No trailing slash. An Android emulator reaches your host at `10.0.2.2`, never `localhost`. |
 | `GOOGLE_WEB_CLIENT_ID` | The **Web** OAuth client id, not the Android one. |
 
-**Backend** — from the shell or the Coolify app environment.
+**Backend** — from the shell or the deploy host's environment.
 
 | Variable | Required | Notes |
 |---|---|---|
@@ -91,5 +91,5 @@ cd backend && pnpm build && pnpm test
 ```
 
 CI (`.github/workflows/ci.yml`) runs both of those on every PR, plus an Android prebuild to catch
-config-plugin breakage. Deployment is a git push: Coolify builds `backend/Dockerfile`
-(`docs/deployment/coolify.md`).
+config-plugin breakage. Deployment: CI publishes a GHCR image that a self-hosted Docker host pulls
+(`docs/deployment/deploy.md`).
