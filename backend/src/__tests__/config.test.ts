@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // config.ts validates at import time, so every case has to load it fresh with a stubbed env.
 const SERVICE_ACCOUNT = JSON.stringify({
-  project_id: 'nexion-ai-prod',
-  client_email: 'sa@nexion-ai-prod.iam.gserviceaccount.com',
+  project_id: 'test-project',
+  client_email: 'sa@test-project.iam.gserviceaccount.com',
   private_key: 'fake-key-material-line-1\\nline-2\\n',
 });
 
@@ -11,7 +11,7 @@ const BASE: Record<string, string | undefined> = {
   PORT: undefined,
   ADMIN_TOKEN: undefined,
   DATABASE_URL: 'postgres://postgres@localhost:5432/couple_sync',
-  FIREBASE_PROJECT_ID: 'nexion-ai-prod',
+  FIREBASE_PROJECT_ID: 'test-project',
   FIREBASE_SERVICE_ACCOUNT_JSON: SERVICE_ACCOUNT,
   CORS_ORIGINS: 'https://couple-sync.example.com',
 };
@@ -57,8 +57,8 @@ describe('config', () => {
     // FIREBASE_PROJECT_ID, so a snake_case passthrough would compare undefined to a string.
     const config = await load();
     expect(config.firebaseServiceAccount).toEqual({
-      projectId: 'nexion-ai-prod',
-      clientEmail: 'sa@nexion-ai-prod.iam.gserviceaccount.com',
+      projectId: 'test-project',
+      clientEmail: 'sa@test-project.iam.gserviceaccount.com',
       // escaped newlines are unescaped — env panels that re-escape the key are common
       privateKey: 'fake-key-material-line-1\nline-2\n',
     });

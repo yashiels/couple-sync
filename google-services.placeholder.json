@@ -1,5 +1,5 @@
 {
-  "_comment": "CI PLACEHOLDER ONLY - NOT REAL CREDENTIALS. The @react-native-firebase/app config plugin copies google-services.json into the generated Android project without ever parsing it, so this stub is enough to make `expo prebuild` run in CI. The workflow does `cp google-services.placeholder.json google-services.json` right before prebuild. A real build needs the real file from the Firebase console (project nexion-ai-prod), which is gitignored.",
+  "_comment": "CI PLACEHOLDER ONLY - NOT REAL CREDENTIALS. The @react-native-firebase/app config plugin copies google-services.json into the generated Android project without ever parsing it, so this stub is enough to make `expo prebuild` run in CI. The workflow does `cp google-services.placeholder.json google-services.json` right before prebuild. A real build needs the real file from your Firebase console, which is gitignored.",
   "project_info": {
     "project_number": "000000000000",
     "project_id": "placeholder-project",

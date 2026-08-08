@@ -8,22 +8,22 @@ This document tracks setup steps that require manual console access.
 ## STORY-001: Firebase Cost Alerts
 
 ### Blaze Plan Verification
-The project `nexion-ai-prod` must be on the Blaze plan for Cloud Functions.
+The Firebase project must be on the Blaze plan for Cloud Functions.
 
 **Verification Steps:**
-1. Go to [Firebase Console](https://console.firebase.google.com/project/nexion-ai-prod/usage/details)
+1. Go to the [Firebase Console](https://console.firebase.google.com/) → your project → Usage and Billing
 2. Navigate to Usage and Billing
 3. Confirm Blaze plan is active
 
 ### Cost Alert Configuration ($1/month threshold)
 
 **Steps:**
-1. Go to [GCP Billing Budgets](https://console.cloud.google.com/billing/0157F6-3F3CDD-C7B9A2/budgets?project=nexion-ai-prod)
+1. Go to [GCP Billing Budgets](https://console.cloud.google.com/billing) for your billing account/project
 2. Click "Create Budget"
 3. Configure:
    - Name: `couple-sync-monthly-limit`
    - Amount: $1.00
-   - Scope: Project `nexion-ai-prod`
+   - Scope: your Firebase project
    - Alerts: 50%, 90%, 100% thresholds
    - Email notifications: Enable for project owners
 4. Save
@@ -62,7 +62,7 @@ Apple Sign-In requires an Apple Developer account and proper capability configur
 The first iOS build should be verified manually:
 
 ```bash
-cd /Volumes/pulsar/apex-local/Developer/github/skyner-group/couple-sync
+cd <repo-root>
 ~/flutter/bin/flutter build ios --no-codesign
 ```
 
@@ -73,7 +73,7 @@ cd /Volumes/pulsar/apex-local/Developer/github/skyner-group/couple-sync
 Android debug build should be verified:
 
 ```bash
-cd /Volumes/pulsar/apex-local/Developer/github/skyner-group/couple-sync
+cd <repo-root>
 ~/flutter/bin/flutter build apk --debug
 ```
 

@@ -1,6 +1,6 @@
 # Couple Sync — RN rebuild spec (authoritative)
 
-Repo: `/Users/yashielsookdeo/Developer/yashiels/couple-sync/.worktrees/chore-couple-sync-react-native`
+Repo: `<repo-root>/.worktrees/chore-couple-sync-react-native`
 All prior code deleted. Greenfield. Expo (managed) app at repo root, Fastify backend in `backend/`.
 
 **This file is the single source of truth. `PRD.md` and `ARCHITECTURE.md` are stale — ignore them
