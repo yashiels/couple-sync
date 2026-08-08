@@ -1,0 +1,13 @@
+# E2E flow 3/3 — after both users' busy fence-blocks are seeded via API, assert the overlap window
+# renders on the Free-time tab. Fences produce exactly one window: Mon 10 Aug 2026 18:00–20:00 UTC.
+appId: dev.yashiel.couplesync
+---
+- launchApp:
+    clearState: false
+- assertVisible: "Free time"
+# The tab fetches GET /overlaps/latest on resume; seeding blocks triggered a refresh + WS push.
+- extendedWaitUntil:
+    visible: "★ Best match"
+    timeout: 30000
+- assertVisible: "Mon 10 Aug, 18:00 – 20:00"   # en-dash U+2013
+- takeScreenshot: 05-overlap-window

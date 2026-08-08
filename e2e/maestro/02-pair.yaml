@@ -1,0 +1,15 @@
+# E2E flow 2/3 — enter the partner's invite code (seeded via API) and pair.
+# PAIR_CODE is injected: maestro test --env PAIR_CODE=XXXXXX e2e/maestro/02-pair.yaml
+appId: dev.yashiel.couplesync
+---
+- launchApp:
+    clearState: false   # keep the signed-in session from flow 1
+- tapOn: "Enter a code"
+- tapOn: "Invite code"
+- inputText: "${PAIR_CODE}"
+- tapOn: "Pair"
+# Redeem succeeds -> couple_id set -> router navigates to the tabs.
+- extendedWaitUntil:
+    visible: "Free time"
+    timeout: 30000
+- takeScreenshot: 04-paired
