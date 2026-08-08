@@ -1,0 +1,30 @@
+name: verify-gsj (temporary)
+
+# Throwaway: decodes the GOOGLE_SERVICES_JSON secret and prints only PUBLIC identifiers
+# (project_id, project_number, package) to confirm it's the real couple-sync-personal config,
+# not the placeholder. Delete after running. No secret values are printed.
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: decode + print non-secret identifiers
+        env:
+          GSJ: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -z "$GSJ" ]; then echo "RESULT: GOOGLE_SERVICES_JSON is EMPTY"; exit 0; fi
+          echo "$GSJ" | base64 -d > gsj.json 2>/dev/null || { echo "RESULT: not valid base64"; exit 0; }
+          python3 - <<'PY'
+          import json
+          d=json.load(open("gsj.json"))
+          pi=d.get("project_info",{})
+          c=(d.get("client") or [{}])[0]
+          pkg=c.get("client_info",{}).get("android_client_info",{}).get("package_name")
+          key=(c.get("api_key") or [{}])[0].get("current_key","")
+          print("RESULT project_id:", pi.get("project_id"))
+          print("RESULT project_number:", pi.get("project_number"))
+          print("RESULT package:", pkg)
+          print("RESULT has_api_key:", bool(key), "| is_placeholder:", key.startswith("PLACEHOLDER"))
+          PY
