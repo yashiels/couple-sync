@@ -36,11 +36,22 @@ const config: ExpoConfig = {
     'expo-dev-client',
     // React Native Firebase requires static frameworks on iOS. Android does not care, but this is
     // the one setting whose absence breaks an iOS build later, and it costs nothing now.
-    ['expo-build-properties', { ios: { useFrameworks: 'static' } }],
+    // E2E builds talk to the Auth emulator + backend over cleartext http://10.0.2.2; Android blocks
+    // cleartext by default. Enabled ONLY in E2E — real builds stay https-only.
+    [
+      'expo-build-properties',
+      {
+        ios: { useFrameworks: 'static' },
+        android: { usesCleartextTraffic: process.env.EXPO_PUBLIC_E2E === '1' },
+      },
+    ],
   ],
   extra: {
     apiBaseUrl: process.env.API_BASE_URL,
     googleWebClientId: process.env.GOOGLE_WEB_CLIENT_ID,
+    // E2E builds only: swaps Google Sign-In for the Firebase Auth emulator (no real Google, which
+    // cannot be automated in an emulator). Never set in a real build.
+    e2e: process.env.EXPO_PUBLIC_E2E === '1',
   },
 };
 

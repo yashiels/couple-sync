@@ -1,0 +1,23 @@
+# E2E flow 1/3 — launch, render, E2E sign-in (Auth emulator), timezone onboarding, land on pairing.
+# Requires an EXPO_PUBLIC_E2E=1 build installed on the emulator + the on-Atlas stack (see e2e/README.md).
+appId: dev.yashiel.couplesync
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Couple Sync"
+- assertVisible:
+    id: "signin-button"
+- takeScreenshot: 01-signin-screen
+- tapOn:
+    id: "signin-button"
+# Login via the Auth emulator navigates to timezone onboarding (user timezone is null).
+- extendedWaitUntil:
+    visible: "Your timezone"
+    timeout: 40000
+- takeScreenshot: 02-timezone
+- tapOn: "Use Etc/UTC"
+# couple_id is null -> lands on the pairing screen (Share/Enter tabs).
+- extendedWaitUntil:
+    visible: "Enter a code"
+    timeout: 30000
+- takeScreenshot: 03-pairing
