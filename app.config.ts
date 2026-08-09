@@ -82,6 +82,9 @@ const config: ExpoConfig = {
     // Xcode script sandboxing (default YES) blocks Expo/RNFirebase build-phase scripts writing into
     // the .app; disable it so the iOS build's dev-launcher script phases run.
     './plugins/withDisableScriptSandbox',
+    // CI-only: manual App Store signing on the app target (scoped by bundle id so Pods are untouched).
+    // No-op unless IOS_APPSTORE_PROFILE_NAME is set (the release workflow).
+    './plugins/withIosManualSigning',
     // React Native Firebase requires static frameworks on iOS. Android does not care, but this is
     // the one setting whose absence breaks an iOS build later, and it costs nothing now.
     // E2E builds talk to the Auth emulator + backend over cleartext http://10.0.2.2; Android blocks
