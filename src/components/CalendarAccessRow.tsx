@@ -1,3 +1,4 @@
+import { MaterialIcons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
@@ -54,9 +55,12 @@ export function CalendarAccessRow() {
       }}
     >
       {/* A glyph and words, not a colour: the warning has to survive a greyscale read. */}
-      <Text style={{ color: colors.text, fontSize: fontSize.label, flex: 1 }}>
-        ⚠ Calendar access is off, so only your manual blocks count.
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flex: 1 }}>
+        <MaterialIcons name="warning-amber" size={fontSize.label} color={colors.warning} />
+        <Text style={{ color: colors.text, fontSize: fontSize.label, flex: 1 }}>
+          Calendar access is off, so only your manual blocks count.
+        </Text>
+      </View>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Allow calendar access"

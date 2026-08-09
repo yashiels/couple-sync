@@ -41,10 +41,12 @@ export function formatWindowRange(
   return `${start.toFormat(`${DAY}, ${TIME}`)} – ${end.toFormat(sameDay ? TIME : `${DAY}, ${TIME}`)}`;
 }
 
-/** "in 3h 20m", "in 2 days", "now". Never a bare millisecond count. */
+/** "in 3h 20m", "in 2 days", "in <1m", "now". Never a bare millisecond count. */
 export function formatCountdown(targetUtc: number, now: number = Date.now()): string {
+  if (targetUtc <= now) return 'now';
   const minutes = Math.floor((targetUtc - now) / 60_000);
-  if (minutes <= 0) return 'now';
+  // Sub-minute but still in the future: Math.floor would round it to 0 and mislabel it "now".
+  if (minutes < 1) return 'in <1m';
   if (minutes < 60 * 24) return `in ${formatDuration(minutes)}`;
   const days = Math.round(minutes / (60 * 24));
   return `in ${days} ${days === 1 ? 'day' : 'days'}`;

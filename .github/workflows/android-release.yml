@@ -3,12 +3,15 @@ name: "Deploy: Android Release APK"
 # Builds a signed release APK and attaches it to a GitHub Release.
 # Trigger: push a version tag (v1.0.0, ...) or run manually.
 #
-# Required repo secrets:
-#   ANDROID_KEYSTORE_BASE64   base64 of the release keystore (in 1Password: Nexion → "couple-sync", field keystore_base64)
-#   ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD
-#   GOOGLE_SERVICES_JSON      base64 of the REAL google-services.json (download after enabling Google sign-in). If unset, a
-#                             placeholder is used and Google Sign-In will NOT work — the build still succeeds so CI stays green.
-#   GOOGLE_WEB_CLIENT_ID      Web OAuth client id (from the Firebase Google provider). Embedded into the app at build time.
+# Secrets come from one of two sources, checked in this order:
+#   1. 1Password — set the repo secret OP_SERVICE_ACCOUNT_TOKEN and every value below is resolved from
+#      op:// references (vault Nexion, item "couple-sync"). See docs/deployment/releases.md.
+#   2. GitHub repo secrets (fallback, used when OP_SERVICE_ACCOUNT_TOKEN is unset) — same behaviour as before:
+#        ANDROID_KEYSTORE_BASE64   base64 of the release keystore (1Password: Nexion → "couple-sync", field keystore_base64)
+#        ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD
+#        GOOGLE_SERVICES_JSON      base64 of the REAL google-services.json (download after enabling Google sign-in). If unset, a
+#                                  placeholder is used and Google Sign-In will NOT work — the build still succeeds so CI stays green.
+#        GOOGLE_WEB_CLIENT_ID      Web OAuth client id (from the Firebase Google provider). Embedded into the app at build time.
 # Non-secret:
 #   API_BASE_URL defaults to https://couple-sync.yashiel.dev
 
@@ -33,6 +36,8 @@ jobs:
     env:
       API_BASE_URL: https://couple-sync.yashiel.dev
       GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+      # Job-level so the "Load secrets" step can gate on it — the `secrets` context is not allowed in `if`.
+      OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -48,33 +53,57 @@ jobs:
 
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
 
+      # When OP_SERVICE_ACCOUNT_TOKEN is set, resolve every secret from 1Password and export it into
+      # the job environment. When it is unset this step is skipped and the consuming steps below fall
+      # back to the ${{ secrets.* }} inputs, so existing repos keep working unchanged.
+      - name: Load secrets from 1Password
+        if: ${{ env.OP_SERVICE_ACCOUNT_TOKEN != '' }}
+        uses: 1Password/load-secrets-action@e544b780808654ba8ceba5fb2fe2897103d92ff4 # v5.0.0
+        with:
+          export-env: true
+        env:
+          ANDROID_KEYSTORE_BASE64: op://Nexion/couple-sync/keystore_base64
+          ANDROID_KEYSTORE_PASSWORD: op://Nexion/couple-sync/keystore_password
+          ANDROID_KEY_ALIAS: op://Nexion/couple-sync/key_alias
+          ANDROID_KEY_PASSWORD: op://Nexion/couple-sync/key_password
+          GOOGLE_SERVICES_JSON: op://Nexion/couple-sync/google_services_json_b64
+          GOOGLE_WEB_CLIENT_ID: op://Nexion/couple-sync/google_web_client_id
+
       - name: Install dependencies
         run: npm ci
 
       - name: Provision google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ env.GOOGLE_SERVICES_JSON || secrets.GOOGLE_SERVICES_JSON }}
         run: |
-          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
-            echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > google-services.json
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" | base64 -d > google-services.json
             echo "Using real google-services.json from secret."
           else
             cp google-services.placeholder.json google-services.json
-            echo "::warning::GOOGLE_SERVICES_JSON secret is unset — built with the placeholder. Google Sign-In will not work in this APK."
+            echo "::warning::GOOGLE_SERVICES_JSON is unset — built with the placeholder. Google Sign-In will not work in this APK."
           fi
 
       - name: Decode release keystore
-        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.keystore"
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ env.ANDROID_KEYSTORE_BASE64 || secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
 
       - name: Expo prebuild (generate android/)
         run: npx expo prebuild -p android --no-install
 
       - name: Build signed release APK
         working-directory: android
+        env:
+          KEYSTORE_PASSWORD: ${{ env.ANDROID_KEYSTORE_PASSWORD || secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ env.ANDROID_KEY_ALIAS || secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ env.ANDROID_KEY_PASSWORD || secrets.ANDROID_KEY_PASSWORD }}
         run: |
           ./gradlew assembleRelease --no-daemon \
             -Pandroid.injected.signing.store.file="$RUNNER_TEMP/release.keystore" \
-            -Pandroid.injected.signing.store.password="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
-            -Pandroid.injected.signing.key.alias="${{ secrets.ANDROID_KEY_ALIAS }}" \
-            -Pandroid.injected.signing.key.password="${{ secrets.ANDROID_KEY_PASSWORD }}"
+            -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
 
       - name: Stage APK
         id: apk

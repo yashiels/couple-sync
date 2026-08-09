@@ -1,3 +1,4 @@
+import { MaterialIcons } from '@expo/vector-icons';
 import { DateTime } from 'luxon';
 import { useRef } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
@@ -101,19 +102,22 @@ export function WeekGrid({
     )
     .filter(onGrid);
 
+  const legendItem = (key: string, label: string, icon?: 'lock') => (
+    <View key={key} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+      {icon === 'lock' ? (
+        <MaterialIcons name="lock" size={fontSize.caption} color={colors.textMuted} />
+      ) : null}
+      <Text style={{ color: colors.textMuted, fontSize: fontSize.caption }}>{label}</Text>
+    </View>
+  );
+
   const legend = (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
-      {[
-        'Solid: yours',
-        `Dashed: ${partnerName}`,
-        '🔒 From Google',
-        '? Tentative',
-        'Shaded: free together',
-      ].map((item) => (
-        <Text key={item} style={{ color: colors.textMuted, fontSize: fontSize.caption }}>
-          {item}
-        </Text>
-      ))}
+      {legendItem('yours', 'Solid: yours')}
+      {legendItem('partner', `Dashed: ${partnerName}`)}
+      {legendItem('google', 'From Google', 'lock')}
+      {legendItem('tentative', '? Tentative')}
+      {legendItem('free', 'Shaded: free together')}
     </View>
   );
 
@@ -234,7 +238,9 @@ export function WeekGrid({
                   // block. Either way "Busy" is all there is — there is deliberately no second,
                   // client-side scrub here, which would mask a server-side regression.
                   const label = block.title ?? 'Busy';
-                  const markers = `${google ? '🔒' : ''}${block.type === 'tentative' ? '?' : ''}`;
+                  // '?' for tentative stays inline text (ASCII); the google lock is a real icon
+                  // rendered beside the label, since a MaterialIcons cannot live inside a <Text>.
+                  const marker = block.type === 'tentative' ? '? ' : '';
                   return (
                     <Pressable
                       key={key}
@@ -266,16 +272,26 @@ export function WeekGrid({
                         opacity: block.type === 'tentative' ? 0.75 : 1,
                       }}
                     >
-                      <Text
-                        numberOfLines={2}
-                        style={{
-                          color: mine ? colors.accentText : colors.text,
-                          fontSize: fontSize.caption,
-                        }}
-                      >
-                        {markers}
-                        {label}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 2 }}>
+                        {google ? (
+                          <MaterialIcons
+                            name="lock"
+                            size={fontSize.caption}
+                            color={mine ? colors.accentText : colors.text}
+                          />
+                        ) : null}
+                        <Text
+                          numberOfLines={2}
+                          style={{
+                            flex: 1,
+                            color: mine ? colors.accentText : colors.text,
+                            fontSize: fontSize.caption,
+                          }}
+                        >
+                          {marker}
+                          {label}
+                        </Text>
+                      </View>
                     </Pressable>
                   );
                 })}

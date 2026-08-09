@@ -1,15 +1,20 @@
-import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+import { MaterialIcons } from '@expo/vector-icons';
+import dayjs from 'dayjs';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import DateTimePicker, { type DateType } from 'react-native-ui-datepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { BlockRow } from '../backend/src/wire';
@@ -76,6 +81,9 @@ export default function BlockFormScreen() {
   // Read once on mount: it only seeds the two state values below, and reading the clock during every
   // render is impure (react-hooks/purity).
   const [start] = useState(() => Number(params.start) || Date.now());
+  // Mount-time "now" for the picker's minimum — reading the clock during render is impure
+  // (react-hooks/purity). A few minutes of staleness is irrelevant: blocks are always in the future.
+  const [nowMs] = useState(() => Date.now());
 
   const [title, setTitle] = useState(block?.title ?? '');
   const [type, setType] = useState<BlockRow['type']>(block?.type ?? 'busy');
@@ -88,26 +96,26 @@ export default function BlockFormScreen() {
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // One in-app modal picker, identical on iOS and Android: react-native-ui-datepicker draws its own
+  // calendar + time in JS, so both platforms get the same combined month-grid + time UI (the native
+  // @react-native-community picker can only do that inline on iOS). `picker` drives the modal; null =
+  // closed.
+  const [picker, setPicker] = useState<{ at: number; apply: (v: number) => void } | null>(null);
+
+  function pickDateTime(current: number, apply: (at: number) => void) {
+    setPicker({ at: current, apply });
+  }
 
   /**
-   * Android shows the date and the time as two separate dialogs, so they are chained: the date dialog
-   * hands back the chosen day carrying the seed's hour and minute, and that Date seeds the time dialog.
-   * Both dialogs speak *device* wall clock, so the block's own zone is applied once, at the end — see
-   * toPickerDate/fromPickerDate. Dismissing either dialog changes nothing, which is what cancel means.
+   * The picker works in *device* wall clock, so the block's own zone is applied via
+   * toPickerDate/fromPickerDate. Applied live as the user picks; Done just dismisses. onChange hands
+   * back a DateType (dayjs/Date/string) — dayjs normalises it to a JS Date for fromPickerDate.
    */
-  function pickDateTime(current: number, apply: (at: number) => void) {
-    DateTimePickerAndroid.open({
-      value: toPickerDate(current, zone),
-      mode: 'date',
-      onValueChange: (_event, day) =>
-        DateTimePickerAndroid.open({
-          value: day,
-          mode: 'time',
-          is24Hour: true, // every time in this app is rendered HH:mm; the dial should match
-
-          onValueChange: (_timeEvent, at) => apply(fromPickerDate(at, zone)),
-        }),
-    });
+  function applyPicked(date: DateType) {
+    if (!date || !picker) return;
+    const at = fromPickerDate(dayjs(date).toDate(), zone);
+    picker.apply(at);
+    setPicker({ ...picker, at });
   }
 
   // Moving the start past the end keeps the block's length rather than leaving an interval the save
@@ -213,16 +221,20 @@ export default function BlockFormScreen() {
         backgroundColor: selected ? colors.surface : colors.background,
       }}
     >
-      <Text
-        style={{
-          color: selected ? colors.text : colors.textMuted,
-          fontSize: fontSize.label,
-          fontWeight: selected ? '700' : '400',
-        }}
-      >
-        {selected ? '✓ ' : ''}
-        {label}
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+        {selected ? (
+          <MaterialIcons name="check" size={fontSize.label} color={colors.accent} />
+        ) : null}
+        <Text
+          style={{
+            color: selected ? colors.text : colors.textMuted,
+            fontSize: fontSize.label,
+            fontWeight: selected ? '700' : '400',
+          }}
+        >
+          {label}
+        </Text>
+      </View>
     </Pressable>
   );
 
@@ -254,145 +266,213 @@ export default function BlockFormScreen() {
   );
 
   return (
-    <ScrollView
-      style={{ backgroundColor: colors.background }}
-      contentContainerStyle={{
-        paddingTop: insets.top + spacing.md,
-        paddingHorizontal: spacing.lg,
-        paddingBottom: insets.bottom + spacing.xl,
-        gap: spacing.md,
-      }}
-      keyboardShouldPersistTaps="handled"
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={0}
     >
-      <Text style={{ color: colors.text, fontSize: fontSize.title }}>
-        {block ? 'Edit block' : 'New block'}
-      </Text>
-      <Text style={{ color: colors.textMuted, fontSize: fontSize.label }}>
-        Times are in {zone.replace(/_/g, ' ')}.
-      </Text>
-
-      <View style={{ gap: spacing.xs }}>
-        <Text style={{ color: colors.text, fontSize: fontSize.label }}>Title</Text>
-        <TextInput
-          accessibilityLabel="Block title"
-          value={title}
-          onChangeText={setTitle}
-          placeholder="Gym, standup, dinner…"
-          placeholderTextColor={colors.textMuted}
-          style={{
-            minHeight: touchTarget,
-            paddingHorizontal: spacing.md,
-            borderRadius: radius,
-            borderWidth: 1,
-            borderColor: colors.border,
-            color: colors.text,
-            fontSize: fontSize.body,
-          }}
-        />
-      </View>
-
-      <View style={{ gap: spacing.sm }}>
-        <Text style={{ color: colors.text, fontSize: fontSize.label }}>Type</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-          {TYPES.map((t) => chip(t.label, t.value === type, () => setType(t.value)))}
-        </View>
-        <Text style={{ color: colors.textMuted, fontSize: fontSize.caption }}>
-          {TYPES.find((t) => t.value === type)?.hint}
-        </Text>
-      </View>
-
-      {when('Starts', startUtc, applyStart)}
-      {when(
-        'Ends',
-        endUtc,
-        setEndUtc,
-        endUtc <= startUtc ? 'The end has to be after the start.' : undefined,
-      )}
-
-      <RecurrencePicker value={rule} startUtc={startUtc} zone={zone} onChange={setRule} />
-
-      <View style={{ gap: spacing.sm }}>
-        <Text style={{ color: colors.text, fontSize: fontSize.label }}>Category</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-          {chip('None', category === null, () => setCategory(null))}
-          {CATEGORIES.map((c) => chip(c, c === category, () => setCategory(c)))}
-        </View>
-      </View>
-
-      <View style={{ gap: spacing.sm }}>
-        <Text style={{ color: colors.text, fontSize: fontSize.label }}>Who sees the details</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-          {chip('Both of us', visibility === 'bothPartners', () => setVisibility('bothPartners'))}
-          {chip('Only me', visibility === 'onlyMe', () => setVisibility('onlyMe'))}
-        </View>
-        {/* Said plainly, because this control was a no-op in the previous build and its name suggests
-            the block is hidden. It is not: only the title and category are. */}
-        <Text style={{ color: colors.textMuted, fontSize: fontSize.caption }}>
-          {visibility === 'onlyMe'
-            ? 'Only me: your partner sees this time as “Busy” with no title or category. The time is still blocked out, so it still shapes your shared free time.'
-            : 'Both of us: your partner sees the title and category of this block.'}
-        </Text>
-      </View>
-
-      {error ? (
-        <Text style={{ color: colors.danger, fontSize: fontSize.label }}>{error}</Text>
-      ) : null}
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ disabled: busy }}
-        disabled={busy}
-        onPress={() => void onSave()}
-        style={{
-          minHeight: touchTarget,
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderRadius: radius,
-          backgroundColor: colors.accent,
-          opacity: busy ? 0.6 : 1,
+      <ScrollView
+        style={{ backgroundColor: colors.background }}
+        contentContainerStyle={{
+          paddingTop: insets.top + spacing.md,
+          paddingHorizontal: spacing.lg,
+          paddingBottom: insets.bottom + spacing.xl,
+          gap: spacing.md,
         }}
+        keyboardShouldPersistTaps="handled"
       >
-        {busy ? (
-          <ActivityIndicator color={colors.accentText} />
-        ) : (
-          <Text style={{ color: colors.accentText, fontSize: fontSize.body }}>
-            {block ? 'Save changes' : 'Add block'}
+        <Text style={{ color: colors.text, fontSize: fontSize.title }}>
+          {block ? 'Edit block' : 'New block'}
+        </Text>
+        <Text style={{ color: colors.textMuted, fontSize: fontSize.label }}>
+          Times are in {zone.replace(/_/g, ' ')}.
+        </Text>
+
+        <View style={{ gap: spacing.xs }}>
+          <Text style={{ color: colors.text, fontSize: fontSize.label }}>Title</Text>
+          <TextInput
+            accessibilityLabel="Block title"
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Gym, standup, dinner…"
+            placeholderTextColor={colors.textMuted}
+            style={{
+              minHeight: touchTarget,
+              paddingHorizontal: spacing.md,
+              borderRadius: radius,
+              borderWidth: 1,
+              borderColor: colors.border,
+              color: colors.text,
+              fontSize: fontSize.body,
+            }}
+          />
+        </View>
+
+        <View style={{ gap: spacing.sm }}>
+          <Text style={{ color: colors.text, fontSize: fontSize.label }}>Type</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+            {TYPES.map((t) => chip(t.label, t.value === type, () => setType(t.value)))}
+          </View>
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.caption }}>
+            {TYPES.find((t) => t.value === type)?.hint}
           </Text>
+        </View>
+
+        {when('Starts', startUtc, applyStart)}
+        {when(
+          'Ends',
+          endUtc,
+          setEndUtc,
+          endUtc <= startUtc ? 'The end has to be after the start.' : undefined,
         )}
-      </Pressable>
 
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => router.back()}
-        style={{
-          minHeight: touchTarget,
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderRadius: radius,
-          backgroundColor: colors.surface,
-        }}
-      >
-        <Text style={{ color: colors.text, fontSize: fontSize.body }}>Cancel</Text>
-      </Pressable>
+        <RecurrencePicker value={rule} startUtc={startUtc} zone={zone} onChange={setRule} />
 
-      {block ? (
+        <View style={{ gap: spacing.sm }}>
+          <Text style={{ color: colors.text, fontSize: fontSize.label }}>Category</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+            {chip('None', category === null, () => setCategory(null))}
+            {CATEGORIES.map((c) => chip(c, c === category, () => setCategory(c)))}
+          </View>
+        </View>
+
+        <View style={{ gap: spacing.sm }}>
+          <Text style={{ color: colors.text, fontSize: fontSize.label }}>Who sees the details</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+            {chip('Both of us', visibility === 'bothPartners', () => setVisibility('bothPartners'))}
+            {chip('Only me', visibility === 'onlyMe', () => setVisibility('onlyMe'))}
+          </View>
+          {/* Said plainly, because this control was a no-op in the previous build and its name suggests
+              the block is hidden. It is not: only the title and category are. */}
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.caption }}>
+            {visibility === 'onlyMe'
+              ? 'Only me: your partner sees this time as “Busy” with no title or category. The time is still blocked out, so it still shapes your shared free time.'
+              : 'Both of us: your partner sees the title and category of this block.'}
+          </Text>
+        </View>
+
+        {error ? (
+          <Text style={{ color: colors.danger, fontSize: fontSize.label }}>{error}</Text>
+        ) : null}
+
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ disabled: busy }}
           disabled={busy}
-          onPress={onDelete}
+          onPress={() => void onSave()}
           style={{
             minHeight: touchTarget,
             alignItems: 'center',
             justifyContent: 'center',
             borderRadius: radius,
-            borderWidth: 1,
-            borderColor: colors.danger,
+            backgroundColor: colors.accent,
+            opacity: busy ? 0.6 : 1,
           }}
         >
-          <Text style={{ color: colors.danger, fontSize: fontSize.body }}>Delete block</Text>
+          {busy ? (
+            <ActivityIndicator color={colors.accentText} />
+          ) : (
+            <Text style={{ color: colors.accentText, fontSize: fontSize.body }}>
+              {block ? 'Save changes' : 'Add block'}
+            </Text>
+          )}
         </Pressable>
-      ) : null}
-    </ScrollView>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.back()}
+          style={{
+            minHeight: touchTarget,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: radius,
+            backgroundColor: colors.surface,
+          }}
+        >
+          <Text style={{ color: colors.text, fontSize: fontSize.body }}>Cancel</Text>
+        </Pressable>
+
+        {block ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: busy }}
+            disabled={busy}
+            onPress={onDelete}
+            style={{
+              minHeight: touchTarget,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: radius,
+              borderWidth: 1,
+              borderColor: colors.danger,
+            }}
+          >
+            <Text style={{ color: colors.danger, fontSize: fontSize.body }}>Delete block</Text>
+          </Pressable>
+        ) : null}
+
+        {/* One combined calendar + time picker, rendered identically on iOS and Android, in a sheet.
+            Applied live in the block's zone; Done dismisses. */}
+        <Modal
+          visible={picker !== null}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setPicker(null)}
+        >
+          <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#00000066' }}>
+            <View
+              style={{
+                backgroundColor: colors.surface,
+                paddingTop: spacing.md,
+                paddingHorizontal: spacing.lg,
+                paddingBottom: insets.bottom + spacing.md,
+                gap: spacing.sm,
+              }}
+            >
+              {picker ? (
+                <DateTimePicker
+                  mode="single"
+                  date={toPickerDate(picker.at, zone)}
+                  // New blocks are future-only. When EDITING, allow the existing value: a recurring
+                  // block's start (its DTSTART) recedes into the past, and forcing it forward would
+                  // shift every occurrence.
+                  minDate={block ? undefined : toPickerDate(nowMs, zone)}
+                  timePicker
+                  onChange={({ date }) => applyPicked(date)}
+                  // Themed to the app palette so it reads correctly in light and dark.
+                  styles={{
+                    today: { borderColor: colors.accent, borderWidth: 1 },
+                    today_label: { color: colors.text },
+                    selected: { backgroundColor: colors.accent },
+                    selected_label: { color: colors.accentText },
+                    day_label: { color: colors.text },
+                    disabled_label: { color: colors.textMuted },
+                    weekday_label: { color: colors.textMuted },
+                    month_selector_label: { color: colors.text },
+                    year_selector_label: { color: colors.text },
+                    time_label: { color: colors.text },
+                    button_next: { backgroundColor: 'transparent' },
+                    button_prev: { backgroundColor: 'transparent' },
+                  }}
+                />
+              ) : null}
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setPicker(null)}
+                style={{
+                  minHeight: touchTarget,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: radius,
+                  backgroundColor: colors.accent,
+                }}
+              >
+                <Text style={{ color: colors.accentText, fontSize: fontSize.body }}>Done</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }

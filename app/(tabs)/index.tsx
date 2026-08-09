@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -72,12 +72,29 @@ export default function FreeTimeScreen() {
   const partnerZone = partner?.timezone ?? yourZone;
   const partnerName = partner?.display_name ?? 'Your partner';
 
-  // No fetch on mount: hydrateFromServer() already loaded the windows, a WS `overlap` message keeps
-  // them current, and a failed cold start renders the retry screen in app/_layout.tsx instead of this.
+  // Refetch the server-computed windows every time this tab gains focus. hydrateFromServer() loads
+  // them once and the WS `overlap` push keeps them live — but a push missed during a socket drop (or
+  // a block added on another device) leaves this screen showing a window computed earlier in the day
+  // (e.g. a stale "13:00–23:00" from before a block was added). Refetching on focus self-heals that
+  // without waiting for a pull-to-refresh. Fire-and-forget: a failure just leaves the current windows.
+  useFocusEffect(
+    useCallback(() => {
+      if (!coupleId) return;
+      api
+        .latestOverlap(coupleId)
+        .then((o) => useStore.getState().setWindows(o.windows, o.computed_at))
+        .catch(() => undefined);
+    }, [coupleId]),
+  );
+
   const live = visibleWindows(windows, now, 0);
   const visible = visibleWindows(live, now, minMinutes);
   const next = earliestWindow(visible);
   const topScore = visible.reduce((max, w) => Math.max(max, w.score), -Infinity);
+  // The server sorts by score, which surfaces a long window days out ahead of tonight's gap. People
+  // read this list as "when can we next meet", so show it chronologically — the soonest gap first —
+  // and let the score drive only the "best match" star, not the position.
+  const ordered = [...visible].sort((a, b) => a.startUtc - b.startUtc);
   const loading = computedAt === null;
 
   async function onRefresh() {
@@ -232,7 +249,7 @@ export default function FreeTimeScreen() {
         paddingBottom: insets.bottom + spacing.lg,
         gap: spacing.md,
       }}
-      data={visible}
+      data={ordered}
       keyExtractor={(w) => `${w.startUtc}-${w.endUtc}`}
       ListHeaderComponent={header}
       ListEmptyComponent={empty}

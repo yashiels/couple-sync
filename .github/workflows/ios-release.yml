@@ -1,0 +1,154 @@
+name: "Deploy: iOS TestFlight"
+
+# Builds a signed iOS .ipa on the paid Apple team and uploads it to TestFlight (App Store Connect).
+# Testers install via the TestFlight app — a raw .ipa cannot be sideloaded, so there is no GitHub
+# Release attach here. Trigger: push a version tag (v1.0.0, ...) or run manually.
+#
+# Secrets come from 1Password via load-secrets-action: account-wide Apple creds from Agents/
+# apple-developer, app-specific config from Nexion/couple-sync. The only GitHub repo secret required
+# is OP_SERVICE_ACCOUNT_TOKEN (read on both vaults) — everything else is an op:// reference resolved
+# at runtime. See docs/deployment/releases.md for the field list and portal setup.
+#
+# The build number is the workflow run number, so every upload is unique (App Store Connect rejects a
+# re-used build number). This build keeps the real push entitlement: CS_NO_PUSH is intentionally NOT
+# set (that flag only exists for a free personal team, which cannot carry aps-environment).
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A signed release build must never be interrupted mid-flight, so overlapping runs serialize rather
+# than cancel (see github-actions-conventions §6: serialize deploys/publishes).
+concurrency:
+  group: ios-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 45
+    env:
+      API_BASE_URL: https://couple-sync.yashiel.dev
+      EXPORT_METHOD: app-store-connect
+      # Unique per run → a fresh CFBundleVersion App Store Connect will accept. Read by app.config.ts.
+      IOS_BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Load secrets from 1Password
+        uses: 1Password/load-secrets-action@e544b780808654ba8ceba5fb2fe2897103d92ff4 # v5.0.0
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          # App-specific → Nexion/couple-sync.
+          GOOGLE_SERVICE_INFO_PLIST_B64: op://Nexion/couple-sync/google_services_info_plist_b64
+          GOOGLE_WEB_CLIENT_ID: op://Nexion/couple-sync/google_web_client_id
+          # Account-wide Apple creds (shared by every iOS app) → Agents/apple-developer.
+          ASC_API_KEY_ID: op://Agents/apple-developer/asc_api_key_id
+          ASC_ISSUER_ID: op://Agents/apple-developer/asc_issuer_id
+          ASC_API_KEY_P8_BASE64: op://Agents/apple-developer/asc_api_key_p8_base64
+          # Team the ASC API key belongs to; needed so automatic signing can resolve a provisioning
+          # profile at archive/export time. See docs/deployment/releases.md.
+          APPLE_TEAM_ID: op://Agents/apple-developer/apple_team_id
+
+      - name: Provision GoogleService-Info.plist
+        run: echo "$GOOGLE_SERVICE_INFO_PLIST_B64" | openssl base64 -d -A > GoogleService-Info.plist
+
+      - name: Provision App Store Connect API key
+        run: |
+          mkdir -p "$RUNNER_TEMP/asc"
+          echo "$ASC_API_KEY_P8_BASE64" | openssl base64 -d -A > "$RUNNER_TEMP/asc/AuthKey_${ASC_API_KEY_ID}.p8"
+
+      - name: Expo prebuild (generate ios/)
+        run: npx expo prebuild -p ios --no-install
+
+      - name: Install CocoaPods
+        working-directory: ios
+        run: pod install
+
+      - name: Write ExportOptions.plist
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>${EXPORT_METHOD}</string>
+            <key>signingStyle</key>
+            <string>automatic</string>
+            <key>teamID</key>
+            <string>${APPLE_TEAM_ID}</string>
+            <key>destination</key>
+            <string>export</string>
+            <key>stripSwiftSymbols</key>
+            <true/>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Build signed archive
+        run: |
+          xcodebuild \
+            -workspace ios/CoupleSync.xcworkspace \
+            -scheme CoupleSync \
+            -configuration Release \
+            -archivePath "$RUNNER_TEMP/CoupleSync.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${ASC_API_KEY_ID}.p8" \
+            -authenticationKeyID "$ASC_API_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            archive
+
+      - name: Export signed .ipa
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/CoupleSync.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${ASC_API_KEY_ID}.p8" \
+            -authenticationKeyID "$ASC_API_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      - name: Stage IPA
+        id: ipa
+        run: |
+          SRC=$(find "$RUNNER_TEMP/export" -name '*.ipa' | head -1)
+          DEST="couple-sync-${{ github.ref_name }}.ipa"
+          cp "$SRC" "$DEST"
+          echo "path=$DEST" >> "$GITHUB_OUTPUT"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: couple-sync-ipa
+          path: ${{ steps.ipa.outputs.path }}
+
+      - name: Upload to TestFlight
+        # altool finds the key by API_PRIVATE_KEYS_DIR + the --apiKey id (AuthKey_<id>.p8). This
+        # uploads the build to App Store Connect; it appears in TestFlight after Apple finishes
+        # processing (a few minutes). Internal testers get it immediately; external testers need a
+        # one-time beta review. `--upload-package` is not used — plain --upload-app is correct for IPAs.
+        env:
+          API_PRIVATE_KEYS_DIR: ${{ runner.temp }}/asc
+        run: |
+          xcrun altool --upload-app \
+            --type ios \
+            --file "${{ steps.ipa.outputs.path }}" \
+            --apiKey "$ASC_API_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID"

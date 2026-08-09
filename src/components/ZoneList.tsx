@@ -1,5 +1,6 @@
+import { MaterialIcons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, Text, TextInput } from 'react-native';
+import { FlatList, Pressable, Text, TextInput, View } from 'react-native';
 
 import { fontSize, radius, spacing, touchTarget, useColors } from '../theme';
 import { formatClock } from '../time';
@@ -84,10 +85,21 @@ export function ZoneList({
               }}
             >
               {/* The tick, not the tint, is what says "selected" — colour alone is not a state. */}
-              <Text style={{ color: colors.text, fontSize: fontSize.body, flexShrink: 1 }}>
-                {isSelected ? '✓ ' : ''}
-                {item.replace(/_/g, ' ')}
-              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: spacing.xs,
+                  flexShrink: 1,
+                }}
+              >
+                {isSelected ? (
+                  <MaterialIcons name="check" size={fontSize.body} color={colors.accent} />
+                ) : null}
+                <Text style={{ color: colors.text, fontSize: fontSize.body, flexShrink: 1 }}>
+                  {item.replace(/_/g, ' ')}
+                </Text>
+              </View>
               <Text style={{ color: colors.textMuted, fontSize: fontSize.label }}>
                 {formatClock(item, now)}
               </Text>

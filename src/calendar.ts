@@ -29,9 +29,14 @@ const RETRY_DELAYS_MS = [1000, 2000, 4000];
 
 export type SyncResult = 'synced' | 'rate-limited' | 'scope-missing' | 'no-session';
 
-/** freeBusy's response, narrowed to the two fields we read. There is deliberately no title field. */
+/** freeBusy's response, narrowed to the fields we read. There is deliberately no title field. The
+ *  `errors` array is why we can't treat a missing `busy` as "no busy times": Google returns HTTP 200
+ *  with a per-calendar error (e.g. rate/notFound), and a naive read would post [] and delete blocks. */
 interface FreeBusyResponse {
-  calendars?: Record<string, { busy?: { start?: string; end?: string }[] }>;
+  calendars?: Record<
+    string,
+    { busy?: { start?: string; end?: string }[]; errors?: { reason?: string }[] }
+  >;
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -247,7 +252,12 @@ async function fetchBusy(
       continue;
     }
     if (!res.ok) throw new Error(`freebusy_${res.status}`);
-    return intervals((await res.json()) as FreeBusyResponse);
+    const body = (await res.json()) as FreeBusyResponse;
+    // A 200 can still carry a per-calendar error (rate limit, notFound, insufficient scope). Treat it
+    // as a failed read — NOT an empty result — so the caller skips the PUT rather than replacing the
+    // stored Google set with [] and deleting every previously-synced block.
+    if (body.calendars?.['primary']?.errors?.length) return 'scope-missing';
+    return intervals(body);
   }
 }
 

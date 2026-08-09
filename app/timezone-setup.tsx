@@ -1,6 +1,6 @@
 import * as Localization from 'expo-localization';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ApiError, api } from '../src/api';
@@ -50,66 +50,74 @@ export default function TimezoneSetupScreen() {
   }
 
   return (
-    <View
-      style={{
-        flex: 1,
-        paddingTop: insets.top + spacing.md,
-        paddingHorizontal: spacing.lg,
-        paddingBottom: insets.bottom + spacing.md,
-        gap: spacing.sm,
-        backgroundColor: colors.background,
-      }}
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={0}
     >
-      <Text style={{ color: colors.text, fontSize: fontSize.title }}>Your timezone</Text>
-      <Text style={{ color: colors.textMuted, fontSize: fontSize.body }}>
-        We use it to show your free time in your hours, and your partner&apos;s in theirs.
-      </Text>
-
       <View
         style={{
-          padding: spacing.md,
-          borderRadius: radius,
-          backgroundColor: colors.surface,
-          gap: spacing.xs,
+          flex: 1,
+          paddingTop: insets.top + spacing.md,
+          paddingHorizontal: spacing.lg,
+          paddingBottom: insets.bottom + spacing.md,
+          gap: spacing.sm,
+          backgroundColor: colors.background,
         }}
       >
-        <Text style={{ color: colors.textMuted, fontSize: fontSize.caption }}>
-          {selected === detectedZone ? 'Detected on this device' : 'Selected'}
+        <Text style={{ color: colors.text, fontSize: fontSize.title }}>Your timezone</Text>
+        <Text style={{ color: colors.textMuted, fontSize: fontSize.body }}>
+          We use it to show your free time in your hours, and your partner&apos;s in theirs.
         </Text>
-        <Text style={{ color: colors.text, fontSize: fontSize.heading }}>
-          {selected.replace(/_/g, ' ')}
-        </Text>
-        <Text style={{ color: colors.text, fontSize: fontSize.body }}>
-          {formatClock(selected, now)} right now
-        </Text>
-      </View>
 
-      <ZoneList selected={selected} onSelect={setSelected} />
-
-      {error ? <Text style={{ color: colors.danger, fontSize: fontSize.label }}>{error}</Text> : null}
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ disabled: saving }}
-        disabled={saving}
-        onPress={() => void onConfirm()}
-        style={{
-          minHeight: touchTarget,
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderRadius: radius,
-          backgroundColor: colors.accent,
-          opacity: saving ? 0.6 : 1,
-        }}
-      >
-        {saving ? (
-          <ActivityIndicator color={colors.accentText} />
-        ) : (
-          <Text style={{ color: colors.accentText, fontSize: fontSize.body }}>
-            Use {selected.replace(/_/g, ' ')}
+        <View
+          style={{
+            padding: spacing.md,
+            borderRadius: radius,
+            backgroundColor: colors.surface,
+            gap: spacing.xs,
+          }}
+        >
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.caption }}>
+            {selected === detectedZone ? 'Detected on this device' : 'Selected'}
           </Text>
-        )}
-      </Pressable>
-    </View>
+          <Text style={{ color: colors.text, fontSize: fontSize.heading }}>
+            {selected.replace(/_/g, ' ')}
+          </Text>
+          <Text style={{ color: colors.text, fontSize: fontSize.body }}>
+            {formatClock(selected, now)} right now
+          </Text>
+        </View>
+
+        <ZoneList selected={selected} onSelect={setSelected} />
+
+        {error ? (
+          <Text style={{ color: colors.danger, fontSize: fontSize.label }}>{error}</Text>
+        ) : null}
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: saving }}
+          disabled={saving}
+          onPress={() => void onConfirm()}
+          style={{
+            minHeight: touchTarget,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: radius,
+            backgroundColor: colors.accent,
+            opacity: saving ? 0.6 : 1,
+          }}
+        >
+          {saving ? (
+            <ActivityIndicator color={colors.accentText} />
+          ) : (
+            <Text style={{ color: colors.accentText, fontSize: fontSize.body }}>
+              Use {selected.replace(/_/g, ' ')}
+            </Text>
+          )}
+        </Pressable>
+      </View>
+    </KeyboardAvoidingView>
   );
 }

@@ -1,3 +1,4 @@
+import { MaterialIcons } from '@expo/vector-icons';
 import { Text, View } from 'react-native';
 
 import type { OverlapWindow } from '../../backend/src/wire';
@@ -52,7 +53,7 @@ export function WindowCard({
         gap: spacing.xs,
         borderRadius: radius,
         backgroundColor: colors.surface,
-        // Emphasis is a border weight as well as a colour, and the ★ row below says it in words.
+        // Emphasis is a border weight as well as a colour, and the star row below says it in words.
         borderWidth: best ? 2 : 1,
         borderColor: best ? colors.accent : colors.border,
       }}
@@ -72,10 +73,16 @@ export function WindowCard({
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
         <Text style={{ color: colors.text, fontSize: fontSize.label }}>{duration}</Text>
         {best ? (
-          <Text style={{ color: colors.accent, fontSize: fontSize.label }}>★ Best match</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+            <MaterialIcons name="star" size={fontSize.label} color={colors.accent} />
+            <Text style={{ color: colors.accent, fontSize: fontSize.label }}>Best match</Text>
+          </View>
         ) : null}
         {lateNight ? (
-          <Text style={{ color: colors.warning, fontSize: fontSize.label }}>🌙 May run late</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+            <MaterialIcons name="bedtime" size={fontSize.label} color={colors.warning} />
+            <Text style={{ color: colors.warning, fontSize: fontSize.label }}>May run late</Text>
+          </View>
         ) : null}
       </View>
     </View>

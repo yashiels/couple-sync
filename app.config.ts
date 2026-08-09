@@ -28,6 +28,10 @@ const config: ExpoConfig = {
   icon: './assets/icon.png',
   android: {
     package: 'dev.yashiel.couplesync',
+    // Every store/TestFlight upload needs a fresh number. CI passes the run number
+    // (ANDROID_VERSION_CODE / IOS_BUILD_NUMBER); locally it defaults to 1. android/ and ios/ are
+    // prebuild output, so this config is the only place the number lives.
+    versionCode: Number(process.env.ANDROID_VERSION_CODE ?? 1),
     // The *real* file: a developer drops it in from the Firebase console and it stays gitignored.
     // CI copies google-services.placeholder.json to this path immediately before prebuild. Pointing
     // this at the placeholder permanently would keep CI green while a device build consumed a fake
@@ -41,6 +45,11 @@ const config: ExpoConfig = {
   },
   ios: {
     bundleIdentifier: 'dev.yashiel.couplesync',
+    // BUMP on every App Store Connect / TestFlight upload — CI passes IOS_BUILD_NUMBER (see above).
+    buildNumber: process.env.IOS_BUILD_NUMBER ?? '1',
+    // Follow the system light/dark setting (expo-system-ui). Without this iOS pins Info.plist to Light
+    // and the dark palette in src/theme.ts never activates; Android already follows the system.
+    userInterfaceStyle: 'automatic',
     // Real Firebase iOS config, gitignored like its Android sibling. Pulled by scripts/pull-secrets.sh.
     googleServicesFile: './GoogleService-Info.plist',
   },

@@ -1,3 +1,4 @@
+import { MaterialIcons } from '@expo/vector-icons';
 import { Pressable, Text, View } from 'react-native';
 
 import {
@@ -93,16 +94,20 @@ export function RecurrencePicker({
         backgroundColor: selected ? colors.surface : colors.background,
       }}
     >
-      <Text
-        style={{
-          color: selected ? colors.text : colors.textMuted,
-          fontSize: fontSize.label,
-          fontWeight: selected ? '700' : '400',
-        }}
-      >
-        {selected ? '✓ ' : ''}
-        {label}
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+        {selected ? (
+          <MaterialIcons name="check" size={fontSize.label} color={colors.accent} />
+        ) : null}
+        <Text
+          style={{
+            color: selected ? colors.text : colors.textMuted,
+            fontSize: fontSize.label,
+            fontWeight: selected ? '700' : '400',
+          }}
+        >
+          {label}
+        </Text>
+      </View>
     </Pressable>
   );
 

@@ -12,15 +12,17 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
-    "@react-native-community/datetimepicker": "9.1.0",
     "@react-native-firebase/app": "^26.1.0",
     "@react-native-firebase/auth": "^26.1.0",
     "@react-native-firebase/messaging": "^26.1.0",
     "@react-native-google-signin/google-signin": "^16.1.4",
+    "dayjs": "^1.11.21",
     "expo": "~57.0.10",
     "expo-build-properties": "~57.0.8",
     "expo-calendar": "~57.0.1",
+    "expo-clipboard": "~57.0.1",
     "expo-constants": "~57.0.9",
     "expo-dev-client": "~57.0.10",
     "expo-linking": "~57.0.5",
@@ -29,11 +31,13 @@
     "expo-router": "~57.0.10",
     "expo-secure-store": "~57.0.1",
     "expo-status-bar": "~57.0.1",
+    "expo-system-ui": "~57.0.2",
     "luxon": "^3.7.2",
     "react": "19.2.3",
     "react-native": "0.86.2",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
+    "react-native-ui-datepicker": "^3.3.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

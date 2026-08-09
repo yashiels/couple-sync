@@ -111,8 +111,9 @@ describe('formatting', () => {
     expect(formatDuration(150)).toBe('2h 30m');
     expect(formatDuration(45)).toBe('45m');
     expect(formatDuration(120)).toBe('2h');
-    expect(formatCountdown(1_000_000, 1_000_000)).toBe('now');
-    expect(formatCountdown(1_000_000, 999_000)).toBe('now'); // under a minute away
+    expect(formatCountdown(1_000_000, 1_000_000)).toBe('now'); // target reached
+    expect(formatCountdown(1_000_000, 999_000)).toBe('in <1m'); // sub-minute in the future, not "now"
+    expect(formatCountdown(999_000, 1_000_000)).toBe('now'); // already passed
     expect(formatCountdown(10_000_000, 1_000_000)).toBe('in 2h 30m');
     expect(formatCountdown(1_000_000 + 3 * 86_400_000, 1_000_000)).toBe('in 3 days');
   });

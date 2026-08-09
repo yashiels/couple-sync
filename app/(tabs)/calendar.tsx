@@ -1,6 +1,7 @@
+import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { DateTime } from 'luxon';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ComponentProps } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -114,7 +115,11 @@ export default function CalendarScreen() {
     setSheet({ kind: 'block', block, occurrence });
   }
 
-  const iconButton = (label: string, glyph: string, onPress: () => void) => (
+  const iconButton = (
+    label: string,
+    icon: ComponentProps<typeof MaterialIcons>['name'],
+    onPress: () => void,
+  ) => (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
@@ -129,7 +134,7 @@ export default function CalendarScreen() {
         borderColor: colors.border,
       }}
     >
-      <Text style={{ color: colors.text, fontSize: fontSize.body }}>{glyph}</Text>
+      <MaterialIcons name={icon} size={fontSize.heading} color={colors.text} />
     </Pressable>
   );
 
@@ -179,10 +184,13 @@ export default function CalendarScreen() {
           <Text style={{ color: colors.textMuted, fontSize: fontSize.label }}>{repeat}</Text>
         ) : null}
         {block.source === 'google' ? (
-          <Text style={{ color: colors.text, fontSize: fontSize.label }}>
-            🔒 From Google Calendar. We only ever read busy and free times, never event titles. Change
-            it in Google Calendar and it updates here on the next sync.
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs }}>
+            <MaterialIcons name="lock" size={fontSize.label} color={colors.textMuted} />
+            <Text style={{ color: colors.text, fontSize: fontSize.label, flex: 1 }}>
+              From Google Calendar. We only ever read busy and free times, never event titles. Change
+              it in Google Calendar and it updates here on the next sync.
+            </Text>
+          </View>
         ) : block.title === null ? (
           <Text style={{ color: colors.text, fontSize: fontSize.label }}>
             {partnerName} kept the details of this one private. The time is still blocked out.
@@ -208,7 +216,7 @@ export default function CalendarScreen() {
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-        {iconButton('Previous week', '‹', () => setIndex((i) => i - 1))}
+        {iconButton('Previous week', 'chevron-left', () => setIndex((i) => i - 1))}
         <View style={{ flex: 1 }}>
           <Text numberOfLines={1} style={{ color: colors.text, fontSize: fontSize.heading }}>
             {weekLabel}
@@ -235,7 +243,7 @@ export default function CalendarScreen() {
             <Text style={{ color: colors.accent, fontSize: fontSize.label }}>Today</Text>
           </Pressable>
         )}
-        {iconButton('Next week', '›', () => setIndex((i) => i + 1))}
+        {iconButton('Next week', 'chevron-right', () => setIndex((i) => i + 1))}
       </View>
 
       {error ? (
@@ -272,7 +280,7 @@ export default function CalendarScreen() {
           backgroundColor: colors.accent,
         }}
       >
-        <Text style={{ color: colors.accentText, fontSize: fontSize.title }}>+</Text>
+        <MaterialIcons name="add" size={fontSize.title} color={colors.accentText} />
       </Pressable>
 
       <Modal

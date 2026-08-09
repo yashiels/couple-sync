@@ -1,3 +1,4 @@
+import { MaterialIcons } from '@expo/vector-icons';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Alert, Modal, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -323,7 +324,7 @@ export default function SettingsScreen() {
             <Text style={{ color: colors.textMuted, fontSize: fontSize.label }}>
               {zone.replace(/_/g, ' ')}
             </Text>
-            <Text style={{ color: colors.textMuted, fontSize: fontSize.body }}>›</Text>
+            <MaterialIcons name="chevron-right" size={fontSize.body} color={colors.textMuted} />
           </Pressable>
 
           {toggle(

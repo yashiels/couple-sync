@@ -1,14 +1,15 @@
+import { MaterialIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { Text, type ColorValue } from 'react-native';
+import type { ColorValue } from 'react-native';
 
-import { fontSize, touchTarget, useColors } from '../../src/theme';
+import { touchTarget, useColors } from '../../src/theme';
 
 // Three tabs, per REBUILD-SPEC §1. There is no Overlap tab and no Blocks tab: the Calendar tab *is*
-// the block-management surface. No icon library is installed and three glyphs do not justify adding
-// one; each tab keeps its visible label and an accessibilityLabel so the icon is never the only cue.
-const tabIcon = (glyph: string) =>
-  function TabIcon({ color }: { color: ColorValue }) {
-    return <Text style={{ color, fontSize: fontSize.heading }}>{glyph}</Text>;
+// the block-management surface. Icons are Google Material Icons (@expo/vector-icons); each tab keeps
+// its visible label and an accessibilityLabel so the icon is never the only cue.
+const tabIcon = (name: keyof typeof MaterialIcons.glyphMap) =>
+  function TabIcon({ color, size }: { color: ColorValue; size: number }) {
+    return <MaterialIcons name={name} color={color} size={size} />;
   };
 
 export default function TabsLayout() {
@@ -29,7 +30,7 @@ export default function TabsLayout() {
         options={{
           title: 'Free time',
           tabBarAccessibilityLabel: 'Free time',
-          tabBarIcon: tabIcon('◆'),
+          tabBarIcon: tabIcon('schedule'),
         }}
       />
       <Tabs.Screen
@@ -37,7 +38,7 @@ export default function TabsLayout() {
         options={{
           title: 'Calendar',
           tabBarAccessibilityLabel: 'Calendar',
-          tabBarIcon: tabIcon('▦'),
+          tabBarIcon: tabIcon('calendar-month'),
         }}
       />
       <Tabs.Screen
@@ -45,7 +46,7 @@ export default function TabsLayout() {
         options={{
           title: 'Settings',
           tabBarAccessibilityLabel: 'Settings',
-          tabBarIcon: tabIcon('⚙'),
+          tabBarIcon: tabIcon('settings'),
         }}
       />
     </Tabs>

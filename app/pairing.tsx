@@ -1,7 +1,10 @@
+import { MaterialIcons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Clipboard,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   Share,
   Text,
@@ -164,152 +167,165 @@ export default function PairingScreen() {
   } as const;
 
   return (
-    <View
-      style={{
-        flex: 1,
-        paddingTop: insets.top + spacing.md,
-        paddingHorizontal: spacing.lg,
-        paddingBottom: insets.bottom + spacing.md,
-        gap: spacing.md,
-        backgroundColor: colors.background,
-      }}
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={0}
     >
-      <Text style={{ color: colors.text, fontSize: fontSize.title }}>Pair with your partner</Text>
+      <View
+        style={{
+          flex: 1,
+          paddingTop: insets.top + spacing.md,
+          paddingHorizontal: spacing.lg,
+          paddingBottom: insets.bottom + spacing.md,
+          gap: spacing.md,
+          backgroundColor: colors.background,
+        }}
+      >
+        <Text style={{ color: colors.text, fontSize: fontSize.title }}>Pair with your partner</Text>
 
-      <View accessibilityRole="tablist" style={{ flexDirection: 'row' }}>
-        {tabButton('share', 'Share a code')}
-        {tabButton('enter', 'Enter a code')}
-      </View>
+        <View accessibilityRole="tablist" style={{ flexDirection: 'row' }}>
+          {tabButton('share', 'Share a code')}
+          {tabButton('enter', 'Enter a code')}
+        </View>
 
-      {tab === 'share' ? (
-        <View style={{ gap: spacing.md }}>
-          <Text style={{ color: colors.textMuted, fontSize: fontSize.body }}>
-            Send this code to your partner. It works once.
-          </Text>
+        {tab === 'share' ? (
+          <View style={{ gap: spacing.md }}>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.body }}>
+              Send this code to your partner. It works once.
+            </Text>
 
-          {creating ? <ActivityIndicator color={colors.accent} /> : null}
+            {creating ? <ActivityIndicator color={colors.accent} /> : null}
 
-          {createError ? (
-            <>
-              <Text style={{ color: colors.danger, fontSize: fontSize.label }}>{createError}</Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setCreateError(null)}
-                style={primaryButton}
-              >
-                <Text style={{ color: colors.accentText, fontSize: fontSize.body }}>Try again</Text>
-              </Pressable>
-            </>
-          ) : null}
-
-          {invite ? (
-            <>
-              <View
-                style={{
-                  padding: spacing.md,
-                  borderRadius: radius,
-                  backgroundColor: colors.surface,
-                  alignItems: 'center',
-                  gap: spacing.xs,
-                }}
-              >
-                <Text
-                  accessibilityLabel={`Your code is ${invite.code.split('').join(' ')}`}
-                  selectable
-                  style={{ color: colors.text, fontSize: fontSize.title, letterSpacing: 4 }}
+            {createError ? (
+              <>
+                <Text style={{ color: colors.danger, fontSize: fontSize.label }}>{createError}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setCreateError(null)}
+                  style={primaryButton}
                 >
-                  {invite.code}
-                </Text>
+                  <Text style={{ color: colors.accentText, fontSize: fontSize.body }}>Try again</Text>
+                </Pressable>
+              </>
+            ) : null}
+
+            {invite ? (
+              <>
+                <View
+                  style={{
+                    padding: spacing.md,
+                    borderRadius: radius,
+                    backgroundColor: colors.surface,
+                    alignItems: 'center',
+                    gap: spacing.xs,
+                  }}
+                >
+                  <Text
+                    accessibilityLabel={`Your code is ${invite.code.split('').join(' ')}`}
+                    selectable
+                    style={{ color: colors.text, fontSize: fontSize.title, letterSpacing: 4 }}
+                  >
+                    {invite.code}
+                  </Text>
+                  <Text style={{ color: colors.textMuted, fontSize: fontSize.caption }}>
+                    Expires {formatCountdown(invite.expires_at)}
+                  </Text>
+                </View>
+
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => void onShare()}
+                  style={primaryButton}
+                >
+                  <Text style={{ color: colors.accentText, fontSize: fontSize.body }}>Share code</Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    void Clipboard.setStringAsync(invite.code);
+                    setCopied(true);
+                  }}
+                  style={{
+                    ...primaryButton,
+                    backgroundColor: colors.surface,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  {copied ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                      <MaterialIcons name="check" size={fontSize.body} color={colors.text} />
+                      <Text style={{ color: colors.text, fontSize: fontSize.body }}>Copied</Text>
+                    </View>
+                  ) : (
+                    <Text style={{ color: colors.text, fontSize: fontSize.body }}>Copy code</Text>
+                  )}
+                </Pressable>
+
                 <Text style={{ color: colors.textMuted, fontSize: fontSize.caption }}>
-                  Expires {formatCountdown(invite.expires_at)}
+                  Keep this screen open — you will go straight in when your partner enters the code.
                 </Text>
-              </View>
+              </>
+            ) : null}
+          </View>
+        ) : (
+          <View style={{ gap: spacing.md }}>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.body }}>
+              Type the code your partner sent you.
+            </Text>
 
-              <Pressable accessibilityRole="button" onPress={() => void onShare()} style={primaryButton}>
-                <Text style={{ color: colors.accentText, fontSize: fontSize.body }}>Share code</Text>
-              </Pressable>
+            <TextInput
+              accessibilityLabel="Invite code"
+              placeholder="ABC234"
+              placeholderTextColor={colors.textMuted}
+              value={code}
+              // Upper-cased and filtered as it is typed, so the field always shows the same six
+              // characters the partner was given.
+              onChangeText={(text) => setCode(normalizeInviteCode(text))}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={CODE_LENGTH}
+              style={{
+                minHeight: touchTarget,
+                paddingHorizontal: spacing.md,
+                borderRadius: radius,
+                borderWidth: 1,
+                borderColor: colors.border,
+                color: colors.text,
+                fontSize: fontSize.heading,
+                letterSpacing: 4,
+                textAlign: 'center',
+              }}
+            />
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.caption }}>
+              6 characters. A code never contains O, 0, I or 1.
+            </Text>
 
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  // Ceiling: react-native's Clipboard is deprecated and warns once. Replacing it
-                  // means adding expo-clipboard, which is a native module and so a new dev build.
-                  Clipboard.setString(invite.code);
-                  setCopied(true);
-                }}
-                style={{
-                  ...primaryButton,
-                  backgroundColor: colors.surface,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                }}
-              >
-                <Text style={{ color: colors.text, fontSize: fontSize.body }}>
-                  {copied ? '✓ Copied' : 'Copy code'}
-                </Text>
-              </Pressable>
+            {redeemError ? (
+              <Text style={{ color: colors.danger, fontSize: fontSize.label }}>{redeemError}</Text>
+            ) : null}
 
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.caption }}>
-                Keep this screen open — you will go straight in when your partner enters the code.
-              </Text>
-            </>
-          ) : null}
-        </View>
-      ) : (
-        <View style={{ gap: spacing.md }}>
-          <Text style={{ color: colors.textMuted, fontSize: fontSize.body }}>
-            Type the code your partner sent you.
-          </Text>
-
-          <TextInput
-            accessibilityLabel="Invite code"
-            placeholder="ABC234"
-            placeholderTextColor={colors.textMuted}
-            value={code}
-            // Upper-cased and filtered as it is typed, so the field always shows the same six
-            // characters the partner was given.
-            onChangeText={(text) => setCode(normalizeInviteCode(text))}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            maxLength={CODE_LENGTH}
-            style={{
-              minHeight: touchTarget,
-              paddingHorizontal: spacing.md,
-              borderRadius: radius,
-              borderWidth: 1,
-              borderColor: colors.border,
-              color: colors.text,
-              fontSize: fontSize.heading,
-              letterSpacing: 4,
-              textAlign: 'center',
-            }}
-          />
-          <Text style={{ color: colors.textMuted, fontSize: fontSize.caption }}>
-            6 characters. A code never contains O, 0, I or 1.
-          </Text>
-
-          {redeemError ? (
-            <Text style={{ color: colors.danger, fontSize: fontSize.label }}>{redeemError}</Text>
-          ) : null}
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ disabled: redeeming || code.length < CODE_LENGTH }}
-            disabled={redeeming || code.length < CODE_LENGTH}
-            onPress={() => void onRedeem()}
-            style={{
-              ...primaryButton,
-              opacity: redeeming || code.length < CODE_LENGTH ? 0.6 : 1,
-            }}
-          >
-            {redeeming ? (
-              <ActivityIndicator color={colors.accentText} />
-            ) : (
-              <Text style={{ color: colors.accentText, fontSize: fontSize.body }}>Pair</Text>
-            )}
-          </Pressable>
-        </View>
-      )}
-    </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: redeeming || code.length < CODE_LENGTH }}
+              disabled={redeeming || code.length < CODE_LENGTH}
+              onPress={() => void onRedeem()}
+              style={{
+                ...primaryButton,
+                opacity: redeeming || code.length < CODE_LENGTH ? 0.6 : 1,
+              }}
+            >
+              {redeeming ? (
+                <ActivityIndicator color={colors.accentText} />
+              ) : (
+                <Text style={{ color: colors.accentText, fontSize: fontSize.body }}>Pair</Text>
+              )}
+            </Pressable>
+          </View>
+        )}
+      </View>
+    </KeyboardAvoidingView>
   );
 }
