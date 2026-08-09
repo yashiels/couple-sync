@@ -133,7 +133,7 @@ jobs:
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/fb-sa.json"
           npx --yes firebase-tools appdistribution:distribute "${{ steps.apk.outputs.path }}" \
             --app "$ANDROID_APP_ID" \
-            --groups "testers" \
+            --groups "group-a" \
             --release-notes "${{ github.ref_name }} (build ${{ github.run_number }})"
 
       - name: Attach APK to GitHub Release
