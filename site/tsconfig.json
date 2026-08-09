@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    // webworker, NOT dom: @cloudflare/workers-types redefines the DOM globals (Request, Response,
+    // fetch, URL, …), and lib.dom collides with it. A Pages Function is a Worker, so the worker
+    // lib is the correct one.
+    "lib": ["ES2022", "webworker"],
+    "strict": true,
+    "noEmit": true,
+    // The types pull in both workers-types and vitest's (via the test's import). skipLibCheck keeps
+    // a third-party .d.ts disagreement from failing our typecheck; our own files are still checked.
+    "skipLibCheck": true,
+    "types": ["@cloudflare/workers-types"]
+  },
+  "include": ["functions/**/*.ts"]
+}

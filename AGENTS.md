@@ -16,12 +16,13 @@ intervals, computes overlap windows, and pushes them to both partners over WebSo
 Node 22 / TypeScript strict / Fastify 5 / `pg` / `ws` / `firebase-admin` / vitest ·
 Postgres 16 · Firebase Auth + FCM only (Spark plan — no Firestore, no Cloud Functions).
 
-Two deployables in one repo — **never mix their package managers:**
+Three deployables in one repo — **never mix their package managers:**
 
 | Deployable | Location | Package manager | Lockfile |
 |---|---|---|---|
 | Expo React Native app | repo root (`app/`, `src/`) | **npm** | `package-lock.json` |
 | Fastify + Postgres backend | `backend/` | **pnpm** (`pnpm@10.26.0`) | `backend/pnpm-lock.yaml` |
+| Cloudflare Pages 1-pager | `site/` | **pnpm** (`pnpm@10.26.0`) | `site/pnpm-lock.yaml` |
 
 ## Build & Test
 
@@ -90,11 +91,17 @@ prebuild) and runs exactly the commands above. A locally-skipped test is a red p
 | `backend/src/overlap/` | pure overlap engine (`types.ts` has zero imports; `index.ts` reaches `rrule`) |
 | `backend/src/routes/` | Fastify routes; `wire.ts` = shared wire types; `firebase.ts` = Admin SDK boot |
 | `backend/src/migrations/` | idempotent DDL, re-run on every boot (no version table) |
-| `docs/deployment/deploy.md` | the live deployment doc (backend only) |
+| `site/` | Cloudflare Pages 1-pager + the Pages Function that splits page-vs-API on the shared hostname |
+| `docs/deployment/deploy.md` | the live deployment doc (backend + site) |
 | `e2e/` | maestro flows + `seed-partner.mjs` |
 
 ## Gotchas
 
+- **Adding a backend route? Update the site split too.** `site/functions/_middleware.ts` decides
+  page-vs-API by path on the shared hostname; a new Fastify route that isn't added to `API_EXACT` /
+  `API_PREFIX` serves the static 404 page to the app instead of proxying. The routing test
+  (`site/functions/_middleware.test.ts`, run by root `npm test`) enumerates every live route —
+  add it there.
 - **`pnpm build` before `pnpm test`, always:** `backend/src/__tests__/boot-esm.test.ts` imports the
   **built** output to catch CJS/ESM interop breakage and silently skips when `dist/` is absent.
 - **`TEST_DATABASE_URL` gates the 7 migration tests** — unset, they skip (a typo'd column name goes

@@ -1,0 +1,6 @@
+# pnpm 10 blocks dependency build scripts by default. Neither esbuild's nor workerd's postinstall
+# is needed here: `wrangler pages deploy` ships prebuilt binaries and the function is deployed
+# unbuilt. Keep both off rather than prompting on every install.
+allowBuilds:
+  esbuild: false
+  workerd: false

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy — Couple Sync</title>
+    <meta name="description" content="What Couple Sync reads, stores, and never touches." />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <a class="wordmark" href="/">Couple&nbsp;Sync</a>
+
+      <h1>Privacy policy</h1>
+      <p class="muted">Last updated: 9 August 2026</p>
+
+      <h2>The short version</h2>
+      <p>
+        Couple Sync reads <strong>busy/free intervals only</strong> from Google Calendar — never an
+        event title, guest list, location, or description. We show your partner <em>when</em> you're
+        free, never <em>what</em> you're doing. We don't run ads, we don't sell data, and we don't
+        use analytics trackers.
+      </p>
+
+      <h2>What we store</h2>
+      <ol class="steps">
+        <li>
+          <strong>Your Google account basics</strong> — email, display name, and profile photo, from
+          Google sign-in (handled by Firebase Authentication).
+        </li>
+        <li>
+          <strong>Busy/free intervals</strong> — start and end times of busy periods, fetched via
+          Google's free/busy API. The API never returns event details, so we never see them.
+        </li>
+        <li>
+          <strong>Your timezone</strong>, so overlap windows are computed at the right local times.
+        </li>
+        <li>
+          <strong>Blocks you create in the app</strong> — including an optional title. A block marked
+          <em>only me</em> shapes the overlap result, but its title never leaves the server to your
+          partner.
+        </li>
+        <li>
+          <strong>A push-notification token</strong> (Firebase Cloud Messaging) so your partner's
+          updates reach your phone.
+        </li>
+      </ol>
+
+      <h2>How it's used</h2>
+      <p>
+        Intervals from both partners are compared on our server to compute mutual free windows, which
+        are sent to the two of you and nobody else. There are no other users, no social graph, no
+        public profile.
+      </p>
+
+      <h2>Where it lives</h2>
+      <p>
+        Data is stored in a single self-hosted PostgreSQL database operated by the developer.
+        Identity and push delivery are handled by Google Firebase. Traffic is encrypted in transit
+        (TLS via Cloudflare). Data is not shared with, sold to, or processed by any other third
+        party.
+      </p>
+
+      <h2>Your controls</h2>
+      <p>
+        Calendar access is read-only and can be revoked at any time in your
+        <a href="https://myaccount.google.com/permissions">Google account permissions</a> — Couple
+        Sync simply stops seeing new busy periods. To delete your account and all stored data, open
+        an issue on <a href="https://github.com/yashiels/couple-sync/issues">GitHub</a> and it will
+        be removed.
+      </p>
+
+      <footer>
+        <a href="/">Home</a>
+        <a href="/support">Support</a>
+        <span>© 2026 Couple Sync</span>
+      </footer>
+    </main>
+  </body>
+</html>

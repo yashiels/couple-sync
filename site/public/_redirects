@@ -1,0 +1,3 @@
+# /invite/<code> has no per-code file; serve the one invite page and let its script read the code
+# out of the URL. Pages runs this after functions, so API paths have already been proxied away.
+/invite/* /invite/index.html 200

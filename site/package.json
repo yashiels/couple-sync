@@ -1,0 +1,16 @@
+{
+  "name": "couple-sync-site",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Cloudflare Pages 1-pager for couple-sync.yashiel.dev. Deploy-only: no build, no runtime deps.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "deploy": "wrangler pages deploy public --project-name couple-sync"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250617.0",
+    "typescript": "5.9.3",
+    "wrangler": "^4.0.0"
+  }
+}

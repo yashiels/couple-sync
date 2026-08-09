@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>You're invited — Couple Sync</title>
+    <meta name="description" content="Pair with your partner on Couple Sync." />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <a class="wordmark" href="/">Couple&nbsp;Sync</a>
+
+      <h1>You're invited to pair.</h1>
+      <p class="lede">
+        Your partner wants to find time together on Couple Sync. Open the app to accept.
+      </p>
+
+      <div class="card">
+        <div class="code" id="invite-code" aria-label="Invite code">······</div>
+        <p class="muted" style="text-align: center; margin: 0">Invite code</p>
+      </div>
+
+      <div class="button-row">
+        <!-- href is set by script; without JS the code below is the fallback. -->
+        <a class="button" id="open-app" href="#">Open in Couple&nbsp;Sync</a>
+        <a class="button secondary" href="https://play.google.com/store/apps/details?id=dev.yashiel.couplesync"
+          >Get the app</a
+        >
+      </div>
+
+      <h2>No app yet?</h2>
+      <ol class="steps">
+        <li>Install Couple Sync from Google Play.</li>
+        <li>Sign in with Google.</li>
+        <li>Type the 6-character code above when prompted.</li>
+      </ol>
+      <p class="muted">
+        Codes expire after 48 hours — if this one has lapsed, ask your partner for a fresh one from
+        the app.
+      </p>
+
+      <footer>
+        <a href="/">Home</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/support">Support</a>
+        <span>© 2026 Couple Sync</span>
+      </footer>
+    </main>
+
+    <script>
+      // The code travels in the URL path (/invite/ABC123). Pull it out, display it, and aim the
+      // deep-link button at the custom scheme the app already registers (couplesync://invite/…).
+      (function () {
+        var m = window.location.pathname.match(/^\/invite\/([A-HJ-NP-Za-hj-np-z2-9]{6})\/?$/);
+        var codeEl = document.getElementById('invite-code');
+        var openBtn = document.getElementById('open-app');
+        if (m) {
+          var code = m[1].toUpperCase();
+          codeEl.textContent = code;
+          openBtn.href = 'couplesync://invite/' + code;
+        } else {
+          codeEl.textContent = 'no code';
+          openBtn.style.display = 'none';
+        }
+      })();
+    </script>
+  </body>
+</html>

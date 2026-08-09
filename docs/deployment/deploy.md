@@ -1,7 +1,10 @@
 # Deployment
 
-**One app, not two.** Only the backend is deployed. The client is an Android app installed on a
-device — there is no web app, no root `Dockerfile`, and nothing that builds from `assets/` or `web/`.
+**Two deployables, one hostname.** The backend ships as a Docker image; the 1-pager ships to
+Cloudflare Pages on the same `couple-sync.yashiel.dev`, where a Pages Function proxies the API
+paths to the tunnel (see `site/README.md`). The client is an Android app installed on a device —
+there is no *interactive* web app, no root `Dockerfile`, and nothing that builds from `assets/` or
+`web/`.
 
 ## How it ships
 

@@ -1,0 +1,6 @@
+# Static pages: light hardening. API responses come from the backend through the function, so
+# their caching/security headers are the backend's own and are not set here.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin

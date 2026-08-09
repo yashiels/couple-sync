@@ -1,0 +1,168 @@
+/* Palette mirrors src/theme.ts so the page reads as the same product as the app. */
+:root {
+  --background: #ffffff;
+  --surface: #f4f4f7;
+  --border: #dedee4;
+  --text: #141419;
+  --text-muted: #5c5c68;
+  --accent: #e0518a;
+  --accent-text: #ffffff;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #121215;
+    --surface: #1e1e23;
+    --border: #33333b;
+    --text: #f2f2f5;
+    --text-muted: #a5a5b0;
+    --accent: #ff7fae;
+    --accent-text: #1a0a11;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--text);
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 48px 24px 64px;
+}
+
+.wordmark {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h1 {
+  font-size: 34px;
+  line-height: 1.2;
+  margin: 40px 0 16px;
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  font-size: 20px;
+  margin: 32px 0 8px;
+}
+
+p {
+  margin: 0 0 16px;
+}
+
+.lede {
+  font-size: 18px;
+  color: var(--text-muted);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+a {
+  color: var(--accent);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin: 16px 0;
+}
+
+.button {
+  display: inline-block;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+  font-size: 16px;
+  text-decoration: none;
+  border: 0;
+  border-radius: 10px;
+  padding: 14px 24px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.button.secondary {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.button-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+
+.code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-align: center;
+  padding: 24px 16px 24px 28px; /* optically recenter against the letter-spacing */
+  margin: 24px 0 8px;
+  user-select: all;
+}
+
+.steps {
+  padding-left: 20px;
+}
+
+.steps li {
+  margin-bottom: 8px;
+}
+
+footer {
+  margin-top: 64px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+footer a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+footer a:hover {
+  color: var(--accent);
+}
+
+@media (max-width: 480px) {
+  h1 {
+    font-size: 28px;
+  }
+
+  .code {
+    font-size: 32px;
+  }
+}
