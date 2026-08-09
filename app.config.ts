@@ -52,6 +52,11 @@ const config: ExpoConfig = {
     userInterfaceStyle: 'automatic',
     // Real Firebase iOS config, gitignored like its Android sibling. Pulled by scripts/pull-secrets.sh.
     googleServicesFile: './GoogleService-Info.plist',
+    infoPlist: {
+      // The app uses only standard HTTPS/TLS (backend, Firebase, Google sign-in) — exempt encryption.
+      // Declaring it here auto-answers the App Store export-compliance prompt on every TestFlight build.
+      ITSAppUsesNonExemptEncryption: false,
+    },
   },
   plugins: [
     'expo-router',
