@@ -1,39 +1,49 @@
 # App releases (Android + iOS)
 
 The backend ships as a Docker image (see `deploy.md`). This doc covers the **client** release
-workflows that build signed installables and attach them to a GitHub Release:
+workflows:
 
-- `.github/workflows/android-release.yml` — signed `.apk` on `ubuntu-latest`.
-- `.github/workflows/ios-release.yml` — signed `.ipa` on `macos-14` (paid Apple team; push entitlement kept).
+- `.github/workflows/android-release.yml` — signed `.apk` on `ubuntu-latest`, attached to the GitHub Release.
+- `.github/workflows/ios-release.yml` — signed `.ipa` on `macos-26`, uploaded to **TestFlight** (paid
+  Apple team; push entitlement kept). macos-26 is required: expo-modules-jsi (SDK 57) only compiles on
+  Xcode ≥26.4 (Swift 6.2); older images fail.
 
-Both trigger on a `v*` tag push (or manual `workflow_dispatch`) and both read their secrets from
-1Password using a single GitHub repo secret, `OP_SERVICE_ACCOUNT_TOKEN`. The Android workflow also
-still accepts plain GitHub repo secrets as a fallback when that token is not set.
+Both trigger on a `v*` tag push (or manual `workflow_dispatch`) and read their secrets from 1Password
+using a single GitHub repo secret, `OP_SERVICE_ACCOUNT_TOKEN`. The Android workflow also still accepts
+plain GitHub repo secrets as a fallback when that token is not set.
+
+> **Status:** fully provisioned and shipped once (`v0.1.0`). The credentials below already exist in
+> 1Password — this doc is the reference for what's wired and how to re-provision (e.g. when the iOS
+> Distribution cert or profile expires, ~1 year). iOS signing is **manual** (a managed Apple
+> Distribution cert + App Store profile); automatic/cloud signing did not work on GitHub runners.
 
 ---
 
 ## a) Apple portal actions (one-time, done by you in a browser)
 
-1. **App Store Connect API key** — App Store Connect → Users and Access → Integrations → App Store
-   Connect API → **Team Keys** → generate a key with role **App Manager** (or **Admin**). Download the
-   `.p8` **once** (it cannot be re-downloaded). Note the **Key ID** and the **Issuer ID** shown on that
-   page. This key is what lets `xcodebuild` sign and (optionally) upload without an Apple ID password.
-2. **App ID / bundle identifier** — in the Apple Developer portal (Certificates, Identifiers &
-   Profiles → Identifiers), confirm an App ID exists for **`dev.yashiel.couplesync`** with the
-   **Push Notifications** capability enabled. Automatic signing will create the provisioning profile,
-   but the identifier itself must exist first.
-2b. **App record in App Store Connect** — App Store Connect → **Apps → +** → **New App**, platform iOS,
-   bundle id `dev.yashiel.couplesync`, pick a name + SKU. TestFlight uploads have nowhere to land
-   without this record. After the first successful upload, add testers under the app's **TestFlight**
-   tab (Internal Testing group = your team, installs immediately; External = up to 10k, one-time beta
-   review). Testers install builds through the **TestFlight** iOS app.
-3. **Team ID** — Apple Developer → Membership. Copy the 10-character Team ID (e.g. `A1B2C3D4E5`); the
-   iOS workflow needs it so automatic signing can pick the right team.
-4. **APNs auth key for Firebase push** — App Store Connect API keys do **not** carry push. Create a
+1. **App Store Connect API key** (done) — App Store Connect → Users and Access → Integrations → App
+   Store Connect API → **Team Keys** → key with role **App Manager**. The `.p8` downloads once. Used by
+   the workflow only to **upload** to TestFlight (`altool`) — NOT for signing (see step 5). Note the
+   **Key ID** + **Issuer ID**.
+2. **App ID** — Certificates, Identifiers & Profiles → Identifiers: App ID `dev.yashiel.couplesync`
+   with **Push Notifications** enabled.
+3. **App record in App Store Connect** (done) — Apps → **+** → New App, iOS, bundle id
+   `dev.yashiel.couplesync`. TestFlight uploads land here. Add testers under the app's **TestFlight**
+   tab (Internal = your team, installs immediately; External = up to 10k, one-time beta review); they
+   install via the **TestFlight** iOS app.
+4. **Team ID** — Apple Developer → Membership (10 chars: `3ZD88GJ8SJ`).
+5. **iOS Distribution cert + App Store profile** (done — MANUAL signing) — created with
+   `fastlane cert` (an Apple Distribution cert, id `85V8539546`) + `fastlane sigh --app_identifier
+   dev.yashiel.couplesync` (App Store profile `dev.yashiel.couplesync AppStore`), using the ASC API key.
+   Both are stored in 1Password (see below) and imported into a throwaway keychain at build time by the
+   workflow's "Set up code signing" step; `plugins/withIosManualSigning.js` applies them to only the app
+   target. **Re-provision the same way** when the cert/profile expire (~1 year) and re-store the base64.
+6. **APNs auth key for Firebase push** — App Store Connect API keys do **not** carry push. Create a
    separate **APNs Auth Key** (Certificates, Identifiers & Profiles → Keys → new key, check **Apple
    Push Notifications service (APNs)**), download its `.p8`, and upload it in the **Firebase console →
-   Project settings → Cloud Messaging → Apple app configuration**, entering the APNs Key ID and your
-   Team ID. Without this, FCM push to iOS silently fails even though the build is signed correctly.
+   Project settings → Cloud Messaging → Apple app configuration**. Without this, FCM push to iOS fails
+   even though the build is signed. (Export-compliance is auto-answered via
+   `ios.infoPlist.ITSAppUsesNonExemptEncryption=false` — HTTPS/TLS only.)
 
 ## b) New 1Password fields (vault **Nexion**, item **couple-sync**)
 
@@ -46,10 +56,12 @@ workflows read.
 
 | Field name | Value |
 |---|---|
-| `asc_api_key_id` | The App Store Connect API **Key ID** from step (a1). |
-| `asc_issuer_id` | The **Issuer ID** from step (a1). |
-| `asc_api_key_p8_base64` | The `.p8` file, base64-encoded (see below). |
-| `apple_team_id` | The 10-char **Team ID** from step (a3). |
+| `asc_api_key_id` | App Store Connect API **Key ID** (upload). |
+| `asc_issuer_id` | The **Issuer ID**. |
+| `asc_api_key_p8_base64` | The ASC `.p8`, base64 (see below). |
+| `apple_team_id` | Team ID (`3ZD88GJ8SJ`). |
+| `ios_dist_cert_p12_base64` | Apple **Distribution** cert `.p12`, base64 (manual signing). |
+| `ios_dist_cert_password` | Export password for that `.p12`. |
 
 **`op://Nexion/couple-sync/…` (this app only):**
 
@@ -57,6 +69,8 @@ workflows read.
 |---|---|
 | `google_services_info_plist_b64` | base64 of iOS `GoogleService-Info.plist`. |
 | `google_web_client_id` | Web OAuth client id (Google sign-in). |
+| `ios_appstore_profile_base64` | base64 of the App Store `.mobileprovision`. |
+| `ios_appstore_profile_name` | The profile Name (`dev.yashiel.couplesync AppStore`) — used in ExportOptions. |
 | `keystore_base64` / `keystore_password` / `key_alias` / `key_password` / `google_services_json_b64` | Android release signing + Firebase (used by `android-release.yml`). |
 
 Base64-encode the `.p8` (one line, no wrapping):
