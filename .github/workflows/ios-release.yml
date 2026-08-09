@@ -29,7 +29,9 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-14
+    # macos-15 ships Xcode 16; macos-14's default Xcode is too old for firebase-ios-sdk (RNFirebase
+    # v23), whose Podfile check fails pod install with "Please upgrade XCode".
+    runs-on: macos-15
     timeout-minutes: 45
     env:
       API_BASE_URL: https://couple-sync.yashiel.dev
