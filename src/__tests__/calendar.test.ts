@@ -15,8 +15,15 @@ const mocks = vi.hoisted(() => ({
   signInSilently: vi.fn(),
   addScopes: vi.fn(),
   getGoogleAccessToken: vi.fn<() => Promise<string | null>>(),
-  putGoogleBlocks: vi.fn<
-    (coupleId: string, intervals: { start_utc: number; end_utc: number }[]) => Promise<number>
+  putCalendarBlocks: vi.fn<
+    (
+      coupleId: string,
+      intervals: { start_utc: number; end_utc: number }[],
+      source: 'google' | 'device',
+    ) => Promise<number>
+  >(),
+  deviceBusy: vi.fn<
+    (from: number, to: number) => Promise<{ start_utc: number; end_utc: number }[] | null>
   >(),
 }));
 
@@ -54,7 +61,12 @@ vi.mock('../auth', () => ({
   getIdToken: async () => 'FIREBASE-ID-TOKEN',
 }));
 
-vi.mock('../api', () => ({ api: { putGoogleBlocks: mocks.putGoogleBlocks } }));
+vi.mock('../api', () => ({ api: { putCalendarBlocks: mocks.putCalendarBlocks } }));
+
+// Device calendar is stubbed (the real module pulls expo-calendar, a native module). Controllable per
+// test; defaults to null in beforeEach = "device not read", so runSync skips the device PUT and only
+// the Google source is posted — those assertions are exactly the Google result.
+vi.mock('../deviceCalendar', () => ({ deviceBusy: mocks.deviceBusy }));
 
 const fetchMock = vi.fn();
 
@@ -86,7 +98,8 @@ beforeEach(() => {
   mocks.signInSilently.mockReset().mockResolvedValue({ type: 'success', data: { scopes: [CALENDAR_SCOPE] } });
   mocks.addScopes.mockReset().mockResolvedValue({ type: 'success', data: {} });
   mocks.getGoogleAccessToken.mockReset().mockResolvedValue('GOOGLE-ACCESS-TOKEN');
-  mocks.putGoogleBlocks.mockReset().mockResolvedValue(0);
+  mocks.putCalendarBlocks.mockReset().mockResolvedValue(0);
+  mocks.deviceBusy.mockReset().mockResolvedValue(null); // default: device not read → only Google posts
   fetchMock.mockReset().mockResolvedValue(freeBusyOk());
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -141,7 +154,7 @@ describe('the calendar scope', () => {
     fetchMock.mockResolvedValue({ ok: false, status: 403 });
 
     await expect(sync('c1')).resolves.toBe('scope-missing');
-    expect(mocks.putGoogleBlocks).not.toHaveBeenCalled();
+    expect(mocks.putCalendarBlocks).not.toHaveBeenCalled();
   });
 
   it('returns scope-missing rather than leaking a native error when getTokens() rejects', async () => {
@@ -225,11 +238,11 @@ describe('the freebusy request', () => {
 
     await sync('c1');
 
-    expect(mocks.putGoogleBlocks).toHaveBeenCalledWith('c1', [
+    expect(mocks.putCalendarBlocks).toHaveBeenCalledWith('c1', [
       // Epoch ms on the way back in, and exactly two keys — no title, category or summary.
       { start_utc: Date.UTC(2026, 7, 4, 14), end_utc: Date.UTC(2026, 7, 4, 15, 30) },
-    ]);
-    const [, intervals] = mocks.putGoogleBlocks.mock.calls[0]!;
+    ], 'google');
+    const [, intervals] = mocks.putCalendarBlocks.mock.calls[0]!;
     expect(Object.keys(intervals[0]!).sort()).toEqual(['end_utc', 'start_utc']);
   });
 
@@ -245,9 +258,9 @@ describe('the freebusy request', () => {
 
     await sync('c1');
 
-    expect(mocks.putGoogleBlocks).toHaveBeenCalledWith('c1', [
+    expect(mocks.putCalendarBlocks).toHaveBeenCalledWith('c1', [
       { start_utc: Date.UTC(2026, 7, 4, 17), end_utc: Date.UTC(2026, 7, 4, 18) },
-    ]);
+    ], 'google');
   });
 
   it('backs off and retries a 429 rather than failing the sync', async () => {
@@ -342,5 +355,32 @@ describe('the persisted rate limit', () => {
 
     vi.setSystemTime(NOW - 5 * 24 * HOUR_MS); // stored timestamp is now in the "future"
     await expect(sync('c1')).resolves.toBe('synced');
+  });
+});
+
+describe('the two sources are isolated', () => {
+  it('still posts device blocks when the Google read throws', async () => {
+    const { sync } = await setup();
+    fetchMock.mockResolvedValue({ ok: false, status: 500 }); // fetchBusy throws — a transient failure
+    mocks.deviceBusy.mockResolvedValue([{ start_utc: NOW, end_utc: NOW + HOUR_MS }]);
+
+    await expect(sync('c1', { force: true })).resolves.toBe('synced');
+    expect(mocks.putCalendarBlocks).toHaveBeenCalledWith(
+      'c1',
+      [{ start_utc: NOW, end_utc: NOW + HOUR_MS }],
+      'device',
+    );
+    // Google produced nothing to write, so its source is left untouched — never posted empty.
+    expect(mocks.putCalendarBlocks).not.toHaveBeenCalledWith('c1', expect.anything(), 'google');
+  });
+
+  it('rethrows a failed write instead of reporting scope-missing', async () => {
+    const { sync } = await setup();
+    mocks.getCurrentUser.mockReturnValue({ scopes: ['email'] }); // no calendar scope → a reason exists
+    mocks.deviceBusy.mockResolvedValue([]); // device read ok → device PUT attempted...
+    mocks.putCalendarBlocks.mockRejectedValue(new Error('network')); // ...and fails
+
+    // The real error wins over the scope reason, so the caller sees the true failure.
+    await expect(sync('c1', { force: true })).rejects.toThrow('network');
   });
 });

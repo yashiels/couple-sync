@@ -45,7 +45,9 @@ export interface BlockRow {
   end_utc: number;
   timezone: string;
   recurrence_rule: string | null;
-  source: 'google' | 'manual';
+  // 'device' mirrors the OS calendar (aggregates the user's accounts, work included); 'google' is
+  // freebusy on the signed-in account. Both are calendar-sourced and read-only in PATCH.
+  source: 'google' | 'manual' | 'device';
   visibility: 'bothPartners' | 'onlyMe';
   created_at: number;
 }

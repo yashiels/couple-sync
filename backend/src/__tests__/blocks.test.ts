@@ -208,6 +208,44 @@ async function runInTx(
     return [];
   }
 
+  // Batched calendar insert: parallel arrays through unnest (id[], start[], end[]) + scalar columns.
+  if (sql.includes('INSERT INTO timeblocks') && sql.includes('unnest')) {
+    const ids = params[0] as string[];
+    const [, coupleId, uid, title, timezone, source, createdAt, starts, ends] = params as [
+      unknown,
+      string,
+      string,
+      string,
+      string,
+      string,
+      number,
+      number[],
+      number[],
+    ];
+    const rows = ids.map(
+      (id, i) =>
+        ({
+          id,
+          couple_id: coupleId,
+          user_id: uid,
+          title,
+          type: 'busy',
+          category: null,
+          start_utc: starts[i],
+          end_utc: ends[i],
+          timezone,
+          recurrence_rule: null,
+          source,
+          visibility: 'bothPartners',
+          created_at: createdAt,
+        }) as BlockRow,
+    );
+    staged.push(() => {
+      for (const r of rows) timeblocks.push(r);
+    });
+    return rows.map((r) => ({ ...r }));
+  }
+
   if (sql.includes('INSERT INTO timeblocks')) {
     const row = rowFromInsert(params);
     staged.push(() => timeblocks.push(row));
@@ -232,12 +270,12 @@ async function runInTx(
     return [{ ...patched }];
   }
 
-  // The google whole-set delete, before the broader matches below.
-  if (sql.includes("DELETE FROM timeblocks") && sql.includes("source = 'google'")) {
-    const [coupleId, uid] = params.map(String);
+  // The calendar whole-set delete (scoped to one source via $3), before the broader matches below.
+  if (sql.includes('DELETE FROM timeblocks') && sql.includes('source = $3')) {
+    const [coupleId, uid, source] = params.map(String);
     staged.push(() => {
       timeblocks = timeblocks.filter(
-        (b) => !(b.couple_id === coupleId && b.user_id === uid && b.source === 'google'),
+        (b) => !(b.couple_id === coupleId && b.user_id === uid && b.source === source),
       );
     });
     return [];
@@ -732,6 +770,50 @@ describe('PUT /blocks/google', () => {
     await putGoogle({ couple_id: 'c1', intervals: [iv(2)] }, 'uid-a');
 
     expect(timeblocks.map((b) => b.id)).toContain('theirs');
+  });
+
+  it('replaces only the named source — device and google are independent', async () => {
+    seedPair();
+    seedBlock('old-google', { source: 'google' });
+    seedBlock('old-device', { source: 'device' });
+
+    // Posting device leaves google untouched...
+    await putGoogle({ couple_id: 'c1', intervals: [iv(2)], source: 'device' });
+    expect(timeblocks.map((b) => b.id)).toContain('old-google');
+    expect(timeblocks.map((b) => b.id)).not.toContain('old-device');
+    expect(timeblocks.filter((b) => b.source === 'device')).toHaveLength(1);
+
+    // ...and posting google leaves the freshly-written device set untouched.
+    await putGoogle({ couple_id: 'c1', intervals: [iv(4)], source: 'google' });
+    expect(timeblocks.filter((b) => b.source === 'device')).toHaveLength(1);
+    expect(timeblocks.filter((b) => b.source === 'google')).toHaveLength(1);
+    expect(timeblocks.map((b) => b.id)).not.toContain('old-google');
+  });
+
+  it('defaults source to google when omitted', async () => {
+    seedPair();
+    await putGoogle({ couple_id: 'c1', intervals: [iv(1)] });
+    expect(timeblocks.filter((b) => b.source === 'google')).toHaveLength(1);
+  });
+
+  it('400s an invalid source', async () => {
+    seedPair();
+    const res = await putGoogle({ couple_id: 'c1', intervals: [iv(1)], source: 'manual' });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('400s an unexpected body field (no title/category/summary can ride along)', async () => {
+    seedPair();
+    const res = await putGoogle({ couple_id: 'c1', intervals: [iv(1)], summary: 'lunch' });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('400s a payload over the interval cap instead of inserting it', async () => {
+    seedPair();
+    const intervals = Array.from({ length: 1001 }, (_, i) => iv(i));
+    const res = await putGoogle({ couple_id: 'c1', intervals });
+    expect(res.statusCode).toBe(400);
+    expect(timeblocks).toHaveLength(0);
   });
 
   it('is atomic — a mid-insert failure leaves the old set intact', async () => {

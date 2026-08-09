@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 
 import { api } from './api';
 import { CALENDAR_SCOPE, getGoogleAccessToken } from './auth';
+import { deviceBusy } from './deviceCalendar';
 import { useStore } from './store';
 
 /**
@@ -101,7 +102,11 @@ export function clearSyncLimiter(): void {
 }
 
 /**
- * freeBusy.query on the primary calendar for the next 14 days → `PUT /blocks/google`.
+ * Two independent busy sources for the next 14 days, each replacing its own server-side set:
+ * Google freebusy (`source='google'`) and the device OS calendar (`source='device'`, which already
+ * aggregates the user's accounts — work included). They are posted in SEPARATE PUTs so a failure of
+ * one never deletes the other's blocks. Intervals go up raw and un-merged: unioning/deduplicating a
+ * block that appears in both sources is the server engine's job (no client-side interval algebra).
  *
  * `force` has exactly three permitted callers — the Settings "Sync now" button, a successful
  * `ensureScope()`, and the moment a couple first pairs — each a discrete user action, so none can
@@ -111,7 +116,23 @@ export function clearSyncLimiter(): void {
  * calls an hour. Server-side enforcement needs a `last_calendar_sync` column on `users` — that is the
  * upgrade path, and it is also what would stop repeated pair/unpair cycles forcing repeated syncs.
  */
-export async function sync(coupleId: string, opts?: { force?: boolean }): Promise<SyncResult> {
+// Serialises syncs on this device: a second call (auto or forced) waits for the in-flight one rather
+// than racing its PUTs or the limiter's read/write (#2). Each run is isolated so a rejection can never
+// wedge the chain for the next caller.
+let syncChain: Promise<unknown> = Promise.resolve();
+export function sync(coupleId: string, opts?: { force?: boolean }): Promise<SyncResult> {
+  const run = syncChain.then(
+    () => runSync(coupleId, opts),
+    () => runSync(coupleId, opts),
+  );
+  syncChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+async function runSync(coupleId: string, opts?: { force?: boolean }): Promise<SyncResult> {
   const now = Date.now();
   const last = await readLastSync();
   // Mirrored into the store so Settings can show a real "last synced" even on the rate-limited path.
@@ -120,27 +141,79 @@ export async function sync(coupleId: string, opts?: { force?: boolean }): Promis
   // until it caught up.
   if (!opts?.force && last !== null && last <= now && now - last < HOUR_MS) return 'rate-limited';
 
+  // Google freebusy (isolated). null = not read this time (no session / scope / broken grant); an
+  // array (even []) = read succeeded. A missing scope no longer fails the whole sync — the device
+  // source may still carry the user's busy times.
+  let googleBusy: { start_utc: number; end_utc: number }[] | null = null;
+  let googleReason: 'no-session' | 'scope-missing' | null = null;
+  let googleError: unknown = null;
   const user = await currentGoogleUser();
-  if (!user) return 'no-session';
-  if (!user.scopes.includes(CALENDAR_SCOPE)) return 'scope-missing';
-
-  const accessToken = await getGoogleAccessToken();
-  // There IS a cached account (checked above), so a null token means getTokens() rejected during
-  // token recovery — a broken grant, which ensureScope() is what fixes. Never a leaked native error.
-  if (!accessToken) return 'scope-missing';
-
-  const busy = await fetchBusy(accessToken, now, now + LOOKAHEAD_MS);
-  if (busy === 'scope-missing') return 'scope-missing';
-
-  await api.putGoogleBlocks(coupleId, busy);
-  useStore.getState().setLastCalendarSync(now);
-  try {
-    await SecureStore.setItemAsync(LAST_SYNC_KEY, String(now));
-  } catch {
-    // Ceiling: a keystore write failure defeats the limiter for this device, so auto-sync would run
-    // once per launch instead of once per hour. Moving the timestamp server-side is the upgrade path.
+  if (!user) {
+    googleReason = 'no-session';
+  } else if (!user.scopes.includes(CALENDAR_SCOPE)) {
+    googleReason = 'scope-missing';
+  } else {
+    try {
+      // A cached account with no token means getTokens() rejected during recovery — a broken grant that
+      // ensureScope() fixes. A thrown token read or a non-401/403 freebusy failure (network/500) is a
+      // transient read error: capture it and fall through to the device source rather than aborting the
+      // whole sync, so a Google hiccup can never block a good device PUT.
+      const accessToken = await getGoogleAccessToken();
+      const busy = accessToken
+        ? await fetchBusy(accessToken, now, now + LOOKAHEAD_MS)
+        : 'scope-missing';
+      if (busy === 'scope-missing') googleReason = 'scope-missing';
+      else googleBusy = busy;
+    } catch (e) {
+      googleError = e;
+    }
   }
-  return 'synced';
+
+  // Device calendar (isolated). null = native read failure (preserve prior device blocks); [] = denied
+  // or genuinely empty (clear them).
+  const deviceResult = await deviceBusy(now, now + LOOKAHEAD_MS).catch(() => null);
+
+  // Write each source that was actually read. A source whose read failed is left untouched, so a
+  // transient failure of one can never delete the other's blocks.
+  let posted = false;
+  let putError: unknown = null;
+  if (googleBusy !== null) {
+    try {
+      await api.putCalendarBlocks(coupleId, googleBusy, 'google');
+      posted = true;
+    } catch (e) {
+      putError = e;
+    }
+  }
+  if (deviceResult !== null) {
+    try {
+      await api.putCalendarBlocks(coupleId, deviceResult, 'device');
+      posted = true;
+    } catch (e) {
+      putError = e;
+    }
+  }
+
+  // The limiter advances only after at least one successful write, so a fully-failed attempt retries
+  // next time instead of being suppressed for an hour.
+  if (posted) {
+    useStore.getState().setLastCalendarSync(now);
+    try {
+      await SecureStore.setItemAsync(LAST_SYNC_KEY, String(now));
+    } catch {
+      // Ceiling: a keystore write failure defeats the limiter for this device, so auto-sync would run
+      // once per launch instead of once per hour. Moving the timestamp server-side is the upgrade path.
+    }
+    return 'synced';
+  }
+
+  // Nothing was written. A real error (a failed PUT, or a thrown Google read) takes precedence over a
+  // scope/session reason, so a network/persistence failure is never misreported as 'scope-missing' or
+  // 'no-session'. Rethrow it so the caller's catch (Settings "Sync now") shows the true problem.
+  const error = putError ?? googleError;
+  if (error) throw error;
+  if (googleReason) return googleReason;
+  return 'scope-missing';
 }
 
 async function fetchBusy(

@@ -135,12 +135,20 @@ export const api = {
   },
 
   /** Whole-set replacement of this user's google blocks. Returns how many the server stored. */
-  putGoogleBlocks: async (
+  // Replaces the caller's blocks for ONE calendar source ('google' freebusy or 'device' OS calendar).
+  // Each source is independent server-side, so posting one never touches the other.
+  putCalendarBlocks: async (
     coupleId: string,
     intervals: { start_utc: number; end_utc: number }[],
+    source: 'google' | 'device',
   ): Promise<number> =>
-    (await request<{ count: number }>('PUT', '/blocks/google', { couple_id: coupleId, intervals }))
-      .count,
+    (
+      await request<{ count: number }>('PUT', '/blocks/google', {
+        couple_id: coupleId,
+        intervals,
+        source,
+      })
+    ).count,
 
   /** The server recomputes first when the stored hash is stale, so this is never a rotten read. */
   latestOverlap: (coupleId: string): Promise<{ windows: OverlapWindow[]; computed_at: number }> =>

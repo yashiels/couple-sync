@@ -165,12 +165,15 @@ describe('envelopes and shapes', () => {
     expect(JSON.parse(call().init.body as string)).toEqual({ token: 'device-token' });
   });
 
-  it('returns the stored count from PUT /blocks/google', async () => {
+  it('returns the stored count from PUT /blocks/google and sends the source', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ count: 3 }));
-    await expect(api.putGoogleBlocks('c1', [{ start_utc: 1, end_utc: 2 }])).resolves.toBe(3);
+    await expect(
+      api.putCalendarBlocks('c1', [{ start_utc: 1, end_utc: 2 }], 'device'),
+    ).resolves.toBe(3);
     expect(JSON.parse(call().init.body as string)).toEqual({
       couple_id: 'c1',
       intervals: [{ start_utc: 1, end_utc: 2 }],
+      source: 'device',
     });
   });
 });

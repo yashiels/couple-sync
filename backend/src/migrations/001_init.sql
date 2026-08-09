@@ -53,7 +53,8 @@ CREATE TABLE IF NOT EXISTS timeblocks (
   end_utc          BIGINT NOT NULL,
   timezone         TEXT NOT NULL,
   recurrence_rule  TEXT,
-  source           TEXT NOT NULL CHECK (source IN ('google','manual')),
+  source           TEXT NOT NULL
+                   CONSTRAINT timeblocks_source_check CHECK (source IN ('google','manual','device')),
   visibility       TEXT NOT NULL DEFAULT 'bothPartners'
                    CHECK (visibility IN ('bothPartners','onlyMe')),
   created_at       BIGINT NOT NULL,
@@ -71,3 +72,12 @@ CREATE INDEX IF NOT EXISTS timeblocks_couple_user_idx   ON timeblocks (couple_id
 CREATE INDEX IF NOT EXISTS timeblocks_couple_source_idx ON timeblocks (couple_id, source);
 CREATE INDEX IF NOT EXISTS invites_status_expires_idx   ON invites (status, expires_at);
 CREATE INDEX IF NOT EXISTS users_couple_idx             ON users (couple_id);
+
+-- Widen source to allow 'device' on databases created before it existed. The CREATE TABLE above only
+-- affects fresh DBs (IF NOT EXISTS), so an existing table keeps its old two-value constraint until this
+-- runs. Migrations re-run on every boot with no version table, so this must be idempotent; the advisory
+-- lock (held for the surrounding per-file transaction) also serialises concurrent instance boots so the
+-- DROP/ADD pair cannot race.
+SELECT pg_advisory_xact_lock(hashtext('timeblocks_source_check'));
+ALTER TABLE timeblocks DROP CONSTRAINT IF EXISTS timeblocks_source_check;
+ALTER TABLE timeblocks ADD  CONSTRAINT timeblocks_source_check CHECK (source IN ('google','manual','device'));

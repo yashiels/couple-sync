@@ -1,8 +1,22 @@
+import * as fs from 'fs';
 import type { ExpoConfig } from 'expo/config';
 
 // API_BASE_URL and GOOGLE_WEB_CLIENT_ID come from the environment (see .env.example). Neither gets a
 // default: a missing value has to fail loudly where it is read, not silently point at localhost or
 // start a Google sign-in that never resolves.
+
+// The iOS Google Sign-In URL scheme is REVERSED_CLIENT_ID from GoogleService-Info.plist (pulled by
+// scripts/pull-secrets.sh). Read it at config time so it never drifts and is never hardcoded. Absent
+// on Android-only checkouts and in CI — the sign-in plugin then stays bare (Android needs no scheme).
+const iosReversedClientId = ((): string | undefined => {
+  try {
+    const plist = fs.readFileSync('./GoogleService-Info.plist', 'utf8');
+    return plist.match(/<key>REVERSED_CLIENT_ID<\/key>\s*<string>([^<]+)<\/string>/)?.[1];
+  } catch {
+    return undefined;
+  }
+})();
+
 const config: ExpoConfig = {
   name: 'Couple Sync',
   slug: 'couple-sync',
@@ -25,15 +39,40 @@ const config: ExpoConfig = {
       monochromeImage: './assets/android-icon-monochrome.png',
     },
   },
-  // iOS is not built, tested, or shipped in v1 — Android only. The bundle id is reserved here so the
-  // app identity does not change if iOS is ever picked up.
-  ios: { bundleIdentifier: 'dev.yashiel.couplesync' },
+  ios: {
+    bundleIdentifier: 'dev.yashiel.couplesync',
+    // Real Firebase iOS config, gitignored like its Android sibling. Pulled by scripts/pull-secrets.sh.
+    googleServicesFile: './GoogleService-Info.plist',
+  },
   plugins: [
     'expo-router',
     '@react-native-firebase/app',
-    '@react-native-google-signin/google-signin',
+    // iOS needs the reversed-client URL scheme registered; Android does not. Bare string when the
+    // plist is absent (Android-only / CI) keeps prebuild working there.
+    iosReversedClientId
+      ? ['@react-native-google-signin/google-signin', { iosUrlScheme: iosReversedClientId }]
+      : '@react-native-google-signin/google-signin',
+    // Read-only device calendar access: busy intervals are read from the OS calendar (which already
+    // aggregates every account on the device, work included). Only start/end times are read — never
+    // an event title, matching the freebusy privacy stance in §5.
+    [
+      'expo-calendar',
+      { calendarPermission: 'Couple Sync reads only your busy times to find free windows together.' },
+    ],
     'expo-notifications',
     'expo-dev-client',
+    // Signs the debug build with the couple-sync keystore (SHA-1 registered in Firebase) so Google
+    // Sign-In works on-device. Keystore + passwords come from scripts/pull-secrets.sh; no-op in CI.
+    './plugins/withAndroidDebugSigning',
+    // react-native-firebase v23 pulls Firebase via SPM, which clashes with static useFrameworks
+    // (below) and breaks `pod install`. Opt out of SPM so Firebase resolves via CocoaPods.
+    './plugins/withRNFirebaseDisableSPM',
+    // Strips the iOS push entitlement when CS_NO_PUSH=1 so a free Apple team can sign a test build.
+    // No-op for the real paid-account build (push kept). Remove the flag once the paid team is active.
+    './plugins/withStripPushEntitlement',
+    // Xcode script sandboxing (default YES) blocks Expo/RNFirebase build-phase scripts writing into
+    // the .app; disable it so the iOS build's dev-launcher script phases run.
+    './plugins/withDisableScriptSandbox',
     // React Native Firebase requires static frameworks on iOS. Android does not care, but this is
     // the one setting whose absence breaks an iOS build later, and it costs nothing now.
     // E2E builds talk to the Auth emulator + backend over cleartext http://10.0.2.2; Android blocks

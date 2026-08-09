@@ -6,6 +6,11 @@ import { ApiError, api } from '../../src/api';
 import { signOut } from '../../src/auth';
 import { hasCalendarScope, sync, type SyncResult } from '../../src/calendar';
 import { CalendarAccessRow } from '../../src/components/CalendarAccessRow';
+import {
+  listDeviceCalendars,
+  setCalendarEnabled,
+  type DeviceCalendar,
+} from '../../src/deviceCalendar';
 import { ZoneList } from '../../src/components/ZoneList';
 import { useStore } from '../../src/store';
 import { fontSize, radius, spacing, touchTarget, useColors } from '../../src/theme';
@@ -47,6 +52,12 @@ export default function SettingsScreen() {
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncNote, setSyncNote] = useState<string | null>(null);
+  // null until the OS calendar list loads; [] means permission denied or no calendars.
+  const [deviceCals, setDeviceCals] = useState<DeviceCalendar[] | null>(null);
+
+  useEffect(() => {
+    void listDeviceCalendars().then(setDeviceCals);
+  }, []);
 
   // Re-checked whenever the last-sync mirror moves, because that is what CalendarAccessRow does on a
   // successful grant (it force-syncs). Without the dependency the row would grant the scope and then
@@ -88,6 +99,23 @@ export default function SettingsScreen() {
       setSyncNote(SYNC_NOTES[result]);
     } catch {
       setSyncNote('Could not reach Google Calendar. Try again in a moment.');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function onToggleCalendar(id: string, enabled: boolean) {
+    await setCalendarEnabled(id, enabled);
+    setDeviceCals(await listDeviceCalendars());
+    // Which device calendars count changes the busy times feeding overlap, so re-sync now. A discrete
+    // toggle press — a permitted `force` caller, same as "Sync now", so it cannot loop.
+    if (!coupleId) return;
+    setSyncing(true);
+    setSyncNote(null);
+    try {
+      setSyncNote(SYNC_NOTES[await sync(coupleId, { force: true })]);
+    } catch {
+      setSyncNote('Could not sync. Try again in a moment.');
     } finally {
       setSyncing(false);
     }
@@ -252,6 +280,28 @@ export default function SettingsScreen() {
           )}
         </>,
       )}
+
+      {deviceCals && deviceCals.length > 0
+        ? group(
+            'Device calendars',
+            <>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.caption }}>
+                Busy times are read from these. A work calendar appears here once it is synced to this
+                phone — only start and end times are read, never event titles.
+              </Text>
+              {deviceCals.map((c) => (
+                <View key={c.id}>
+                  {toggle(
+                    c.title,
+                    c.source || 'Device calendar',
+                    c.enabled,
+                    (v) => void onToggleCalendar(c.id, v),
+                  )}
+                </View>
+              ))}
+            </>,
+          )
+        : null}
 
       {group(
         'You',

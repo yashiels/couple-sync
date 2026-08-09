@@ -26,8 +26,12 @@ const { RRule, rrulestr } = rrule;
 /** A week view asks for ~7 days. The cap bounds both the expansion work and the response size. */
 const MAX_RANGE_MS = 60 * 86_400_000;
 
-/** §5: freebusy carries no titles, so every google block gets the same placeholder. */
+/** §5: freebusy carries no titles, so every calendar-sourced block gets the same placeholder. */
 const GOOGLE_TITLE = 'Busy';
+
+/** Backstop on a single calendar-replacement payload. A 14-day window is dozens of rows; this is a
+ *  runaway guard, not a normal limit — the client is told (400), never silently truncated. */
+const MAX_INTERVALS = 1000;
 
 // Exactly the four the engine supports (§3.2). rrulestr happily parses FREQ=HOURLY and friends.
 const SUPPORTED_FREQ = new Set([RRule.YEARLY, RRule.MONTHLY, RRule.WEEKLY, RRule.DAILY]);
@@ -273,9 +277,10 @@ export default async function blocksRoutes(app: FastifyInstance): Promise<void> 
     const { couple, block } = await withTx(async (c) => {
       const couple = await lockCouple(c, coupleId, req.uid);
       const existing = await ownBlock(c, id, coupleId, req.uid);
-      // A google block mirrors the user's calendar and PUT /blocks/google is its only writer, so an
-      // edit here would silently vanish on the next sync.
-      if (existing.source === 'google') throw new HttpError(403, 'read_only_block');
+      // Any calendar-sourced block (google or device) mirrors the user's calendar and PUT
+      // /blocks/google is its only writer, so an edit here would silently vanish on the next sync.
+      // Only 'manual' blocks are user-editable.
+      if (existing.source !== 'manual') throw new HttpError(403, 'read_only_block');
       // Merged, so patching one end is still validated against the stored other end.
       const merged = { ...existing, ...patch } as BlockRow;
       if (merged.end_utc <= merged.start_utc) throw bad('invalid_interval');
@@ -319,16 +324,37 @@ export default async function blocksRoutes(app: FastifyInstance): Promise<void> 
     const coupleId = coupleIdFromBody(req.body);
     await assertMember(coupleId, req.uid);
     const body = (req.body ?? {}) as Record<string, unknown>;
+
+    // Strict body allowlist: anything outside these three is rejected up front, so nothing can ride
+    // along with the intervals. The §5 privacy fields keep their specific code (a title/category/
+    // summary at the body level is a privacy violation, not just an unknown key); everything else is a
+    // generic unexpected_field. This is the outer guard; each interval is re-checked below.
+    for (const key of Object.keys(body)) {
+      if (key === 'title' || key === 'category' || key === 'summary') throw bad('title_not_allowed');
+      if (key !== 'couple_id' && key !== 'intervals' && key !== 'source') throw bad('unexpected_field');
+    }
+
+    // Which calendar source this replaces. 'google' = freebusy on the signed-in account; 'device' =
+    // the OS calendar (aggregates the user's accounts). Each source replaces only its own rows, so one
+    // source failing on the client never deletes the other's blocks. Defaults to 'google'.
+    const source = body['source'] === undefined ? 'google' : body['source'];
+    if (source !== 'google' && source !== 'device') throw bad('invalid_source');
+
     const { intervals } = body;
     if (!Array.isArray(intervals)) throw bad('invalid_intervals');
-    // Freebusy only, enforced server-side: the rule does not depend on a client honouring it.
-    if ('title' in body) throw bad('title_not_allowed');
+    // Bound the payload before mapping — a runaway calendar cannot force an unbounded batch. A 14-day
+    // window across many calendars is far under this; the cap is a backstop, never a silent truncation.
+    if (intervals.length > MAX_INTERVALS) throw bad('too_many_intervals');
 
     const now = Date.now();
     const parsed = intervals.map((raw) => {
       if (typeof raw !== 'object' || raw === null) throw bad('invalid_interval');
       const iv = raw as Record<string, unknown>;
       if ('title' in iv || 'category' in iv || 'summary' in iv) throw bad('title_not_allowed');
+      // Strict interval contract: exactly the two epoch-ms bounds, nothing else can ride along.
+      for (const key of Object.keys(iv)) {
+        if (key !== 'start_utc' && key !== 'end_utc') throw bad('unexpected_field');
+      }
       const start = iv['start_utc'];
       const end = iv['end_utc'];
       if (!Number.isInteger(start) || !Number.isInteger(end)) throw bad('invalid_interval');
@@ -346,32 +372,32 @@ export default async function blocksRoutes(app: FastifyInstance): Promise<void> 
       );
       if (!me?.timezone) throw new HttpError(409, 'timezone_required');
 
-      // Scoped to this user AND source='google': the partner's calendar and everybody's manual
-      // blocks are untouched.
-      await c.query(
-        `DELETE FROM timeblocks WHERE couple_id = $1 AND user_id = $2 AND source = 'google'`,
-        [coupleId, req.uid],
-      );
-      // Ceiling: one round trip per interval. A 14-day freebusy set is dozens of rows; if it ever
-      // reaches hundreds, batch it with a single INSERT ... SELECT FROM unnest($1::bigint[], ...).
-      for (const iv of parsed) {
+      // Scoped to this user AND this source: the partner's calendar, the user's OTHER source, and
+      // everybody's manual blocks are untouched.
+      await c.query('DELETE FROM timeblocks WHERE couple_id = $1 AND user_id = $2 AND source = $3', [
+        coupleId,
+        req.uid,
+        source,
+      ]);
+      // Batched insert (one round trip): the varying columns travel as parallel arrays through unnest;
+      // every calendar block is the same 'Busy' placeholder with no title, type 'busy', bothPartners.
+      if (parsed.length > 0) {
         await c.query(
-          INSERT_SQL,
-          insertParams({
-            id: randomUUID(),
-            couple_id: coupleId,
-            user_id: req.uid,
-            title: GOOGLE_TITLE,
-            type: 'busy',
-            category: null,
-            start_utc: iv.start,
-            end_utc: iv.end,
-            timezone: me.timezone,
-            recurrence_rule: null,
-            source: 'google',
-            visibility: 'bothPartners',
-            created_at: now,
-          }),
+          `INSERT INTO timeblocks (id, couple_id, user_id, title, type, category, start_utc, end_utc,
+                                   timezone, recurrence_rule, source, visibility, created_at)
+           SELECT id, $2, $3, $4, 'busy', NULL, s, e, $5, NULL, $6, 'bothPartners', $7
+           FROM unnest($1::text[], $8::bigint[], $9::bigint[]) AS t(id, s, e)`,
+          [
+            parsed.map(() => randomUUID()),
+            coupleId,
+            req.uid,
+            GOOGLE_TITLE,
+            me.timezone,
+            source,
+            now,
+            parsed.map((iv) => iv.start),
+            parsed.map((iv) => iv.end),
+          ],
         );
       }
       return couple;

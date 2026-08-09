@@ -119,6 +119,7 @@ expo-env.d.ts
 /android
 
 # Signing + Firebase credentials (never commit)
+credentials/
 *.jks
 *.p8
 *.p12
