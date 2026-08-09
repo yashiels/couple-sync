@@ -36,6 +36,9 @@ jobs:
     timeout-minutes: 45
     env:
       API_BASE_URL: https://couple-sync.yashiel.dev
+      # Manual App Store signing (automatic/cloud signing failed: "No signing certificate iOS
+      # Distribution found"). A manually-managed Distribution cert + App Store profile are imported
+      # from 1Password at build time; see the "Set up code signing" step below.
       EXPORT_METHOD: app-store-connect
       # Unique per run → a fresh CFBundleVersion App Store Connect will accept. Read by app.config.ts.
       IOS_BUILD_NUMBER: ${{ github.run_number }}
@@ -65,13 +68,17 @@ jobs:
           # App-specific → Nexion/couple-sync.
           GOOGLE_SERVICE_INFO_PLIST_B64: op://Nexion/couple-sync/google_services_info_plist_b64
           GOOGLE_WEB_CLIENT_ID: op://Nexion/couple-sync/google_web_client_id
+          # Manual-signing profile is per-app (bound to dev.yashiel.couplesync) → Nexion/couple-sync.
+          IOS_APPSTORE_PROFILE_BASE64: op://Nexion/couple-sync/ios_appstore_profile_base64
+          IOS_APPSTORE_PROFILE_NAME: op://Nexion/couple-sync/ios_appstore_profile_name
           # Account-wide Apple creds (shared by every iOS app) → Agents/apple-developer.
           ASC_API_KEY_ID: op://Agents/apple-developer/asc_api_key_id
           ASC_ISSUER_ID: op://Agents/apple-developer/asc_issuer_id
           ASC_API_KEY_P8_BASE64: op://Agents/apple-developer/asc_api_key_p8_base64
-          # Team the ASC API key belongs to; needed so automatic signing can resolve a provisioning
-          # profile at archive/export time. See docs/deployment/releases.md.
           APPLE_TEAM_ID: op://Agents/apple-developer/apple_team_id
+          # Manual signing: the iOS Distribution cert (+ its p12 password) is reusable across apps.
+          IOS_DIST_CERT_P12_BASE64: op://Agents/apple-developer/ios_dist_cert_p12_base64
+          IOS_DIST_CERT_PASSWORD: op://Agents/apple-developer/ios_dist_cert_password
 
       - name: Provision GoogleService-Info.plist
         run: echo "$GOOGLE_SERVICE_INFO_PLIST_B64" | openssl base64 -d -A > GoogleService-Info.plist
@@ -88,6 +95,30 @@ jobs:
         working-directory: ios
         run: pod install
 
+      - name: Set up code signing (manual)
+        # Import the Distribution cert into a throwaway keychain and drop the App Store profile where
+        # Xcode looks for it. The keychain password is ephemeral (never leaves the runner); the p12
+        # password is the 1Password-held one. set-key-partition-list stops codesign's UI prompt, and
+        # putting the keychain on the search list lets xcodebuild find the identity.
+        env:
+          KEYCHAIN_PATH: ${{ runner.temp }}/app-signing.keychain-db
+        run: |
+          KEYCHAIN_PW="$(openssl rand -base64 24)"
+          security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN_PATH"
+
+          echo "$IOS_DIST_CERT_P12_BASE64" | openssl base64 -d -A > "$RUNNER_TEMP/dist.p12"
+          security import "$RUNNER_TEMP/dist.p12" -P "$IOS_DIST_CERT_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PW" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+
+          PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILE_DIR"
+          echo "$IOS_APPSTORE_PROFILE_BASE64" | openssl base64 -d -A \
+            > "$PROFILE_DIR/couplesync-appstore.mobileprovision"
+
       - name: Write ExportOptions.plist
         run: |
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
@@ -98,9 +129,16 @@ jobs:
             <key>method</key>
             <string>${EXPORT_METHOD}</string>
             <key>signingStyle</key>
-            <string>automatic</string>
+            <string>manual</string>
             <key>teamID</key>
             <string>${APPLE_TEAM_ID}</string>
+            <key>signingCertificate</key>
+            <string>Apple Distribution</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>dev.yashiel.couplesync</key>
+              <string>${IOS_APPSTORE_PROFILE_NAME}</string>
+            </dict>
             <key>destination</key>
             <string>export</string>
             <key>stripSwiftSymbols</key>
@@ -110,6 +148,9 @@ jobs:
           PLIST
 
       - name: Build signed archive
+        # Manual signing: pin the imported Distribution identity and the App Store profile by name.
+        # No -allowProvisioningUpdates / ASC auth key here — that path is automatic (cloud) signing,
+        # which is exactly what failed. Pods are static libs and need no profile of their own.
         run: |
           xcodebuild \
             -workspace ios/CoupleSync.xcworkspace \
@@ -117,12 +158,10 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/CoupleSync.xcarchive" \
-            -allowProvisioningUpdates \
-            -allowProvisioningDeviceRegistration \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${ASC_API_KEY_ID}.p8" \
-            -authenticationKeyID "$ASC_API_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            PROVISIONING_PROFILE_SPECIFIER="$IOS_APPSTORE_PROFILE_NAME" \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
             archive
 
       - name: Export signed .ipa
@@ -130,11 +169,7 @@ jobs:
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/CoupleSync.xcarchive" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-            -exportPath "$RUNNER_TEMP/export" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${ASC_API_KEY_ID}.p8" \
-            -authenticationKeyID "$ASC_API_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+            -exportPath "$RUNNER_TEMP/export"
 
       - name: Stage IPA
         id: ipa
