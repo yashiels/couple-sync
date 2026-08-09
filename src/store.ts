@@ -26,7 +26,9 @@ interface State {
   computedAt: number | null;
   /** Parked from a couplesync://invite/:code deep link, across the sign-in round trip. */
   pendingInviteCode: string | null;
-  lastCalendarSyncMs: number | null;
+  /** Per-source "last synced" mirrors for Settings. Google is metered + hourly-gated; device is not. */
+  lastGoogleSyncMs: number | null;
+  lastDeviceSyncMs: number | null;
   /** The Calendar tab's current week. Null until the tab is opened. */
   visibleRange: { from: number; to: number } | null;
   /** Set on a failed cold start; drives a retry screen. */
@@ -45,7 +47,8 @@ interface Actions {
   setVisibleRange(from: number, to: number): void;
   setWindows(w: OverlapWindow[], computedAt: number): void;
   setPendingInvite(code: string | null): void;
-  setLastCalendarSync(ms: number): void;
+  setLastGoogleSync(ms: number): void;
+  setLastDeviceSync(ms: number): void;
   /** Unpair: keep the authenticated user and their timezone, drop everything couple-scoped. */
   resetCouple(): void;
   /** Sign-out: drop everything including the user. */
@@ -61,7 +64,8 @@ const initialState: State = {
   windows: [],
   computedAt: null,
   pendingInviteCode: null,
-  lastCalendarSyncMs: null,
+  lastGoogleSyncMs: null,
+  lastDeviceSyncMs: null,
   visibleRange: null,
   hydrationError: null,
 };
@@ -74,7 +78,8 @@ const coupleScoped = {
   windows: [],
   computedAt: null,
   pendingInviteCode: null,
-  lastCalendarSyncMs: null,
+  lastGoogleSyncMs: null,
+  lastDeviceSyncMs: null,
   visibleRange: null,
 } satisfies Partial<State>;
 
@@ -82,8 +87,8 @@ const coupleScoped = {
  * Set by `app/_layout.tsx` to `calendar.clearSyncLimiter`. A seam rather than an import because the
  * limiter's authoritative copy lives in expo-secure-store, and importing that here would drag a
  * native module into every test that touches the store. Both resets fire it: the in-memory
- * `lastCalendarSyncMs` below is only a mirror, and clearing the mirror alone would leave the persisted
- * timestamp suppressing the re-sync that repopulates a re-paired couple's google blocks.
+ * `lastGoogleSyncMs`/`lastDeviceSyncMs` below are only mirrors, and clearing them alone would leave
+ * the persisted gate timestamp suppressing the re-sync that repopulates a re-paired couple's blocks.
  */
 let clearPersistedCalendarSync: (() => void) | null = null;
 
@@ -106,9 +111,14 @@ export const useStore = create<State & Actions>((set) => ({
   setBlocks: (blocks) => set({ blocks }),
   removeBlock: (id) => set((s) => ({ blocks: s.blocks.filter((b) => b.id !== id) })),
   setVisibleRange: (from, to) => set({ visibleRange: { from, to } }),
-  setWindows: (windows, computedAt) => set({ windows, computedAt }),
+  // Monotonic on computedAt: two concurrent /overlaps/latest reads (a tab-focus refetch racing a
+  // foreground/pull sync) can resolve out of order, and a slower STALE response must not overwrite
+  // newer windows. An equal computedAt still writes — a recompute in the same hour bucket is a no-op.
+  setWindows: (windows, computedAt) =>
+    set((s) => (s.computedAt !== null && computedAt < s.computedAt ? s : { windows, computedAt })),
   setPendingInvite: (pendingInviteCode) => set({ pendingInviteCode }),
-  setLastCalendarSync: (lastCalendarSyncMs) => set({ lastCalendarSyncMs }),
+  setLastGoogleSync: (lastGoogleSyncMs) => set({ lastGoogleSyncMs }),
+  setLastDeviceSync: (lastDeviceSyncMs) => set({ lastDeviceSyncMs }),
 
   // couple_id is cleared on the local row too: the guard chain is what sends the user back to
   // /pairing, and it reads user.couple_id.

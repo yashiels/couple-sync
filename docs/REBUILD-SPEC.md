@@ -269,11 +269,22 @@ Sync = delete this user's `source='google'` blocks then batch-insert the fresh s
 transaction, then recompute overlap once.
 Auto-sync on launch only if last sync > 1h ago; manual sync from pull-to-refresh and Settings.
 **Quota rule, stated precisely:** at most one *automatic* freebusy call per device per hour.
-Three user-initiated / state-transition syncs additionally bypass the limiter — the Settings "Sync
-now" button, a successful `ensureScope()`, and the moment a couple first pairs. Each corresponds to a
-discrete user action and cannot loop. Exponential backoff on 429/503 with a user-visible rate-limited
-state. (The limiter is per device, not per user: server-side enforcement would need a last-sync
-column on `users` — the recorded upgrade path.)
+The user-initiated / state-transition syncs that additionally bypass the limiter are the Settings
+"Sync now" button, a successful `ensureScope()`, the moment a couple first pairs, the Settings
+device-calendar toggle, and pull-to-refresh (guarded by a short client-side cooldown so repeated
+tugs don't each spend a call). Each corresponds to a discrete user action and cannot loop.
+Exponential backoff on 429/503 is used **only** by these forced syncs; an *automatic* call is exactly
+one request with no retry, so a 429/503 there simply fails the Google source for that run and leaves
+the device source untouched. (The limiter is per device, not per user: server-side enforcement would
+need a last-sync column on `users` — the recorded upgrade path.)
+
+**Two sources, one gate.** Only Google freebusy is metered, so only Google is hourly-gated (persisted
+`calendar.googleGateMs`, reserved *before* the request and fail-closed if that write throws). The
+device OS calendar read is **local and unmetered**, so it runs on *every* sync — cold start,
+foreground return, and pull — and is never gated. Because of that split the app re-syncs on a real
+background→foreground transition (device refreshes immediately; Google respects its gate) and Settings
+shows per-source freshness (`calendar.googleSuccessMs` / `calendar.deviceSuccessMs`) rather than one
+combined "last synced" — a device-only refresh is never labelled as a Google sync.
 
 The client already holds the grant from sign-in, calls `freeBusy.query` itself, and posts the
 resulting busy intervals to `PUT /blocks/google`. **No OAuth refresh token is stored server-side**, so

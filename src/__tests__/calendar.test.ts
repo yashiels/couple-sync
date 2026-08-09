@@ -8,6 +8,8 @@ const NOW = Date.UTC(2026, 7, 4, 12, 0, 0);
 const mocks = vi.hoisted(() => ({
   /** A real map, so "the timestamp survives a launch" is an actual property of these tests. */
   keychain: new Map<string, string>(),
+  /** Keys whose SecureStore write should throw — drives the fail-closed reservation test. */
+  throwOnSet: new Set<string>(),
   /** Ordered log of the native calls whose sequence matters. */
   calls: [] as string[],
   getCurrentUser: vi.fn<() => { scopes: string[] } | null>(),
@@ -42,6 +44,7 @@ vi.mock('@react-native-google-signin/google-signin', () => ({
 vi.mock('expo-secure-store', () => ({
   getItemAsync: async (key: string) => mocks.keychain.get(key) ?? null,
   setItemAsync: async (key: string, value: string) => {
+    if (mocks.throwOnSet.has(key)) throw new Error('keystore write failed');
     mocks.keychain.set(key, value);
   },
   deleteItemAsync: async (key: string) => {
@@ -65,7 +68,7 @@ vi.mock('../api', () => ({ api: { putCalendarBlocks: mocks.putCalendarBlocks } }
 
 // Device calendar is stubbed (the real module pulls expo-calendar, a native module). Controllable per
 // test; defaults to null in beforeEach = "device not read", so runSync skips the device PUT and only
-// the Google source is posted — those assertions are exactly the Google result.
+// the Google source is posted — those assertions are exactly the Google result (device: 'skipped').
 vi.mock('../deviceCalendar', () => ({ deviceBusy: mocks.deviceBusy }));
 
 const fetchMock = vi.fn();
@@ -92,10 +95,13 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
   mocks.keychain.clear();
+  mocks.throwOnSet.clear();
   mocks.calls.length = 0;
   mocks.getCurrentUser.mockReset().mockReturnValue({ scopes: [CALENDAR_SCOPE] });
   mocks.hasPreviousSignIn.mockReset().mockReturnValue(true);
-  mocks.signInSilently.mockReset().mockResolvedValue({ type: 'success', data: { scopes: [CALENDAR_SCOPE] } });
+  mocks.signInSilently
+    .mockReset()
+    .mockResolvedValue({ type: 'success', data: { scopes: [CALENDAR_SCOPE] } });
   mocks.addScopes.mockReset().mockResolvedValue({ type: 'success', data: {} });
   mocks.getGoogleAccessToken.mockReset().mockResolvedValue('GOOGLE-ACCESS-TOKEN');
   mocks.putCalendarBlocks.mockReset().mockResolvedValue(0);
@@ -113,7 +119,7 @@ describe('the Google session', () => {
     const { sync } = await setup();
     mocks.getCurrentUser.mockReturnValue(null); // cached account, no live session
 
-    await expect(sync('c1')).resolves.toBe('synced');
+    expect((await sync('c1')).google).toBe('synced');
 
     expect(mocks.calls).toEqual(['signInSilently', 'getTokens']);
   });
@@ -123,7 +129,7 @@ describe('the Google session', () => {
     mocks.getCurrentUser.mockReturnValue(null);
     mocks.hasPreviousSignIn.mockReturnValue(false);
 
-    await expect(sync('c1')).resolves.toBe('no-session');
+    expect((await sync('c1')).google).toBe('no-session');
 
     expect(mocks.calls).toEqual([]); // getTokens would REJECT here — it must never be reached
     expect(fetchMock).not.toHaveBeenCalled();
@@ -134,7 +140,7 @@ describe('the Google session', () => {
     mocks.getCurrentUser.mockReturnValue(null);
     mocks.signInSilently.mockRejectedValue(new Error('RNGoogleSignin: token recovery failed'));
 
-    await expect(sync('c1')).resolves.toBe('no-session');
+    expect((await sync('c1')).google).toBe('no-session');
   });
 });
 
@@ -144,7 +150,7 @@ describe('the calendar scope', () => {
     // Sign-in completed; Google's own identity scopes are there, ours is not.
     mocks.getCurrentUser.mockReturnValue({ scopes: ['openid', 'email', 'profile'] });
 
-    await expect(sync('c1')).resolves.toBe('scope-missing');
+    expect((await sync('c1')).google).toBe('scope-missing');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -153,7 +159,7 @@ describe('the calendar scope', () => {
     // The cached account still lists the scope; Google answers 403 because it was revoked server-side.
     fetchMock.mockResolvedValue({ ok: false, status: 403 });
 
-    await expect(sync('c1')).resolves.toBe('scope-missing');
+    expect((await sync('c1')).google).toBe('scope-missing');
     expect(mocks.putCalendarBlocks).not.toHaveBeenCalled();
   });
 
@@ -162,7 +168,7 @@ describe('the calendar scope', () => {
     // getGoogleAccessToken swallows the native rejection into null; a crash here is the bug.
     mocks.getGoogleAccessToken.mockResolvedValue(null);
 
-    await expect(sync('c1')).resolves.toBe('scope-missing');
+    expect((await sync('c1')).google).toBe('scope-missing');
   });
 
   it('reports the grant without touching the API', async () => {
@@ -238,10 +244,14 @@ describe('the freebusy request', () => {
 
     await sync('c1');
 
-    expect(mocks.putCalendarBlocks).toHaveBeenCalledWith('c1', [
-      // Epoch ms on the way back in, and exactly two keys — no title, category or summary.
-      { start_utc: Date.UTC(2026, 7, 4, 14), end_utc: Date.UTC(2026, 7, 4, 15, 30) },
-    ], 'google');
+    expect(mocks.putCalendarBlocks).toHaveBeenCalledWith(
+      'c1',
+      [
+        // Epoch ms on the way back in, and exactly two keys — no title, category or summary.
+        { start_utc: Date.UTC(2026, 7, 4, 14), end_utc: Date.UTC(2026, 7, 4, 15, 30) },
+      ],
+      'google',
+    );
     const [, intervals] = mocks.putCalendarBlocks.mock.calls[0]!;
     expect(Object.keys(intervals[0]!).sort()).toEqual(['end_utc', 'start_utc']);
   });
@@ -258,58 +268,91 @@ describe('the freebusy request', () => {
 
     await sync('c1');
 
-    expect(mocks.putCalendarBlocks).toHaveBeenCalledWith('c1', [
-      { start_utc: Date.UTC(2026, 7, 4, 17), end_utc: Date.UTC(2026, 7, 4, 18) },
-    ], 'google');
+    expect(mocks.putCalendarBlocks).toHaveBeenCalledWith(
+      'c1',
+      [{ start_utc: Date.UTC(2026, 7, 4, 17), end_utc: Date.UTC(2026, 7, 4, 18) }],
+      'google',
+    );
   });
 
-  it('backs off and retries a 429 rather than failing the sync', async () => {
+  it('a forced sync backs off and retries a 429 rather than failing', async () => {
     const { sync } = await setup();
     fetchMock.mockResolvedValueOnce({ ok: false, status: 429 }).mockResolvedValueOnce(freeBusyOk());
 
-    const promise = sync('c1');
+    const promise = sync('c1', { force: true });
     await vi.advanceTimersByTimeAsync(1000);
 
-    await expect(promise).resolves.toBe('synced');
+    expect((await promise).google).toBe('synced');
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('an AUTOMATIC sync makes exactly one request and does not retry a 429', async () => {
+    const { sync } = await setup();
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 429 }).mockResolvedValue(freeBusyOk());
+
+    // One request, no backoff: the 429 fails just the Google source for this run (§5).
+    expect((await sync('c1')).google).toBe('failed');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('the persisted rate limit', () => {
-  it('returns rate-limited without calling the API when the stored sync is 30 minutes old', async () => {
+describe('the Google hourly gate', () => {
+  it('within the hour, an automatic sync skips Google but still PUTs the device source', async () => {
     const { sync } = await setup();
-    await sync('c1');
+    mocks.deviceBusy.mockResolvedValue([{ start_utc: NOW, end_utc: NOW + HOUR_MS }]);
+    await sync('c1'); // opens the gate (and posts both sources)
     fetchMock.mockClear();
+    mocks.putCalendarBlocks.mockClear();
 
     vi.setSystemTime(NOW + 30 * 60 * 1000);
-    await expect(sync('c1')).resolves.toBe('rate-limited');
+    const summary = await sync('c1');
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(summary).toEqual({ device: 'synced', google: 'rate-limited' });
+    expect(fetchMock).not.toHaveBeenCalled(); // no metered Google call
+    // The device source is local + unmetered, so it still refreshes on this run.
+    expect(mocks.putCalendarBlocks).toHaveBeenCalledWith(
+      'c1',
+      [{ start_utc: NOW, end_utc: NOW + HOUR_MS }],
+      'device',
+    );
+    expect(mocks.putCalendarBlocks).not.toHaveBeenCalledWith('c1', expect.anything(), 'google');
   });
 
-  it('calls the API when the stored sync is 90 minutes old', async () => {
+  it('calls Google when the gate is 90 minutes old', async () => {
     const { sync } = await setup();
     await sync('c1');
     fetchMock.mockClear();
 
     vi.setSystemTime(NOW + 90 * 60 * 1000);
-    await expect(sync('c1')).resolves.toBe('synced');
+    expect((await sync('c1')).google).toBe('synced');
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('calls the API regardless of the stored sync when force is true', async () => {
+  it('calls Google regardless of the gate when force is true', async () => {
     const { sync } = await setup();
     await sync('c1');
     fetchMock.mockClear();
 
     vi.setSystemTime(NOW + 60_000);
-    await expect(sync('c1', { force: true })).resolves.toBe('synced');
+    expect((await sync('c1', { force: true })).google).toBe('synced');
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('survives a relaunch — the limiter is persisted, not a module variable', async () => {
+  it('fail-closed: skips the automatic Google request when the reservation write throws', async () => {
+    const { sync } = await setup();
+    // The gate reservation is written BEFORE the request; a keystore write failure must skip the call,
+    // not fall through to it — otherwise a broken keystore would let Google run on every foreground.
+    mocks.throwOnSet.add('calendar.googleGateMs');
+
+    const summary = await sync('c1');
+
+    expect(summary.google).toBe('rate-limited');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('survives a relaunch — the gate is persisted, not a module variable', async () => {
     const first = await setup();
     await first.sync('c1');
 
@@ -317,35 +360,57 @@ describe('the persisted rate limit', () => {
     // gone here, and auto-sync (which runs at exactly this moment) would call Google again.
     const second = await setup();
     vi.setSystemTime(NOW + 60_000);
-    await expect(second.sync('c1')).resolves.toBe('rate-limited');
+    expect((await second.sync('c1')).google).toBe('rate-limited');
   });
 
-  it('is cleared by clearSyncLimiter, so a re-paired couple re-syncs immediately', async () => {
+  it('survives clearSyncLimiter — a re-pair re-syncs via force, not by bypassing the hourly gate', async () => {
     const { sync, clearSyncLimiter } = await setup();
-    await sync('c1');
+    await sync('c1'); // stamps the device-wide Google gate
     fetchMock.mockClear();
 
     clearSyncLimiter();
-    await vi.advanceTimersByTimeAsync(0); // the delete is fire-and-forget
+    await vi.advanceTimersByTimeAsync(0); // the deletes are fire-and-forget
     vi.setSystemTime(NOW + 60_000);
 
-    await expect(sync('c2')).resolves.toBe('synced');
+    // The gate is device-wide and MUST persist across sign-out/in and unpair (REBUILD-SPEC §5), so an
+    // automatic sync within the hour is still rate-limited and makes no Google request.
+    expect((await sync('c2')).google).toBe('rate-limited');
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // First-pair is a `force` caller, which is the intended way a re-paired couple repopulates.
+    expect((await sync('c2', { force: true })).google).toBe('synced');
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('mirrors the persisted timestamp into the store even when rate-limited', async () => {
+  it('clearSyncLimiter clears the freshness stamps and the legacy key but KEEPS the Google gate', async () => {
+    const { sync, clearSyncLimiter } = await setup();
+    mocks.deviceBusy.mockResolvedValue([]); // device read ok → a device success stamp is written too
+    mocks.keychain.set('calendar.lastSyncMs', String(NOW)); // simulate a pre-split install's orphan key
+    await sync('c1');
+    expect(mocks.keychain.has('calendar.googleGateMs')).toBe(true);
+
+    clearSyncLimiter();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mocks.keychain.has('calendar.googleGateMs')).toBe(true); // device-wide gate survives (§5)
+    expect(mocks.keychain.has('calendar.googleSuccessMs')).toBe(false);
+    expect(mocks.keychain.has('calendar.deviceSuccessMs')).toBe(false);
+    expect(mocks.keychain.has('calendar.lastSyncMs')).toBe(false); // legacy orphan swept
+  });
+
+  it('mirrors the persisted Google freshness into the store even when rate-limited', async () => {
     const { sync } = await setup();
     await sync('c1');
 
     // A fresh registry, so the store starts at null exactly as it does on a real launch.
     const relaunched = await setup();
     const { useStore } = await import('../store');
-    expect(useStore.getState().lastCalendarSyncMs).toBeNull();
+    expect(useStore.getState().lastGoogleSyncMs).toBeNull();
     vi.setSystemTime(NOW + 60_000);
     await relaunched.sync('c1');
 
     // Settings shows a real "last synced" instead of "never" after a rate-limited launch.
-    expect(useStore.getState().lastCalendarSyncMs).toBe(NOW);
+    expect(useStore.getState().lastGoogleSyncMs).toBe(NOW);
   });
 
   it('does not wedge auto-sync off when the device clock jumped backwards', async () => {
@@ -353,8 +418,8 @@ describe('the persisted rate limit', () => {
     await sync('c1');
     fetchMock.mockClear();
 
-    vi.setSystemTime(NOW - 5 * 24 * HOUR_MS); // stored timestamp is now in the "future"
-    await expect(sync('c1')).resolves.toBe('synced');
+    vi.setSystemTime(NOW - 5 * 24 * HOUR_MS); // stored gate is now in the "future"
+    expect((await sync('c1')).google).toBe('synced');
   });
 });
 
@@ -364,7 +429,8 @@ describe('the two sources are isolated', () => {
     fetchMock.mockResolvedValue({ ok: false, status: 500 }); // fetchBusy throws — a transient failure
     mocks.deviceBusy.mockResolvedValue([{ start_utc: NOW, end_utc: NOW + HOUR_MS }]);
 
-    await expect(sync('c1', { force: true })).resolves.toBe('synced');
+    const summary = await sync('c1', { force: true });
+    expect(summary).toEqual({ device: 'synced', google: 'failed' });
     expect(mocks.putCalendarBlocks).toHaveBeenCalledWith(
       'c1',
       [{ start_utc: NOW, end_utc: NOW + HOUR_MS }],
@@ -374,13 +440,36 @@ describe('the two sources are isolated', () => {
     expect(mocks.putCalendarBlocks).not.toHaveBeenCalledWith('c1', expect.anything(), 'google');
   });
 
-  it('rethrows a failed write instead of reporting scope-missing', async () => {
+  it('reports a failed device write per-source without masking the Google reason', async () => {
     const { sync } = await setup();
-    mocks.getCurrentUser.mockReturnValue({ scopes: ['email'] }); // no calendar scope → a reason exists
+    mocks.getCurrentUser.mockReturnValue({ scopes: ['email'] }); // no calendar scope
     mocks.deviceBusy.mockResolvedValue([]); // device read ok → device PUT attempted...
     mocks.putCalendarBlocks.mockRejectedValue(new Error('network')); // ...and fails
 
-    // The real error wins over the scope reason, so the caller sees the true failure.
-    await expect(sync('c1', { force: true })).rejects.toThrow('network');
+    // No throw: each source carries its own outcome in the summary.
+    const summary = await sync('c1', { force: true });
+    expect(summary).toEqual({ device: 'failed', google: 'scope-missing' });
+  });
+
+  it('reports an empty device read as device: empty and records its freshness', async () => {
+    const { sync } = await setup();
+    mocks.deviceBusy.mockResolvedValue([]); // read ok, nothing busy
+    const { useStore } = await import('../store');
+
+    const summary = await sync('c1');
+
+    expect(summary).toEqual({ device: 'empty', google: 'synced' });
+    expect(mocks.putCalendarBlocks).toHaveBeenCalledWith('c1', [], 'device');
+    expect(useStore.getState().lastDeviceSyncMs).toBe(NOW);
+  });
+
+  it('reports a null device read as device: skipped and does not PUT the device source', async () => {
+    const { sync } = await setup();
+    mocks.deviceBusy.mockResolvedValue(null); // native read failure
+
+    const summary = await sync('c1');
+
+    expect(summary).toEqual({ device: 'skipped', google: 'synced' });
+    expect(mocks.putCalendarBlocks).not.toHaveBeenCalledWith('c1', expect.anything(), 'device');
   });
 });

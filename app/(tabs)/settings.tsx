@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ApiError, api } from '../../src/api';
 import { signOut } from '../../src/auth';
-import { hasCalendarScope, sync, type SyncResult } from '../../src/calendar';
+import { hasCalendarScope, sync, type SyncSummary } from '../../src/calendar';
 import { CalendarAccessRow } from '../../src/components/CalendarAccessRow';
 import {
   listDeviceCalendars,
@@ -26,18 +26,34 @@ import { formatDuration } from '../../src/time';
  * notification switch here changes whether `backend/src/overlapService.ts` sends a push at all.
  */
 
-/** `force` makes 'rate-limited' unreachable, but the map stays total so a new result cannot slip past. */
-const SYNC_NOTES: Record<SyncResult, string> = {
-  synced: 'Synced with Google Calendar.',
-  'rate-limited': 'Already up to date.',
-  'scope-missing': 'Calendar access is off — allow it above and we will sync straight away.',
-  'no-session': 'Sign in with Google again to sync your calendar.',
-};
+/**
+ * One line from a two-source summary, led by the Google state (the metered one the user acts on). A
+ * device-only success is never labelled "Synced with Google Calendar" — the whole point of the split.
+ * Total over `SyncSummary['google']` so a new result cannot slip past. `force` makes 'rate-limited'
+ * unreachable from the button, but it stays mapped for the debounced paths.
+ */
+function noteForSummary(s: SyncSummary): string {
+  switch (s.google) {
+    case 'synced':
+      return 'Synced with Google Calendar.';
+    case 'rate-limited':
+      return 'Already up to date.';
+    case 'scope-missing':
+      return 'Calendar access is off — allow it above and we will sync straight away.';
+    case 'no-session':
+      return 'Sign in with Google again to sync your calendar.';
+    case 'failed':
+      return s.device === 'synced' || s.device === 'empty'
+        ? 'Synced your device calendars, but Google Calendar could not be reached.'
+        : 'Could not reach Google Calendar. Try again in a moment.';
+  }
+}
 
-function syncedAgo(lastSyncMs: number | null): string {
-  if (lastSyncMs === null) return 'Not synced on this device yet';
-  const minutes = Math.floor((Date.now() - lastSyncMs) / 60_000);
-  return minutes < 1 ? 'Synced just now' : `Synced ${formatDuration(minutes)} ago`;
+/** Lowercase fragment so it reads inside "Google Calendar — {…}". */
+function syncedAgo(ms: number | null): string {
+  if (ms === null) return 'not synced yet';
+  const minutes = Math.floor((Date.now() - ms) / 60_000);
+  return minutes < 1 ? 'synced just now' : `synced ${formatDuration(minutes)} ago`;
 }
 
 export default function SettingsScreen() {
@@ -46,7 +62,8 @@ export default function SettingsScreen() {
   const user = useStore((s) => s.user);
   const partner = useStore((s) => s.partner);
   const setUser = useStore((s) => s.setUser);
-  const lastSyncMs = useStore((s) => s.lastCalendarSyncMs);
+  const lastGoogleSyncMs = useStore((s) => s.lastGoogleSyncMs);
+  const lastDeviceSyncMs = useStore((s) => s.lastDeviceSyncMs);
 
   const [scopeOk, setScopeOk] = useState<boolean | null>(null);
   const [zonesOpen, setZonesOpen] = useState(false);
@@ -60,12 +77,12 @@ export default function SettingsScreen() {
     void listDeviceCalendars().then(setDeviceCals);
   }, []);
 
-  // Re-checked whenever the last-sync mirror moves, because that is what CalendarAccessRow does on a
-  // successful grant (it force-syncs). Without the dependency the row would grant the scope and then
-  // sit there with "Sync now" still hidden until something else remounted this screen.
+  // Re-checked whenever the Google freshness mirror moves, because that is what CalendarAccessRow does
+  // on a successful grant (it force-syncs, which lands a Google PUT). Without the dependency the row
+  // would grant the scope and then sit there with "Sync now" still hidden until a remount.
   useEffect(() => {
     void hasCalendarScope().then(setScopeOk);
-  }, [lastSyncMs]);
+  }, [lastGoogleSyncMs]);
 
   const coupleId = user?.couple_id ?? null;
   const partnerName = partner?.display_name ?? partner?.email ?? 'Your partner';
@@ -93,11 +110,10 @@ export default function SettingsScreen() {
     setSyncing(true);
     setSyncNote(null);
     try {
-      // Permitted `force` caller — one of exactly three (this button, a successful ensureScope(), and
-      // first pairing). A discrete button press, so it cannot loop.
-      const result = await sync(coupleId, { force: true });
-      if (result === 'scope-missing') setScopeOk(false);
-      setSyncNote(SYNC_NOTES[result]);
+      // Permitted `force` caller — a discrete button press, so it cannot loop.
+      const summary = await sync(coupleId, { force: true });
+      if (summary.google === 'scope-missing') setScopeOk(false);
+      setSyncNote(noteForSummary(summary));
     } catch {
       setSyncNote('Could not reach Google Calendar. Try again in a moment.');
     } finally {
@@ -114,7 +130,9 @@ export default function SettingsScreen() {
     setSyncing(true);
     setSyncNote(null);
     try {
-      setSyncNote(SYNC_NOTES[await sync(coupleId, { force: true })]);
+      const summary = await sync(coupleId, { force: true });
+      if (summary.google === 'scope-missing') setScopeOk(false);
+      setSyncNote(noteForSummary(summary));
     } catch {
       setSyncNote('Could not sync. Try again in a moment.');
     } finally {
@@ -256,8 +274,16 @@ export default function SettingsScreen() {
             <Text style={{ color: colors.text, fontSize: fontSize.body }}>
               {user?.email ?? 'Signed in with Google'}
             </Text>
+            {/* Per-source freshness: Google is metered + hourly-gated, device is local and refreshes
+                far more often, so a single "last synced" would be misleading. */}
             <Text style={{ color: colors.textMuted, fontSize: fontSize.caption }}>
-              {syncedAgo(lastSyncMs)} · we read only busy and free times, never event titles.
+              Google Calendar — {syncedAgo(lastGoogleSyncMs)}
+            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.caption }}>
+              Device calendars — {syncedAgo(lastDeviceSyncMs)}
+            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.caption }}>
+              We read only busy and free times, never event titles.
             </Text>
           </View>
 

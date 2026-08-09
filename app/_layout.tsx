@@ -2,7 +2,7 @@ import * as Linking from 'expo-linking';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, type AppStateStatus, Pressable, Text, View } from 'react-native';
 
 import { api } from '../src/api';
 import {
@@ -50,15 +50,41 @@ async function bootstrap(): Promise<void> {
     // Both after hydration, and both fire-and-forget: a refused notification permission or an
     // unreachable Google must not turn a working launch into the retry screen below.
     void requestPermissionAndRegister().catch(() => undefined);
-    // Never forced. Deliberately not gated on the store's lastCalendarSyncMs either — that is null on
-    // every launch, which is exactly why the ≤1-automatic-call-per-hour limiter is persisted inside
-    // sync() instead of held in memory.
+    // Never forced. Deliberately not gated on any store mirror either — those are null on every
+    // launch, which is exactly why the ≤1-automatic-Google-call-per-hour gate is persisted inside
+    // sync() (calendar.googleGateMs) instead of held in memory. The device source refreshes anyway.
     if (coupleId) void sync(coupleId).catch(() => undefined);
   } catch (err) {
     store.setHydrationError(err instanceof Error ? err.message : 'could not reach the server');
   } finally {
     store.setHydrated(true);
   }
+}
+
+// Debounce for the foreground re-sync below. A fast app-switch (glance at another app and back) fires
+// active twice in a few seconds; 45s is long enough to collapse that yet far under the Google gate's
+// hour — the device source (local, unmetered) is what actually refreshes each time, Google respects
+// its own gate inside sync(). Module-level so it survives re-renders but resets on a real relaunch.
+const FOREGROUND_DEBOUNCE_MS = 45_000;
+let lastForegroundSyncMs = 0;
+
+/**
+ * A real background→foreground return: refresh both calendar sources (Google still gated) and refetch
+ * the overlap windows, so a session whose WebSocket died while backgrounded still updates on return.
+ * UN-forced on purpose — this is not a user gesture, so it must not bypass the Google hourly gate.
+ */
+function onForeground(): void {
+  const { user, hydrated } = useStore.getState();
+  const coupleId = user?.couple_id;
+  // Require a finished cold start: firing before hydrate races bootstrap's own sync + hydrateFromServer.
+  if (!hydrated || !coupleId) return;
+  const now = Date.now();
+  if (now - lastForegroundSyncMs < FOREGROUND_DEBOUNCE_MS) return;
+  lastForegroundSyncMs = now;
+  void sync(coupleId)
+    .then(() => api.latestOverlap(coupleId))
+    .then((o) => useStore.getState().setWindows(o.windows, o.computed_at))
+    .catch(() => undefined);
 }
 
 /**
@@ -86,6 +112,18 @@ export default function RootLayout() {
   // Returns its own cleanup. On mount rather than after hydration: a tap that launched the app is
   // reported once and early, and there is nothing to gain by being told about it later.
   useEffect(() => attachTapHandler(), []);
+
+  // Foreground re-sync. ONLY a real background → active transition counts. 'inactive' is excluded on
+  // purpose: iOS enters it for a permission dialog, the app switcher peek, or Control Center — none of
+  // which is a true return, and treating them as one would re-sync on every system prompt.
+  useEffect(() => {
+    let prev: AppStateStatus = AppState.currentState;
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (prev === 'background' && next === 'active') onForeground();
+      prev = next;
+    });
+    return () => subscription.remove();
+  }, []);
 
   // The single source of "is there a session". A signed-out launch resolves to reset(), which leaves
   // hydrated true — an empty state is known, not unknown, and the splash must not outlive it.

@@ -28,6 +28,12 @@ const FILTERS = [
   { label: '2h', minutes: 120 },
 ] as const;
 
+// A pull is a deliberate user gesture, so it forces Google (bypassing the hourly gate). The cooldown
+// stops a user who yanks the list repeatedly from spending a metered call on each tug — 30s is well
+// under an hour but past the reflexive double-pull. Module-level so it survives this screen's unmount.
+const PULL_COOLDOWN_MS = 30_000;
+let lastForcedPullMs = 0;
+
 /**
  * One tick a minute, aligned to the minute boundary. A per-second interval would wake the device 60×
  * more often to redraw an HH:mm clock nobody is watching a second hand on; aligning means the digits
@@ -103,9 +109,12 @@ export default function FreeTimeScreen() {
     setRefreshError(null);
     try {
       // The calendar FIRST, then the windows. Refetching windows without re-pulling free/busy is the
-      // bug a user reports as "it's out of date". Never forced: pull-to-refresh is not one of the
-      // three permitted `force` callers, so a 'rate-limited' result here is correct behaviour.
-      await sync(coupleId);
+      // bug a user reports as "it's out of date". A pull is a deliberate gesture, so it forces Google
+      // past the hourly gate — but only once per cooldown, so repeated tugs don't each spend a call.
+      const now = Date.now();
+      const force = now - lastForcedPullMs >= PULL_COOLDOWN_MS;
+      if (force) lastForcedPullMs = now;
+      await sync(coupleId, { force });
       const overlap = await api.latestOverlap(coupleId);
       useStore.getState().setWindows(overlap.windows, overlap.computed_at);
     } catch {
