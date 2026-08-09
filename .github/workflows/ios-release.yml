@@ -29,9 +29,10 @@ concurrency:
 
 jobs:
   build:
-    # macos-15 ships Xcode 16; macos-14's default Xcode is too old for firebase-ios-sdk (RNFirebase
-    # v23), whose Podfile check fails pod install with "Please upgrade XCode".
-    runs-on: macos-15
+    # Needs Xcode >= 26.4: firebase-ios-sdk wants Xcode 16+, and a dependency's Swift package requires
+    # Swift tools 6.2; expo-modules-jsi only compiles cleanly under Xcode 26.4+ (26.3 hits a Swift 6.2
+    # type-inference bug — expo/expo#47957). macos-26 ships a 26.4+ toolchain.
+    runs-on: macos-26
     timeout-minutes: 45
     env:
       API_BASE_URL: https://couple-sync.yashiel.dev
