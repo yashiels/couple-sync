@@ -41,6 +41,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # A dependency's Swift package needs Swift tools 6.2; the runner's default Xcode (16.4) ships
+      # Swift 6.1. Select the newest stable Xcode (26.x → Swift 6.2) so package resolution succeeds.
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: latest-stable
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
