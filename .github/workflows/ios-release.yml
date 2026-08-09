@@ -108,8 +108,10 @@ jobs:
             -workspace ios/CoupleSync.xcworkspace \
             -scheme CoupleSync \
             -configuration Release \
+            -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/CoupleSync.xcarchive" \
             -allowProvisioningUpdates \
+            -allowProvisioningDeviceRegistration \
             -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${ASC_API_KEY_ID}.p8" \
             -authenticationKeyID "$ASC_API_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
