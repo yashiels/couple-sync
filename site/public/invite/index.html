@@ -5,48 +5,63 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>You're invited — Couple Sync</title>
     <meta name="description" content="Pair with your partner on Couple Sync." />
+    <meta name="theme-color" content="#fafbfc" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="stylesheet" href="/fonts.css" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <main class="wrap">
-      <a class="wordmark" href="/">Couple&nbsp;Sync</a>
+    <div class="grain" aria-hidden="true"></div>
+    <div class="wrap">
+      <header class="site-head">
+        <a class="wordmark" href="/">
+          <img src="/couple-sync-mark.png" alt="" width="30" height="30" />
+          Couple<span>Sync</span>
+        </a>
+        <nav>
+          <a href="/privacy" class="ink">Privacy</a>
+          <a href="/support" class="ink">Support</a>
+        </nav>
+      </header>
 
-      <h1>You're invited to pair.</h1>
-      <p class="lede">
-        Your partner wants to find time together on Couple Sync. Open the app to accept.
-      </p>
+      <main class="invite">
+        <p class="kicker rise">You're invited</p>
+        <h1 class="rise d1">Your partner wants to find <em>time together</em>.</h1>
+        <p class="lede rise d2" style="margin-inline: auto">
+          Open Couple Sync to accept — or install it, then enter the code below.
+        </p>
 
-      <div class="card">
-        <div class="code" id="invite-code" aria-label="Invite code">······</div>
-        <p class="muted" style="text-align: center; margin: 0">Invite code</p>
-      </div>
+        <div class="code-card rise d2">
+          <div class="code" id="invite-code" aria-label="Invite code">······</div>
+          <small>Invite code</small>
+        </div>
 
-      <div class="button-row">
-        <!-- href is set by script; without JS the code below is the fallback. -->
-        <a class="button" id="open-app" href="#">Open in Couple&nbsp;Sync</a>
-        <a class="button secondary" href="https://play.google.com/store/apps/details?id=dev.yashiel.couplesync"
-          >Get the app</a
-        >
-      </div>
+        <div class="cta-row rise d3">
+          <!-- href is set by /invite.js from the URL; this is the no-JS fallback. -->
+          <a class="button" id="open-app" href="#">Open in Couple&nbsp;Sync</a>
+          <a
+            class="button ghost"
+            href="https://play.google.com/store/apps/details?id=dev.yashiel.couplesync"
+            >Get the app</a
+          >
+        </div>
 
-      <h2>No app yet?</h2>
-      <ol class="steps">
-        <li>Install Couple Sync from Google Play.</li>
-        <li>Sign in with Google.</li>
-        <li>Type the 6-character code above when prompted.</li>
-      </ol>
-      <p class="muted">
-        Codes expire after 48 hours — if this one has lapsed, ask your partner for a fresh one from
-        the app.
-      </p>
+        <p class="muted rise d4" style="font-size: 0.82rem; margin-top: 1.5rem">
+          No app yet? Install Couple Sync from Google Play, sign in with Google, then type the
+          6-character code when prompted. Codes expire after 48 hours — if this one has lapsed, ask
+          your partner for a fresh one.
+        </p>
+      </main>
 
       <footer>
-        <a href="/">Home</a>
-        <a href="/privacy">Privacy</a>
-        <a href="/support">Support</a>
-        <span>© 2026 Couple Sync</span>
+        <p class="note">Couple Sync — <em>free/busy in, shared time out.</em></p>
+        <nav>
+          <a href="/" class="ink">Home</a>
+          <a href="/privacy" class="ink">Privacy</a>
+          <a href="/support" class="ink">Support</a>
+        </nav>
       </footer>
-    </main>
+    </div>
 
     <!-- External, not inline, so the CSP in _headers can forbid inline script. Lives at /invite.js
          (not /invite/…) because _redirects rewrites every /invite/* path to this page. -->

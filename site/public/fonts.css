@@ -1,0 +1,9 @@
+/* Self-hosted (latin) — mirrors yashiel.dev's Google Fonts, kept local so the site's
+   default-src 'self' CSP needs no external font host. */
+@font-face{font-family:'Instrument Serif';font-style:italic;font-weight:400;font-display:swap;src:url('/fonts/instrument-serif-400-italic.woff2') format('woff2');}
+@font-face{font-family:'Instrument Serif';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/instrument-serif-400.woff2') format('woff2');}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/jetbrains-mono-400.woff2') format('woff2');}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:500;font-display:swap;src:url('/fonts/jetbrains-mono-500.woff2') format('woff2');}
+@font-face{font-family:'Sora';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/sora-400.woff2') format('woff2');}
+@font-face{font-family:'Sora';font-style:normal;font-weight:600;font-display:swap;src:url('/fonts/sora-600.woff2') format('woff2');}
+@font-face{font-family:'Sora';font-style:normal;font-weight:700;font-display:swap;src:url('/fonts/sora-700.woff2') format('woff2');}

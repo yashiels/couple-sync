@@ -3,55 +3,135 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Couple Sync — find time together, across time zones</title>
+    <title>Couple Sync — find the time you're both free</title>
     <meta
       name="description"
-      content="Couple Sync reads both partners' calendars and surfaces the windows when you're both free — for long-distance couples."
+      content="Couple Sync reads both partners' Google Calendars and surfaces the windows when you're both free — free/busy only, titles never leave your phone. A side project for long-distance couples."
     />
+    <meta name="theme-color" content="#fafbfc" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta property="og:title" content="Couple Sync — find the time you're both free" />
+    <meta
+      property="og:description"
+      content="Both calendars in, shared free time out. Built for the distance between two people."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="stylesheet" href="/fonts.css" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <main class="wrap">
-      <a class="wordmark" href="/">Couple&nbsp;Sync</a>
+    <div class="grain" aria-hidden="true"></div>
+    <div class="wrap">
+      <header class="site-head">
+        <a class="wordmark" href="/">
+          <img src="/couple-sync-mark.png" alt="" width="30" height="30" />
+          Couple<span>Sync</span>
+        </a>
+        <nav>
+          <a href="/privacy" class="ink">Privacy</a>
+          <a href="/support" class="ink">Support</a>
+        </nav>
+      </header>
 
-      <h1>Find time together, across time&nbsp;zones.</h1>
-      <p class="lede">
-        Couple Sync connects to both partners' Google Calendars and shows the windows when you're
-        both free — so the next call plans itself.
-      </p>
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="kicker rise">A side project, built for two</p>
+          <h1 class="rise d1">Find the time you're <em>both</em> actually free.</h1>
+          <p class="lede rise d2">
+            Couple Sync reads both partners' Google Calendars and surfaces the windows when neither
+            of you is busy — across time zones, so the next call plans itself.
+          </p>
+          <div class="cta-row rise d3">
+            <a
+              class="button"
+              href="https://play.google.com/store/apps/details?id=dev.yashiel.couplesync"
+              >Get it on Google&nbsp;Play</a
+            >
+            <span class="cta-note">Android · free</span>
+          </div>
+          <dl class="facts rise d4">
+            <div><dt>Reads</dt><dd>Google free/busy only — never event titles</dd></div>
+            <div><dt>Pairing</dt><dd>One 6-character code, two phones</dd></div>
+            <div><dt>Made by</dt><dd>Yashiel · one person, for two people</dd></div>
+          </dl>
+        </div>
 
-      <div class="button-row">
-        <a class="button" href="https://play.google.com/store/apps/details?id=dev.yashiel.couplesync"
-          >Get it on Google&nbsp;Play</a
-        >
-      </div>
+        <div class="stage rise d2" aria-label="Couple Sync shared free-time preview">
+          <div class="phone" aria-hidden="true">
+            <div class="phone-top"><span>9:41</span><b></b></div>
+            <div class="app-heading">
+              <img src="/couple-sync-mark.png" alt="" width="34" height="34" />
+              <div><small>Couple Sync</small><strong>Free time</strong></div>
+            </div>
+            <div class="clock-row">
+              <div><small>You · Cape Town</small><strong>21:41</strong></div>
+              <div><small>Partner · London</small><strong>19:41</strong></div>
+            </div>
+            <small class="window-label">Next window</small>
+            <div class="window-card best">
+              <div><strong>Tomorrow</strong><span>19:30 – 21:30</span></div>
+              <b>2h</b>
+            </div>
+            <div class="window-card">
+              <div><strong>Saturday</strong><span>16:00 – 17:15</span></div>
+              <b>1h 15m</b>
+            </div>
+            <div class="privacy-line"><span>✓</span> Free/busy only · titles stay private</div>
+          </div>
+        </div>
+      </section>
 
-      <div class="card">
-        <h2>How it works</h2>
-        <ol class="steps">
-          <li><strong>Sign in with Google.</strong> That one consent is also calendar access.</li>
-          <li><strong>Pair with your partner.</strong> Share a 6-character code.</li>
-          <li><strong>See your overlap.</strong> Free windows land on both phones instantly.</li>
+      <div class="section-line"></div>
+
+      <section class="band">
+        <p class="kicker">How it works</p>
+        <h2>Three steps, then it just&nbsp;runs.</h2>
+        <ol class="steps" style="margin-top: 1.75rem">
+          <li>
+            <strong>Sign in with Google</strong>
+            <p>That one consent is also read-only calendar access. No separate connect screen.</p>
+          </li>
+          <li>
+            <strong>Pair with your partner</strong>
+            <p>Share a 6-character code. Two calendars, one shared view.</p>
+          </li>
+          <li>
+            <strong>See your overlap</strong>
+            <p>Free windows of 30 minutes or more land on both phones instantly.</p>
+          </li>
         </ol>
-      </div>
+      </section>
 
-      <h2>Your calendar stays yours</h2>
-      <p class="muted">
-        Couple Sync reads <em>busy/free</em> only — never an event title, never a guest list, never a
-        location. Your partner sees <em>when</em> you're busy, not <em>what</em> you're doing. Read
-        the <a href="/privacy">privacy policy</a>.
-      </p>
+      <div class="section-line"></div>
 
-      <p>
-        Have an invite code? Open it in the app, or
-        <a href="/support">see how pairing works</a>.
-      </p>
+      <section class="band privacy-band">
+        <div>
+          <p class="kicker">Your calendar stays yours</p>
+          <h2>It sees <em>when</em> you're busy — never <em>what</em> you're doing.</h2>
+          <p>
+            Couple Sync asks Google for free/busy blocks only. Event titles, guests, and locations are
+            never requested, stored, or shown to your partner. Read the
+            <a href="/privacy" class="ink">privacy policy</a>.
+          </p>
+        </div>
+        <div class="assure">
+          <div class="row"><b>✓</b><span>Busy/free intervals only — no event details ever leave your device.</span></div>
+          <div class="row"><b>✓</b><span>Your partner sees a block of time, not its title.</span></div>
+          <div class="row"><b>✓</b><span>No ads, no tracking, no selling data. It's a personal project.</span></div>
+        </div>
+      </section>
 
       <footer>
-        <a href="/privacy">Privacy</a>
-        <a href="/support">Support</a>
-        <span>© 2026 Couple Sync</span>
+        <p class="note">
+          Built by <a href="https://yashiel.dev" class="ink">Yashiel</a> to close the gap between two
+          calendars — <em>and the people behind them.</em>
+        </p>
+        <nav>
+          <a href="/privacy" class="ink">Privacy</a>
+          <a href="/support" class="ink">Support</a>
+          <a href="https://yashiel.dev" class="ink">yashiel.dev</a>
+        </nav>
       </footer>
-    </main>
+    </div>
   </body>
 </html>
