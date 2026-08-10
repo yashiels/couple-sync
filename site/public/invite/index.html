@@ -48,22 +48,8 @@
       </footer>
     </main>
 
-    <script>
-      // The code travels in the URL path (/invite/ABC123). Pull it out, display it, and aim the
-      // deep-link button at the custom scheme the app already registers (couplesync://invite/…).
-      (function () {
-        var m = window.location.pathname.match(/^\/invite\/([A-HJ-NP-Za-hj-np-z2-9]{6})\/?$/);
-        var codeEl = document.getElementById('invite-code');
-        var openBtn = document.getElementById('open-app');
-        if (m) {
-          var code = m[1].toUpperCase();
-          codeEl.textContent = code;
-          openBtn.href = 'couplesync://invite/' + code;
-        } else {
-          codeEl.textContent = 'no code';
-          openBtn.style.display = 'none';
-        }
-      })();
-    </script>
+    <!-- External, not inline, so the CSP in _headers can forbid inline script. Lives at /invite.js
+         (not /invite/…) because _redirects rewrites every /invite/* path to this page. -->
+    <script src="/invite.js"></script>
   </body>
 </html>

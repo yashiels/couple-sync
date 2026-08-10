@@ -1,6 +1,9 @@
 # Static pages: light hardening. API responses come from the backend through the function, so
 # their caching/security headers are the backend's own and are not set here.
+# CSP: default-src 'self' blocks inline script (the invite page's script lives in /invite.js);
+# 'unsafe-inline' is allowed for style only (an inline style= attribute, not an execution vector).
 /*
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
+  Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
