@@ -123,7 +123,15 @@ prebuild) and runs exactly the commands above. A locally-skipped test is a red p
   Both Firebase API keys are restricted to package `dev.yashiel.couplesync` + release/debug SHA-1.
 - **Never commit** the real `google-services.json` (gitignored; CI copies the placeholder), the release
   keystore, a service-account key, or any `.env`. The service-account JSON is the only true secret.
-- Canonical API host: **`https://couple-sync.yashiel.dev`** (WS derived: `wss://…/sync`).
+- **Hosting (live).** `https://couple-sync.yashiel.dev` is the one public host (WS: `wss://…/sync`) and
+  the app's unchanged `API_BASE_URL`. It resolves to the **Cloudflare Pages** project `couple-sync`
+  (`couple-sync-7hy.pages.dev`); the Pages Function serves static pages and proxies API/WS paths to the
+  backend tunnel at **`couple-sync-tunnel.yashiel.dev`** — set as the Pages prod env `API_BASE_URL`. Both
+  hostnames live in the `yashiel.dev` Cloudflare zone. Do not point the app at the tunnel host directly.
+- **Two Cloudflare tokens.** CI's `CF_PAGES_API_TOKEN` (1Password `api.cloudflare-pages-ci`) is
+  Pages:Edit-only and CANNOT touch DNS. DNS/tunnel/Pages-admin changes need the broad account token,
+  1Password Agents vault item `api.cloudflare.apex`. A Pages custom-domain cutover has a ~1-minute
+  HTTP-522 window while the edge cert provisions — not zero-downtime.
 
 ## Do not
 
