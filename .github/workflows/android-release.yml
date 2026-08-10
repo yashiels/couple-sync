@@ -38,8 +38,18 @@ jobs:
       GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
       # Job-level so the "Load secrets" step can gate on it — the `secrets` context is not allowed in `if`.
       OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+      # versionCode must strictly increase; run_number is monotonic. Read by app.config.ts at prebuild.
+      ANDROID_VERSION_CODE: ${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
+
+      # Marketing version (app.config.ts `version`) from the release tag: v1.0.1 → 1.0.1. Only on a
+      # tag; a manual/branch run leaves it unset and app.config falls back to its default.
+      - name: Resolve app version from tag
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "APP_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          fi
 
       - uses: actions/setup-node@v4
         with:

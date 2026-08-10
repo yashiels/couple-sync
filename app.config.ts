@@ -20,7 +20,8 @@ const iosReversedClientId = ((): string | undefined => {
 const config: ExpoConfig = {
   name: 'Couple Sync',
   slug: 'couple-sync',
-  version: '1.0.0',
+  // CI passes APP_VERSION from the release tag (v1.0.1 → 1.0.1); locally it defaults to 1.0.0.
+  version: process.env.APP_VERSION ?? '1.0.0',
   orientation: 'portrait',
   scheme: 'couplesync',
   // No `userInterfaceStyle`: it needs expo-system-ui to have any effect on Android, and Android
