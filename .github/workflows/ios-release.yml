@@ -17,6 +17,14 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+  # Reusable: the Release orchestrator (release.yml) calls this with the computed version so both
+  # platforms build the same commit. inputs.version wins over the tag/branch ref below.
+  workflow_call:
+    inputs:
+      version:
+        description: "Marketing version without the leading v (e.g. 1.0.1)."
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -45,12 +53,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Marketing version (app.config.ts `version`) from the release tag: v1.0.1 → 1.0.1. Only on a
-      # tag; a manual/branch run leaves it unset and app.config falls back to its default.
-      - name: Resolve app version from tag
+      # Marketing version (app.config.ts `version`) + the release tag string. From release.yml the
+      # version arrives as an input; from a manual `git tag` push it comes off the ref. A plain
+      # workflow_dispatch leaves both unset and app.config falls back to its default.
+      - name: Resolve app version
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "APP_VERSION=${{ inputs.version }}" >> "$GITHUB_ENV"
+            echo "REL_TAG=v${{ inputs.version }}" >> "$GITHUB_ENV"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             echo "APP_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+            echo "REL_TAG=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
           fi
 
       # A dependency's Swift package needs Swift tools 6.2; the runner's default Xcode (16.4) ships
@@ -180,7 +193,7 @@ jobs:
         id: ipa
         run: |
           SRC=$(find "$RUNNER_TEMP/export" -name '*.ipa' | head -1)
-          DEST="couple-sync-${{ github.ref_name }}.ipa"
+          DEST="couple-sync-${REL_TAG:-${{ github.ref_name }}}.ipa"
           cp "$SRC" "$DEST"
           echo "path=$DEST" >> "$GITHUB_OUTPUT"
 

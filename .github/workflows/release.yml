@@ -1,0 +1,78 @@
+name: "Release"
+
+# One-click release. Pick a semver bump; this computes the next version from the latest tag, tags the
+# current main commit, and builds BOTH platforms from that same commit (Android → Firebase App
+# Distribution, iOS → TestFlight) via the reusable android-release / ios-release workflows.
+#
+# Why call them (workflow_call) instead of letting the tag push trigger them: a tag pushed with the
+# default GITHUB_TOKEN does NOT trigger tag-listening workflows (GitHub's recursion guard), so relying
+# on the tag event would silently build nothing. Calling them as jobs here runs both in THIS run and
+# needs no PAT. The tag is still created (versioning + a GitHub Release for the APK).
+#
+# Note: docker-publish.yml (backend image) is NOT run here — it already publishes on every push to
+# main, so the backend image is current independently of app releases.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Semver bump from the latest vX.Y.Z tag"
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  contents: write
+
+# Never run two releases at once (they'd race on the tag).
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.compute.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need the full tag history to find the latest version
+
+      - name: Compute next version
+        id: compute
+        run: |
+          latest=$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+          latest=${latest:-v0.0.0}
+          IFS=. read -r MA MI PA <<<"${latest#v}"
+          case "${{ inputs.bump }}" in
+            major) MA=$((MA + 1)); MI=0; PA=0 ;;
+            minor) MI=$((MI + 1)); PA=0 ;;
+            patch) PA=$((PA + 1)) ;;
+          esac
+          NEXT="${MA}.${MI}.${PA}"
+          echo "version=${NEXT}" >> "$GITHUB_OUTPUT"
+          echo "::notice::Releasing v${NEXT} (from ${latest}, bump=${{ inputs.bump }})"
+
+      - name: Create and push tag
+        run: |
+          V="v${{ steps.compute.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$V" -m "Release $V"
+          git push origin "$V"
+
+  android:
+    needs: tag
+    uses: ./.github/workflows/android-release.yml
+    with:
+      version: ${{ needs.tag.outputs.version }}
+    secrets: inherit
+
+  ios:
+    needs: tag
+    uses: ./.github/workflows/ios-release.yml
+    with:
+      version: ${{ needs.tag.outputs.version }}
+    secrets: inherit

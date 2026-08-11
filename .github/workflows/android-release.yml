@@ -19,6 +19,14 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+  # Reusable: the Release orchestrator (release.yml) calls this with the computed version so both
+  # platforms build the same commit. inputs.version wins over the tag/branch ref below.
+  workflow_call:
+    inputs:
+      version:
+        description: "Marketing version without the leading v (e.g. 1.0.1)."
+        type: string
+        required: false
 
 permissions:
   contents: write
@@ -43,12 +51,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Marketing version (app.config.ts `version`) from the release tag: v1.0.1 → 1.0.1. Only on a
-      # tag; a manual/branch run leaves it unset and app.config falls back to its default.
-      - name: Resolve app version from tag
+      # Marketing version (app.config.ts `version`) + the release tag string. From release.yml the
+      # version arrives as an input; from a manual `git tag` push it comes off the ref. A plain
+      # workflow_dispatch leaves both unset and app.config falls back to its default.
+      - name: Resolve app version
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "APP_VERSION=${{ inputs.version }}" >> "$GITHUB_ENV"
+            echo "REL_TAG=v${{ inputs.version }}" >> "$GITHUB_ENV"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             echo "APP_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+            echo "REL_TAG=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
           fi
 
       - uses: actions/setup-node@v4
@@ -122,7 +135,7 @@ jobs:
         id: apk
         run: |
           SRC=$(find android/app/build/outputs/apk/release -name '*.apk' | head -1)
-          DEST="couple-sync-${{ github.ref_name }}.apk"
+          DEST="couple-sync-${REL_TAG:-${{ github.ref_name }}}.apk"
           cp "$SRC" "$DEST"
           echo "path=$DEST" >> "$GITHUB_OUTPUT"
 
@@ -144,11 +157,12 @@ jobs:
           npx --yes firebase-tools appdistribution:distribute "${{ steps.apk.outputs.path }}" \
             --app "$ANDROID_APP_ID" \
             --groups "group-a" \
-            --release-notes "${{ github.ref_name }} (build ${{ github.run_number }})"
+            --release-notes "${REL_TAG:-${{ github.ref_name }}} (build ${{ github.run_number }})"
 
       - name: Attach APK to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: ${{ env.REL_TAG != '' }}
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
+          tag_name: ${{ env.REL_TAG }}
           files: ${{ steps.apk.outputs.path }}
           generate_release_notes: true
