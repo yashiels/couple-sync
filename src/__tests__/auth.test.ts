@@ -139,6 +139,17 @@ describe('ensureNarrowedScope', () => {
     expect(mocks.googleSignOut).toHaveBeenCalledOnce();
   });
 
+  it('leaves a session with NO calendar scope alone — declining consent is supported, not migrated', async () => {
+    // The bug this guards: keying migration off freebusy's absence would sign out (every launch) any
+    // user who never granted calendar access, an infinite loop. Only the legacy scope triggers it.
+    const { ensureNarrowedScope } = await setup();
+    mocks.signInSilently.mockResolvedValue(silentSuccess([]));
+
+    await expect(ensureNarrowedScope()).resolves.toBe('ok');
+    expect(mocks.revokeAccess).not.toHaveBeenCalled();
+    expect(mocks.googleSignOut).not.toHaveBeenCalled();
+  });
+
   it('reports no-session when there is no saved Google credential', async () => {
     const { ensureNarrowedScope } = await setup();
     mocks.signInSilently.mockResolvedValue({ type: 'noSavedCredentialFound', data: null });

@@ -83,6 +83,10 @@ function run(sql: string, params: unknown[]): Record<string, unknown>[] {
   if (s.startsWith('SELECT uid FROM deleted_accounts WHERE completed_at IS NULL')) {
     return [...tombstones.values()].filter((t) => t.completed_at === null).map((t) => ({ uid: t.uid }));
   }
+  if (s.startsWith('SELECT couple_id FROM users WHERE uid = $1 FOR UPDATE')) {
+    const row = users.get(String(params[0]));
+    return row ? [{ couple_id: row.couple_id }] : [];
+  }
   if (s.includes('pg_advisory_xact_lock')) return [];
   if (s.startsWith('SELECT * FROM couples WHERE (user_a_uid')) {
     const uid = String(params[0]);
@@ -206,6 +210,17 @@ describe('deleteAccount', () => {
     expect(begin).toBeLessThan(insert);
     expect(insert).toBeLessThan(commit); // tombstone commits with the deletes
     expect(stamp).toBeGreaterThan(commit); // completed only after the out-of-tx Firebase delete
+  });
+
+  it('locks the user row FOR UPDATE first, to serialize against invite redemption', async () => {
+    seedPair();
+    await deleteAccount('uid-a');
+    // The FOR UPDATE on the user row must precede reading the couple, so a concurrent redeem (which
+    // also locks the user rows) cannot slip a new couple in between the read and the delete.
+    const lockAt = events.findIndex((e) => e.startsWith('SELECT couple_id FROM users WHERE uid = $1 FOR UPDATE'));
+    const coupleAt = events.findIndex((e) => e.startsWith('SELECT * FROM couples WHERE (user_a_uid'));
+    expect(lockAt).toBeGreaterThanOrEqual(0);
+    expect(lockAt).toBeLessThan(coupleAt);
   });
 
   it('takes the same advisory lock as unpair before touching the couple', async () => {

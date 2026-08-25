@@ -24,6 +24,12 @@ import type { CoupleRow } from './wire.js';
  */
 export async function deleteAccount(uid: string): Promise<void> {
   const notify = await withTx(async (c) => {
+    // Lock the user row first. /invites/:code/redeem locks both users FOR UPDATE and re-reads their
+    // couple_id after acquiring, so this serializes deletion against pairing: redeem either commits
+    // first — and the couple SELECT below then finds and tears down the couple it created — or it runs
+    // after the user row is gone and fails cleanly with unknown_user, never stranding a half-paired
+    // couple with a deleted member. No rows (an idempotent re-run on an already-deleted uid) is fine.
+    await c.query('SELECT couple_id FROM users WHERE uid = $1 FOR UPDATE', [uid]);
     await c.query(
       `INSERT INTO deleted_accounts (uid, deleted_at) VALUES ($1, $2) ON CONFLICT (uid) DO NOTHING`,
       [uid, Date.now()],

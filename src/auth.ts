@@ -84,9 +84,13 @@ export async function signInWithGoogle(): Promise<void> {
  * Existing-grant migration gate — run once at cold start, before any calendar sync. Narrowing the
  * requested scope in `configureGoogleSignIn()` only affects FUTURE consent; a user who already granted
  * the legacy `calendar.readonly` keeps that broad grant indefinitely. So refresh the cached Google user
- * and inspect the granted scopes (`signInSilently()` returns them; `getTokens()` does not). If the
- * narrowed `calendar.freebusy` is present and the legacy scope is gone, we are done. Otherwise revoke
- * and sign out so the next sign-in re-consents to the narrowed scope only.
+ * and inspect the granted scopes (`signInSilently()` returns them; `getTokens()` does not). The trigger
+ * is the **presence of the legacy scope**, nothing else: if `calendar.readonly` is still granted, revoke
+ * and sign out so the next sign-in re-consents to the narrowed scope only. If it is absent we are done —
+ * whether the user holds `calendar.freebusy` (already migrated) or no calendar scope at all (they
+ * declined or revoked consent, which is a supported state: `sync()` returns `'scope-missing'` and the
+ * app still works on manual blocks). Keying off freebusy's *absence* instead would sign out — on every
+ * launch — every user who never granted calendar access, an infinite loop.
  *
  * Fails closed: on `'needs-reconsent'` the caller must NOT sync — the user is already signed out and the
  * guard chain routes to /auth. `'no-session'` means there is no Google grant to migrate (the normal
@@ -105,10 +109,11 @@ export async function ensureNarrowedScope(): Promise<'ok' | 'needs-reconsent' | 
   } catch {
     return 'no-session';
   }
-  if (scopes.includes(CALENDAR_SCOPE) && !scopes.includes(LEGACY_CALENDAR_SCOPE)) return 'ok';
-  // Still on the broad grant (or the narrowed scope was never granted): revoke so the re-consent asks
-  // for freebusy only, then sign out. revokeAccess is best-effort — even if it fails, signing out
-  // forces the fresh sign-in that requests the narrowed scope.
+  // Only the legacy grant triggers migration. Its absence — freebusy present, or no calendar scope at
+  // all — needs nothing here.
+  if (!scopes.includes(LEGACY_CALENDAR_SCOPE)) return 'ok';
+  // Still on the broad grant: revoke so the re-consent asks for freebusy only, then sign out.
+  // revokeAccess is best-effort — even if it fails, signing out forces a fresh, narrowed sign-in.
   try {
     await GoogleSignin.revokeAccess();
   } catch {
