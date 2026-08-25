@@ -17,8 +17,19 @@ import { unregisterFcmToken } from './notifications';
 import { useStore } from './store';
 import { disconnect } from './ws';
 
-/** freebusy is the only call we ever make with it (§5). Never widened. */
-export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+/**
+ * `freeBusy.query` is the only Calendar call we ever make (§5), so we request the narrowest scope that
+ * authorizes it. This is deliberately NOT `calendar.readonly`: that scope grants full event-title read,
+ * which the consent screen would then advertise — contradicting the app's promise that titles are never
+ * requested. Never widened.
+ */
+export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.freebusy';
+
+/**
+ * The over-broad scope earlier builds requested. Kept only so `ensureNarrowedScope()` can detect a user
+ * still holding it and migrate them to `CALENDAR_SCOPE`. Do not request it.
+ */
+const LEGACY_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
 
 /**
  * Call once at app module load, before any sign-in — `app/_layout.tsx` does. The calendar scope is
@@ -67,6 +78,44 @@ export async function signInWithGoogle(): Promise<void> {
   const { idToken } = result.data;
   if (!idToken) throw new Error('google sign-in returned no id token');
   await signInWithCredential(getAuth(), GoogleAuthProvider.credential(idToken));
+}
+
+/**
+ * Existing-grant migration gate — run once at cold start, before any calendar sync. Narrowing the
+ * requested scope in `configureGoogleSignIn()` only affects FUTURE consent; a user who already granted
+ * the legacy `calendar.readonly` keeps that broad grant indefinitely. So refresh the cached Google user
+ * and inspect the granted scopes (`signInSilently()` returns them; `getTokens()` does not). If the
+ * narrowed `calendar.freebusy` is present and the legacy scope is gone, we are done. Otherwise revoke
+ * and sign out so the next sign-in re-consents to the narrowed scope only.
+ *
+ * Fails closed: on `'needs-reconsent'` the caller must NOT sync — the user is already signed out and the
+ * guard chain routes to /auth. `'no-session'` means there is no Google grant to migrate (the normal
+ * `sync()` → `'scope-missing'` path handles that), so the caller proceeds.
+ *
+ * Ceiling: once the beta cohort has all re-consented this gate is dead weight; it can be deleted after
+ * the migration window closes. It stays cheap in the meantime — the `'ok'` fast-path is one silent call.
+ */
+export async function ensureNarrowedScope(): Promise<'ok' | 'needs-reconsent' | 'no-session'> {
+  if (isE2E()) return 'ok';
+  let scopes: string[];
+  try {
+    const res = await GoogleSignin.signInSilently();
+    if (res.type !== 'success') return 'no-session';
+    scopes = res.data.scopes ?? [];
+  } catch {
+    return 'no-session';
+  }
+  if (scopes.includes(CALENDAR_SCOPE) && !scopes.includes(LEGACY_CALENDAR_SCOPE)) return 'ok';
+  // Still on the broad grant (or the narrowed scope was never granted): revoke so the re-consent asks
+  // for freebusy only, then sign out. revokeAccess is best-effort — even if it fails, signing out
+  // forces the fresh sign-in that requests the narrowed scope.
+  try {
+    await GoogleSignin.revokeAccess();
+  } catch {
+    // best effort
+  }
+  await signOut();
+  return 'needs-reconsent';
 }
 
 /**

@@ -80,7 +80,7 @@ async function currentGoogleUser(): Promise<User | null> {
   }
 }
 
-/** True when the current Google grant still includes calendar.readonly. */
+/** True when the current Google grant includes our calendar scope (`calendar.freebusy`). */
 export async function hasCalendarScope(): Promise<boolean> {
   return (await currentGoogleUser())?.scopes.includes(CALENDAR_SCOPE) ?? false;
 }

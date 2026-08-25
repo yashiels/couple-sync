@@ -7,6 +7,7 @@ import { ActivityIndicator, AppState, type AppStateStatus, Pressable, Text, View
 import { api } from '../src/api';
 import {
   configureGoogleSignIn,
+  ensureNarrowedScope,
   hydrateFromServer,
   onAuthChange,
   setFirstPairHandler,
@@ -43,6 +44,10 @@ async function bootstrap(): Promise<void> {
   const store = useStore.getState();
   store.setHydrationError(null);
   try {
+    // Migrate a user still holding the legacy calendar.readonly grant to the narrowed calendar.freebusy
+    // scope BEFORE anything else: on 'needs-reconsent' the user is already signed out, so there is
+    // nothing to connect or hydrate — the guard chain routes to /auth for a fresh, narrowed consent.
+    if ((await ensureNarrowedScope()) === 'needs-reconsent') return;
     connect(); // inside the try: a misconfigured API_BASE_URL throws here, and that is a retry screen
     await api.verify(); // upserts the user row from the token claims
     const coupleId = await hydrateFromServer();
