@@ -120,7 +120,7 @@ function run(sql: string, params: unknown[]): Record<string, unknown>[] {
 async function fakeTx<T>(fn: (q: Querier) => Promise<T>): Promise<T> {
   // Snapshot for rollback: the transaction must be all-or-nothing.
   const snapshot = {
-    users: new Map([...users].map(([k, v]) => [k, { ...v }])),
+    users: new Map([...users].map(([k, v]) => [k, { ...v, fcm_tokens: [...v.fcm_tokens] }])),
     couples: new Map([...couples].map(([k, v]) => [k, { ...v }])),
     timeblocks: [...timeblocks],
     overlaps: new Set(overlaps),
@@ -269,6 +269,18 @@ describe('deleteAccount', () => {
     expect(sendTo).toHaveBeenCalledWith('uid-b', { t: 'unpair', couple_id: 'c1' });
   });
 
+  it('does NOT fail when the partner socket send throws — deletion already committed', async () => {
+    seedPair();
+    vi.mocked(sendTo).mockImplementationOnce(() => {
+      throw new Error('socket closed');
+    });
+
+    await expect(deleteAccount('uid-a')).resolves.toBeUndefined();
+    expect(users.has('uid-a')).toBe(false);
+    // The Firebase cleanup still ran (a throwing notify must not skip it).
+    expect(tombstones.get('uid-a')?.completed_at).toBe(NOW);
+  });
+
   it('is idempotent — re-running after a full deletion is a safe no-op', async () => {
     seedPair();
     await deleteAccount('uid-a');
@@ -326,5 +338,19 @@ describe('reconcilePendingDeletions', () => {
   it('returns 0 when nothing is pending', async () => {
     await expect(reconcilePendingDeletions()).resolves.toBe(0);
     expect(deleteAuthUser).not.toHaveBeenCalled();
+  });
+
+  it('continues past a uid whose Firebase delete fails — one stuck tombstone cannot starve the rest', async () => {
+    tombstones.set('bad', { uid: 'bad', deleted_at: 1, completed_at: null });
+    tombstones.set('good', { uid: 'good', deleted_at: 1, completed_at: null });
+    vi.mocked(deleteAuthUser).mockImplementation(async (uid: string) => {
+      if (uid === 'bad') throw new Error('firebase down');
+    });
+
+    const done = await reconcilePendingDeletions();
+
+    expect(done).toBe(1); // 'good' completed despite 'bad' failing
+    expect(tombstones.get('good')?.completed_at).toBe(NOW);
+    expect(tombstones.get('bad')?.completed_at).toBeNull(); // retried next sweep
   });
 });

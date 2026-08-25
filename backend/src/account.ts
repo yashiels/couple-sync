@@ -66,9 +66,17 @@ export async function deleteAccount(uid: string): Promise<void> {
     return notify;
   });
 
-  // Postgres has committed, so the account IS deleted — even if the Firebase Auth cleanup below fails.
-  // Notify the partner NOW, before the fallible step, so a Firebase outage cannot swallow the WS reset.
-  if (notify) sendTo(notify.partnerUid, { t: 'unpair', couple_id: notify.coupleId });
+  // Postgres has committed, so the account IS deleted — even if anything below fails.
+  // Notify the partner NOW, before the fallible Firebase step, so a Firebase outage cannot swallow the
+  // WS reset. Best-effort: a socket send can throw, and that must not fail an already-committed
+  // deletion — the partner self-heals on its next fetch (its couple_id is now null).
+  if (notify) {
+    try {
+      sendTo(notify.partnerUid, { t: 'unpair', couple_id: notify.coupleId });
+    } catch {
+      // ignore — deletion already succeeded
+    }
+  }
 
   // Best-effort Firebase Auth delete. A failure leaves completed_at NULL and the cron sweep retries; it
   // must NOT throw, or the caller would report deletion "failed" and stay signed in despite the
@@ -90,9 +98,17 @@ export async function reconcilePendingDeletions(): Promise<number> {
   const pending = await query<{ uid: string }>(
     'SELECT uid FROM deleted_accounts WHERE completed_at IS NULL',
   );
+  let done = 0;
   for (const { uid } of pending) {
-    await deleteAuthUser(uid);
-    await query('UPDATE deleted_accounts SET completed_at = $2 WHERE uid = $1', [uid, Date.now()]);
+    // Per-uid: one Firebase error must not abort the sweep and starve every tombstone behind it. The
+    // next tick retries whatever stayed incomplete.
+    try {
+      await deleteAuthUser(uid);
+      await query('UPDATE deleted_accounts SET completed_at = $2 WHERE uid = $1', [uid, Date.now()]);
+      done++;
+    } catch (err) {
+      console.error('[reconcile] account deletion cleanup failed', uid, err);
+    }
   }
-  return pending.length;
+  return done;
 }
