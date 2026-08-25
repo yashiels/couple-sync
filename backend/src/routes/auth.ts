@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { deleteAccount, isDeleted } from '../account.js';
+import { deleteAccount } from '../account.js';
 import { requireAuth } from '../auth.js';
-import { query } from '../db.js';
+import { query, withTx } from '../db.js';
 import { bad, HttpError } from '../http.js';
 import type { UserRow } from '../wire.js';
 
@@ -20,21 +20,27 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
   // re-sign-in, or confirming a timezone would be undone by the next app launch.
   app.post('/auth/verify', async (req) => {
     const c = req.claims;
-    // Non-resurrection: a deleted account must not be recreated by a token that outlived it. A partial
-    // deletion (Postgres committed, Firebase Auth delete still pending) can leave a valid ID token in
-    // hand; without this, the very next /auth/verify would upsert the user row straight back.
-    if (await isDeleted(req.uid)) throw new HttpError(410, 'account_deleted');
-    const [user] = await query<UserRow>(
-      `INSERT INTO users (uid, email, display_name, photo_url, created_at)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (uid) DO UPDATE SET
-         email = EXCLUDED.email,
-         display_name = COALESCE(EXCLUDED.display_name, users.display_name),
-         photo_url = COALESCE(EXCLUDED.photo_url, users.photo_url)
-       RETURNING *`,
-      [req.uid, c.email ?? '', c.name ?? null, c.picture ?? null, Date.now()],
-    );
-    if (!user) throw new HttpError(500, 'internal');
+    // Non-resurrection: a deleted account must not be recreated by a token that outlived it. The check
+    // and the upsert run in ONE transaction under hashtext(uid) — the same advisory lock deleteAccount
+    // takes — so they are atomic against a concurrent deletion. Without the lock this is a TOCTOU race:
+    // verify reads "no tombstone", a deletion commits, then verify upserts the user straight back.
+    const user = await withTx(async (tx) => {
+      await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [req.uid]);
+      const tomb = await tx.query('SELECT 1 FROM deleted_accounts WHERE uid = $1', [req.uid]);
+      if (tomb.length > 0) throw new HttpError(410, 'account_deleted');
+      const [u] = await tx.query<UserRow>(
+        `INSERT INTO users (uid, email, display_name, photo_url, created_at)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (uid) DO UPDATE SET
+           email = EXCLUDED.email,
+           display_name = COALESCE(EXCLUDED.display_name, users.display_name),
+           photo_url = COALESCE(EXCLUDED.photo_url, users.photo_url)
+         RETURNING *`,
+        [req.uid, c.email ?? '', c.name ?? null, c.picture ?? null, Date.now()],
+      );
+      if (!u) throw new HttpError(500, 'internal');
+      return u;
+    });
     // The caller's own row, so fcm_tokens stay on it.
     return { user };
   });
@@ -73,7 +79,9 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
 
   // Self-only account deletion (§B1). The uid comes from the verified ID token, so a user can only
   // delete themselves. Deletes all their data + their couple + the Firebase Auth user, and leaves a
-  // tombstone that blocks recreation. 204 on success; the client then signs out.
+  // tombstone that blocks recreation. Returns 200 {ok:true} once Postgres has committed (the account is
+  // then irreversibly deleted); the client signs out. Firebase Auth cleanup is finished in the
+  // background if it did not complete inline, so this never fails on a Firebase outage.
   app.delete('/account', async (req) => {
     await deleteAccount(req.uid);
     return { ok: true };

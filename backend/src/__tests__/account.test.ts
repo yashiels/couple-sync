@@ -13,7 +13,7 @@ vi.mock('../sockets.js', () => ({ sendTo: vi.fn(() => true) }));
 const { query, withTx } = await import('../db.js');
 const { deleteAuthUser } = await import('../firebase.js');
 const { sendTo } = await import('../sockets.js');
-const { deleteAccount, isDeleted, reconcilePendingDeletions } = await import('../account.js');
+const { deleteAccount, reconcilePendingDeletions } = await import('../account.js');
 
 const NOW = Date.parse('2026-06-03T10:00:00Z');
 
@@ -88,31 +88,23 @@ function run(sql: string, params: unknown[]): Record<string, unknown>[] {
     return row ? [{ couple_id: row.couple_id }] : [];
   }
   if (s.includes('pg_advisory_xact_lock')) return [];
-  if (s.startsWith('SELECT * FROM couples WHERE (user_a_uid')) {
+  if (s.startsWith('SELECT * FROM couples WHERE user_a_uid = $1 OR user_b_uid = $1')) {
     const uid = String(params[0]);
-    const row = [...couples.values()].find(
-      (c) => (c.user_a_uid === uid || c.user_b_uid === uid) && c.status === 'active',
-    );
-    return row ? [{ ...row }] : [];
+    return [...couples.values()]
+      .filter((c) => c.user_a_uid === uid || c.user_b_uid === uid)
+      .map((c) => ({ ...c }));
   }
-  if (s.startsWith("UPDATE couples SET status = 'inactive'")) {
-    const row = couples.get(String(params[0]));
-    if (row) row.status = 'inactive';
-    return [];
-  }
-  if (s.startsWith('UPDATE users SET couple_id = NULL')) {
-    for (const uid of params.map(String)) {
-      const row = users.get(uid);
-      if (row) row.couple_id = null;
+  if (s.startsWith('DELETE FROM couples WHERE user_a_uid = $1 OR user_b_uid = $1')) {
+    const uid = String(params[0]);
+    const gone = [...couples.values()].filter((c) => c.user_a_uid === uid || c.user_b_uid === uid);
+    for (const c of gone) {
+      couples.delete(c.id);
+      // ON DELETE CASCADE: timeblocks + overlaps_latest for that couple.
+      timeblocks = timeblocks.filter((b) => b.couple_id !== c.id);
+      overlaps.delete(c.id);
+      // ON DELETE SET NULL: the partner's users.couple_id.
+      for (const u of users.values()) if (u.couple_id === c.id) u.couple_id = null;
     }
-    return [];
-  }
-  if (s.startsWith('DELETE FROM timeblocks')) {
-    timeblocks = timeblocks.filter((b) => b.couple_id !== String(params[0]));
-    return [];
-  }
-  if (s.startsWith('DELETE FROM overlaps_latest')) {
-    overlaps.delete(String(params[0]));
     return [];
   }
   if (s.startsWith('DELETE FROM users')) {
@@ -128,7 +120,7 @@ function run(sql: string, params: unknown[]): Record<string, unknown>[] {
 async function fakeTx<T>(fn: (q: Querier) => Promise<T>): Promise<T> {
   // Snapshot for rollback: the transaction must be all-or-nothing.
   const snapshot = {
-    users: new Map(users),
+    users: new Map([...users].map(([k, v]) => [k, { ...v }])),
     couples: new Map([...couples].map(([k, v]) => [k, { ...v }])),
     timeblocks: [...timeblocks],
     overlaps: new Set(overlaps),
@@ -182,7 +174,8 @@ describe('deleteAccount', () => {
     await deleteAccount('uid-a');
 
     expect(users.has('uid-a')).toBe(false);
-    expect(couples.get('c1')?.status).toBe('inactive');
+    // The couple row is DELETED, not just marked inactive — no row may retain the deleted uid.
+    expect(couples.has('c1')).toBe(false);
     expect(users.get('uid-b')?.couple_id).toBeNull();
     expect(timeblocks).toHaveLength(0);
     expect(overlaps.has('c1')).toBe(false);
@@ -195,8 +188,9 @@ describe('deleteAccount', () => {
     const t = tombstones.get('uid-a');
     expect(t).toBeDefined();
     expect(t?.completed_at).toBe(NOW);
-    // Non-resurrection: /auth/verify checks exactly this.
-    await expect(isDeleted('uid-a')).resolves.toBe(true);
+    // Non-resurrection: the tombstone survives the user-row delete and is what /auth/verify checks.
+    expect(tombstones.has('uid-a')).toBe(true);
+    expect(users.has('uid-a')).toBe(false);
   });
 
   it('tombstone is written inside the transaction, completed_at after the Firebase delete', async () => {
@@ -218,18 +212,21 @@ describe('deleteAccount', () => {
     // The FOR UPDATE on the user row must precede reading the couple, so a concurrent redeem (which
     // also locks the user rows) cannot slip a new couple in between the read and the delete.
     const lockAt = events.findIndex((e) => e.startsWith('SELECT couple_id FROM users WHERE uid = $1 FOR UPDATE'));
-    const coupleAt = events.findIndex((e) => e.startsWith('SELECT * FROM couples WHERE (user_a_uid'));
+    const coupleAt = events.findIndex((e) => e.startsWith('SELECT * FROM couples WHERE user_a_uid'));
     expect(lockAt).toBeGreaterThanOrEqual(0);
     expect(lockAt).toBeLessThan(coupleAt);
   });
 
-  it('takes the same advisory lock as unpair before touching the couple', async () => {
+  it('holds the per-account lock first, then refreshOverlap advisory lock before deleting the couple', async () => {
     seedPair();
     await deleteAccount('uid-a');
-    const lockAt = events.findIndex((e) => e.includes('pg_advisory_xact_lock'));
-    const updateAt = events.findIndex((e) => e.startsWith("UPDATE couples SET status = 'inactive'"));
-    expect(lockAt).toBeGreaterThanOrEqual(0);
-    expect(lockAt).toBeLessThan(updateAt);
+    // The very first statement is the hashtext(uid) account lock (serializes with /auth/verify).
+    const firstLock = events.findIndex((e) => e.includes('pg_advisory_xact_lock'));
+    expect(firstLock).toBeGreaterThanOrEqual(0);
+    // A couple advisory lock is taken before the couple rows are deleted (serializes with refreshOverlap).
+    const lastLock = events.lastIndexOf(events.filter((e) => e.includes('pg_advisory_xact_lock')).at(-1)!);
+    const deleteCouplesAt = events.findIndex((e) => e.startsWith('DELETE FROM couples WHERE user_a_uid'));
+    expect(lastLock).toBeLessThan(deleteCouplesAt);
   });
 
   it('notifies the partner so their app resets, exactly as unpair does', async () => {
@@ -247,20 +244,29 @@ describe('deleteAccount', () => {
     expect(sendTo).not.toHaveBeenCalled();
   });
 
-  it('leaves the tombstone incomplete when the Firebase delete fails, then reconciles it', async () => {
+  it('does NOT fail when the Firebase delete fails — the account is already deleted; cron reconciles', async () => {
     seedPair();
     vi.mocked(deleteAuthUser).mockRejectedValueOnce(new Error('firebase down'));
 
-    await expect(deleteAccount('uid-a')).rejects.toThrow('firebase down');
-    // Postgres committed: the user is gone and cannot be resurrected...
+    // Postgres committed = deleted. A Firebase outage must not turn that into a caller-visible failure
+    // (which would leave the app "signed in" over an irreversibly deleted account).
+    await expect(deleteAccount('uid-a')).resolves.toBeUndefined();
     expect(users.has('uid-a')).toBe(false);
-    await expect(isDeleted('uid-a')).resolves.toBe(true);
+    expect(tombstones.has('uid-a')).toBe(true);
     // ...but the tombstone is not complete until Firebase succeeds.
     expect(tombstones.get('uid-a')?.completed_at).toBeNull();
 
     const reconciled = await reconcilePendingDeletions();
     expect(reconciled).toBe(1);
     expect(tombstones.get('uid-a')?.completed_at).toBe(NOW);
+  });
+
+  it('notifies the partner even when the Firebase delete fails (notify precedes the fallible step)', async () => {
+    seedPair();
+    vi.mocked(deleteAuthUser).mockRejectedValueOnce(new Error('firebase down'));
+
+    await deleteAccount('uid-a');
+    expect(sendTo).toHaveBeenCalledWith('uid-b', { t: 'unpair', couple_id: 'c1' });
   });
 
   it('is idempotent — re-running after a full deletion is a safe no-op', async () => {
@@ -277,6 +283,7 @@ describe('deleteAccount', () => {
     failOn = 'DELETE FROM users';
 
     await expect(deleteAccount('uid-a')).rejects.toThrow('constraint violation');
+    // (couple-delete runs before user-delete, so the rollback must restore the couple too)
     // Nothing committed: the couple is still active, the user still present, no tombstone.
     expect(users.has('uid-a')).toBe(true);
     expect(couples.get('c1')?.status).toBe('active');
@@ -284,14 +291,34 @@ describe('deleteAccount', () => {
     expect(deleteAuthUser).not.toHaveBeenCalled();
   });
 
-  it('deleting both partners leaves the couple inactive and both users gone', async () => {
+  it('deleting both partners removes the couple and both users', async () => {
     seedPair();
     await deleteAccount('uid-a');
+    // First deletion removed the couple and nulled uid-b's couple_id.
+    expect(couples.has('c1')).toBe(false);
+    expect(users.get('uid-b')?.couple_id).toBeNull();
     await deleteAccount('uid-b');
     expect(users.size).toBe(0);
-    expect(couples.get('c1')?.status).toBe('inactive');
-    // The second deletion found no active couple, so it only notified once (for the first).
+    // The second deletion found no couple, so it notified no one; only the first notified.
     expect(sendTo).toHaveBeenCalledOnce();
+  });
+
+  it('also removes an INACTIVE couple that still references the deleted uid', async () => {
+    seedUser('uid-a', { couple_id: null });
+    seedUser('uid-b', { couple_id: null });
+    couples.set('old', {
+      id: 'old',
+      user_a_uid: 'uid-a',
+      user_b_uid: 'uid-b',
+      status: 'inactive',
+      paired_at: 1,
+      created_at: 1,
+    });
+
+    await deleteAccount('uid-a');
+    // No couple row may retain the deleted uid — inactive ones included.
+    expect(couples.has('old')).toBe(false);
+    expect(sendTo).not.toHaveBeenCalled(); // inactive couple → no partner to notify
   });
 });
 

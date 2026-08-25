@@ -4,16 +4,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserRow } from '../wire.js';
 
 vi.mock('../firebase.js', () => ({ verifyIdToken: vi.fn() }));
-vi.mock('../db.js', () => ({ query: vi.fn() }));
-// The deletion internals are exercised in account.test.ts; here they are mocked so these tests are
+vi.mock('../db.js', () => ({ query: vi.fn(), withTx: vi.fn() }));
+// The deletion internals are exercised in account.test.ts; deleteAccount is mocked so these tests are
 // purely about the route wiring — the non-resurrection guard on /auth/verify and DELETE /account.
-vi.mock('../account.js', () => ({ isDeleted: vi.fn(async () => false), deleteAccount: vi.fn(async () => {}) }));
+vi.mock('../account.js', () => ({ deleteAccount: vi.fn(async () => {}) }));
 
 const { verifyIdToken } = await import('../firebase.js');
-const { query } = await import('../db.js');
-const { isDeleted, deleteAccount } = await import('../account.js');
+const { query, withTx } = await import('../db.js');
+const { deleteAccount } = await import('../account.js');
 const { registerErrorHandler } = await import('../http.js');
 const authRoutes = (await import('../routes/auth.js')).default;
+
+/** uids with a tombstone — the fake deleted_accounts table the verify guard reads. */
+const deletedUids = new Set<string>();
 
 const JHB = 'Africa/Johannesburg';
 const NOW = Date.parse('2026-06-03T10:00:00Z');
@@ -87,6 +90,10 @@ function upsert(sql: string, params: unknown[]): UserRow {
 }
 
 async function fakeQuery(sql: string, params: unknown[] = []): Promise<Record<string, unknown>[]> {
+  if (sql.includes('pg_advisory_xact_lock')) return [];
+  if (sql.includes('deleted_accounts')) {
+    return deletedUids.has(String(params[0])) ? [{ '?column?': 1 }] : [];
+  }
   if (sql.includes('INSERT INTO users')) return [{ ...upsert(sql, params) }];
 
   if (/^UPDATE users/.test(sql.trim())) {
@@ -133,8 +140,10 @@ beforeEach(() => {
     async (token: string) => ({ uid: token, sub: token }) as DecodedIdToken,
   );
   vi.mocked(query).mockImplementation(fakeQuery as typeof query);
-  // clearAllMocks wiped the factory defaults; restore them (not-deleted, deletion succeeds).
-  vi.mocked(isDeleted).mockResolvedValue(false);
+  // verify runs its check+upsert in one transaction; the fake tx just threads fakeQuery through.
+  vi.mocked(withTx).mockImplementation((async (fn: (q: { query: typeof fakeQuery }) => unknown) =>
+    fn({ query: fakeQuery })) as typeof withTx);
+  deletedUids.clear();
   vi.mocked(deleteAccount).mockResolvedValue(undefined);
 });
 
@@ -279,7 +288,7 @@ describe('DELETE /auth/fcm-token', () => {
 
 describe('POST /auth/verify — non-resurrection', () => {
   it('410s a deleted account instead of recreating its row', async () => {
-    vi.mocked(isDeleted).mockResolvedValue(true);
+    deletedUids.add('uid-gone');
 
     const res = await verify('uid-gone', { email: 'gone@example.com' });
 

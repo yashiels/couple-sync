@@ -24,53 +24,61 @@ import type { CoupleRow } from './wire.js';
  */
 export async function deleteAccount(uid: string): Promise<void> {
   const notify = await withTx(async (c) => {
-    // Lock the user row first. /invites/:code/redeem locks both users FOR UPDATE and re-reads their
+    // Per-account advisory lock, FIRST. /auth/verify takes the same lock (hashtext(uid)) around its
+    // tombstone-check + upsert, so the two serialize: a verify cannot read "no tombstone", pause, and
+    // then recreate the row this deletion is committing (a TOCTOU resurrection).
+    await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [uid]);
+    // Lock the user row too. /invites/:code/redeem locks both users FOR UPDATE and re-reads their
     // couple_id after acquiring, so this serializes deletion against pairing: redeem either commits
-    // first — and the couple SELECT below then finds and tears down the couple it created — or it runs
-    // after the user row is gone and fails cleanly with unknown_user, never stranding a half-paired
-    // couple with a deleted member. No rows (an idempotent re-run on an already-deleted uid) is fine.
+    // first — and the couple sweep below then removes the couple it created — or it runs after the user
+    // row is gone and fails cleanly with unknown_user. No rows (an idempotent re-run) is fine.
     await c.query('SELECT couple_id FROM users WHERE uid = $1 FOR UPDATE', [uid]);
     await c.query(
       `INSERT INTO deleted_accounts (uid, deleted_at) VALUES ($1, $2) ON CONFLICT (uid) DO NOTHING`,
       [uid, Date.now()],
     );
 
-    // At most one active couple. Tear it down under the same advisory lock refreshOverlap takes, held
-    // before the overlaps_latest delete, so an in-flight compute cannot resurrect the row afterwards.
-    const [couple] = await c.query<CoupleRow>(
-      `SELECT * FROM couples WHERE (user_a_uid = $1 OR user_b_uid = $1) AND status = 'active'`,
+    // Remove EVERY couple that references this uid — active or inactive — so no couple row is left
+    // retaining the deleted uid, its partner association, or its timestamps (the privacy policy promises
+    // only a uid-tombstone survives). Take refreshOverlap's advisory lock per couple first, so an
+    // in-flight compute cannot resurrect overlaps_latest for a couple we are deleting.
+    const couples = await c.query<CoupleRow>(
+      `SELECT * FROM couples WHERE user_a_uid = $1 OR user_b_uid = $1`,
       [uid],
     );
-    let partnerUid: string | null = null;
-    if (couple) {
+    let notify: { partnerUid: string; coupleId: string } | null = null;
+    for (const couple of couples) {
       await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [couple.id]);
-      await c.query(`UPDATE couples SET status = 'inactive' WHERE id = $1`, [couple.id]);
-      await c.query('UPDATE users SET couple_id = NULL WHERE uid IN ($1, $2)', [
-        couple.user_a_uid,
-        couple.user_b_uid,
-      ]);
-      await c.query('DELETE FROM timeblocks WHERE couple_id = $1', [couple.id]);
-      await c.query('DELETE FROM overlaps_latest WHERE couple_id = $1', [couple.id]);
-      partnerUid = couple.user_a_uid === uid ? couple.user_b_uid : couple.user_a_uid;
+      if (couple.status === 'active') {
+        notify = {
+          partnerUid: couple.user_a_uid === uid ? couple.user_b_uid : couple.user_a_uid,
+          coupleId: couple.id,
+        };
+      }
     }
+    // ON DELETE CASCADE clears each couple's timeblocks + overlaps_latest; ON DELETE SET NULL clears the
+    // partner's users.couple_id and any invites.couple_id (schema in migrations/001_init.sql).
+    await c.query('DELETE FROM couples WHERE user_a_uid = $1 OR user_b_uid = $1', [uid]);
 
     // The user's own row. invites (created_by_uid) and any timeblocks (user_id) cascade on this delete.
     await c.query('DELETE FROM users WHERE uid = $1', [uid]);
 
-    return couple ? { partnerUid: partnerUid as string, coupleId: couple.id } : null;
+    return notify;
   });
 
-  await deleteAuthUser(uid);
-  await query('UPDATE deleted_accounts SET completed_at = $2 WHERE uid = $1', [uid, Date.now()]);
-
-  // After the commit, tell the partner so their app resets to /pairing — same message unpair sends.
+  // Postgres has committed, so the account IS deleted — even if the Firebase Auth cleanup below fails.
+  // Notify the partner NOW, before the fallible step, so a Firebase outage cannot swallow the WS reset.
   if (notify) sendTo(notify.partnerUid, { t: 'unpair', couple_id: notify.coupleId });
-}
 
-/** True if this uid has been deleted — the non-resurrection check `/auth/verify` calls. */
-export async function isDeleted(uid: string): Promise<boolean> {
-  const rows = await query('SELECT 1 FROM deleted_accounts WHERE uid = $1', [uid]);
-  return rows.length > 0;
+  // Best-effort Firebase Auth delete. A failure leaves completed_at NULL and the cron sweep retries; it
+  // must NOT throw, or the caller would report deletion "failed" and stay signed in despite the
+  // irreversible Postgres delete. The /auth/verify tombstone already blocks the account regardless.
+  try {
+    await deleteAuthUser(uid);
+    await query('UPDATE deleted_accounts SET completed_at = $2 WHERE uid = $1', [uid, Date.now()]);
+  } catch {
+    // reconcilePendingDeletions() finishes it.
+  }
 }
 
 /**
