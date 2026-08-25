@@ -5,9 +5,13 @@ import type { UserRow } from '../wire.js';
 
 vi.mock('../firebase.js', () => ({ verifyIdToken: vi.fn() }));
 vi.mock('../db.js', () => ({ query: vi.fn() }));
+// The deletion internals are exercised in account.test.ts; here they are mocked so these tests are
+// purely about the route wiring — the non-resurrection guard on /auth/verify and DELETE /account.
+vi.mock('../account.js', () => ({ isDeleted: vi.fn(async () => false), deleteAccount: vi.fn(async () => {}) }));
 
 const { verifyIdToken } = await import('../firebase.js');
 const { query } = await import('../db.js');
+const { isDeleted, deleteAccount } = await import('../account.js');
 const { registerErrorHandler } = await import('../http.js');
 const authRoutes = (await import('../routes/auth.js')).default;
 
@@ -129,6 +133,9 @@ beforeEach(() => {
     async (token: string) => ({ uid: token, sub: token }) as DecodedIdToken,
   );
   vi.mocked(query).mockImplementation(fakeQuery as typeof query);
+  // clearAllMocks wiped the factory defaults; restore them (not-deleted, deletion succeeds).
+  vi.mocked(isDeleted).mockResolvedValue(false);
+  vi.mocked(deleteAccount).mockResolvedValue(undefined);
 });
 
 describe('POST /auth/verify', () => {
@@ -267,5 +274,34 @@ describe('DELETE /auth/fcm-token', () => {
     // A shared handset: signing out of A must not strip B's registration of the same token.
     expect(users.get('uid-a')?.fcm_tokens).toEqual([]);
     expect(users.get('uid-b')?.fcm_tokens).toEqual(['tok-shared']);
+  });
+});
+
+describe('POST /auth/verify — non-resurrection', () => {
+  it('410s a deleted account instead of recreating its row', async () => {
+    vi.mocked(isDeleted).mockResolvedValue(true);
+
+    const res = await verify('uid-gone', { email: 'gone@example.com' });
+
+    expect(res.statusCode).toBe(410);
+    // The upsert never ran: a token that outlived the account cannot bring it back.
+    expect(users.has('uid-gone')).toBe(false);
+  });
+});
+
+describe('DELETE /account', () => {
+  it('deletes the caller own account (self-only via the verified uid) and returns ok', async () => {
+    const res = await app().inject({ method: 'DELETE', url: '/account', headers: as('uid-a') });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
+    expect(deleteAccount).toHaveBeenCalledWith('uid-a');
+  });
+
+  it('requires auth — no Bearer token is rejected before any deletion', async () => {
+    const res = await app().inject({ method: 'DELETE', url: '/account' });
+
+    expect(res.statusCode).toBe(401);
+    expect(deleteAccount).not.toHaveBeenCalled();
   });
 });

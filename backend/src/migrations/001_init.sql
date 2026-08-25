@@ -68,6 +68,20 @@ CREATE TABLE IF NOT EXISTS overlaps_latest (
   input_hash   TEXT NOT NULL
 );
 
+-- Deletion tombstone (account deletion, §B1). Written FIRST inside deleteAccount()'s transaction and
+-- deliberately NOT referencing users(uid) — it must survive the user-row delete so /auth/verify can
+-- refuse to recreate a deleted account (non-resurrection). UID only: retaining the email would keep
+-- personal data past deletion with no necessity. completed_at IS NULL marks a deletion that committed
+-- in Postgres but has not finished the out-of-transaction Firebase Auth delete; the cron sweep
+-- reconciles those.
+CREATE TABLE IF NOT EXISTS deleted_accounts (
+  uid           TEXT PRIMARY KEY,
+  deleted_at    BIGINT NOT NULL,
+  completed_at  BIGINT
+);
+
+CREATE INDEX IF NOT EXISTS deleted_accounts_pending_idx ON deleted_accounts (completed_at) WHERE completed_at IS NULL;
+
 CREATE INDEX IF NOT EXISTS timeblocks_couple_user_idx   ON timeblocks (couple_id, user_id);
 CREATE INDEX IF NOT EXISTS timeblocks_couple_source_idx ON timeblocks (couple_id, source);
 CREATE INDEX IF NOT EXISTS invites_status_expires_idx   ON invites (status, expires_at);

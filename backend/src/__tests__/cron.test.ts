@@ -74,6 +74,12 @@ async function loadCron(adminToken: string | null): Promise<Loaded> {
   vi.resetModules();
   vi.doMock('../config.js', () => ({ config: { adminToken } }));
   vi.doMock('../db.js', () => ({ query: vi.fn(fakeQuery) }));
+  // cron.ts imports account.js (which reaches firebase.js and boots the Admin SDK at module load).
+  // Mock it so this suite stays about invite cleanup + the admin gate; deletion has its own tests.
+  vi.doMock('../account.js', () => ({
+    reconcilePendingDeletions: vi.fn(async () => 0),
+    deleteAccount: vi.fn(async () => {}),
+  }));
 
   const cron = await import('../cron.js');
   const { query } = await import('../db.js');
@@ -107,7 +113,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  for (const id of ['../config.js', '../db.js']) vi.doUnmock(id);
+  for (const id of ['../config.js', '../db.js', '../account.js']) vi.doUnmock(id);
   vi.useRealTimers();
   vi.restoreAllMocks();
 });

@@ -18,12 +18,14 @@ const API_EXACT: ReadonlySet<string> = new Set([
   '/sync', // WebSocket upgrade
   '/auth/verify',
   '/auth/fcm-token',
+  '/account', // DELETE — self-serve account deletion
   '/users/me',
   '/invites',
   '/blocks',
   '/blocks/google',
   '/overlaps/latest',
   '/admin/cleanup',
+  '/admin/delete-account',
 ]);
 
 // Dynamic API routes: a prefix that is still one resource. Each must not swallow a same-named page.

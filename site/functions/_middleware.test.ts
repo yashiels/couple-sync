@@ -11,6 +11,7 @@ describe('isApiPath', () => {
     '/sync',
     '/auth/verify',
     '/auth/fcm-token',
+    '/account',
     '/users/me',
     '/users/some-uid',
     '/couples/abc',
@@ -22,6 +23,7 @@ describe('isApiPath', () => {
     '/blocks/google',
     '/overlaps/latest',
     '/admin/cleanup',
+    '/admin/delete-account',
   ])('treats API path %s as API', (path) => {
     expect(isApiPath(path)).toBe(true);
   });
@@ -34,6 +36,8 @@ describe('isApiPath', () => {
     '/privacy/',
     '/support',
     '/support/',
+    '/delete', // the public account-deletion request page (the API route is /account)
+    '/delete/',
     '/invite',
     '/invite/ABC123',
     '/invite/ABC123/',

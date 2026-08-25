@@ -102,6 +102,12 @@ export const api = {
     await request<{ ok: true }>('POST', `/couples/${id}/unpair`);
   },
 
+  // Self-only: the backend takes the uid from the verified ID token, so no id travels here. Deletes
+  // the account, all its data, and the Firebase Auth user; the caller signs out on success.
+  deleteAccount: async (): Promise<void> => {
+    await request<{ ok: true }>('DELETE', '/account');
+  },
+
   createInvite: (): Promise<{ code: string; expires_at: number }> =>
     request('POST', '/invites'),
 

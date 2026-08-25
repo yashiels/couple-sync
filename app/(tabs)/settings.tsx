@@ -179,6 +179,31 @@ export default function SettingsScreen() {
     }
   }
 
+  async function deleteAccount() {
+    setBusy(true);
+    try {
+      // Server-side this deletes the account, all its data, and the Firebase Auth user, and tombstones
+      // the uid so the same token cannot recreate it. Then sign out locally: signOut() resets the store
+      // and the guard chain returns to /auth. On success this screen unmounts, so busy is left set.
+      await api.deleteAccount();
+      await signOut();
+    } catch {
+      Alert.alert('Could not delete your account', 'Check your connection and try again.');
+      setBusy(false);
+    }
+  }
+
+  function confirmDeleteAccount() {
+    Alert.alert(
+      'Delete your account?',
+      'This permanently deletes your account, every block either of you created, and your shared free time, and unpairs you both. Your Google Calendar itself is untouched. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete account', style: 'destructive', onPress: () => void deleteAccount() },
+      ],
+    );
+  }
+
   const group = (title: string, children: ReactNode) => (
     <View style={{ gap: spacing.sm }}>
       <Text style={{ color: colors.textMuted, fontSize: fontSize.label }}>{title.toUpperCase()}</Text>
@@ -383,6 +408,7 @@ export default function SettingsScreen() {
           </View>
           {button('Unpair', confirmUnpair, 'danger')}
           {button('Sign out', () => void onSignOut())}
+          {button('Delete account', confirmDeleteAccount, 'danger')}
         </>,
       )}
 

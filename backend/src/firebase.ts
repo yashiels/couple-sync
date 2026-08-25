@@ -33,6 +33,21 @@ export async function assertCredentials(): Promise<void> {
   await credential.getAccessToken();
 }
 
+/**
+ * Delete a user from Firebase Auth. Idempotent: `auth/user-not-found` means the account is already
+ * gone (a retried deletion), which is success, not an error — so account deletion can be re-run safely
+ * after a partial failure. Any other error propagates so the caller leaves the tombstone incomplete and
+ * the cron sweep retries.
+ */
+export async function deleteAuthUser(uid: string): Promise<void> {
+  try {
+    await getAuth(app).deleteUser(uid);
+  } catch (err) {
+    if ((err as { code?: string }).code === 'auth/user-not-found') return;
+    throw err;
+  }
+}
+
 /** One message per token, so one dead token cannot fail the batch. errorCode is null on success. */
 export async function sendEach(
   tokens: string[],
