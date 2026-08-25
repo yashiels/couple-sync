@@ -99,7 +99,14 @@ const config: ExpoConfig = {
       'expo-build-properties',
       {
         ios: { useFrameworks: 'static' },
-        android: { usesCleartextTraffic: process.env.EXPO_PUBLIC_E2E === '1' },
+        // Target Android 16 (API 36). Google Play requires API 36 for new submissions after
+        // 2026-08-31; the closed-test candidate must already be on 36 since production sits past that
+        // date. compileSdk is pinned to match so the build resolves 36 APIs.
+        android: {
+          compileSdkVersion: 36,
+          targetSdkVersion: 36,
+          usesCleartextTraffic: process.env.EXPO_PUBLIC_E2E === '1',
+        },
       },
     ],
   ],
