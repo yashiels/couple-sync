@@ -38,6 +38,8 @@ describe('isApiPath', () => {
     '/support/',
     '/delete', // the public account-deletion request page (the API route is /account)
     '/delete/',
+    '/terms',
+    '/terms/',
     '/invite',
     '/invite/ABC123',
     '/invite/ABC123/',

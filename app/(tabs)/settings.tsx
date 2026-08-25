@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Alert, Modal, Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { Alert, Linking, Modal, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ApiError, api } from '../../src/api';
@@ -409,6 +409,14 @@ export default function SettingsScreen() {
           {button('Unpair', confirmUnpair, 'danger')}
           {button('Sign out', () => void onSignOut())}
           {button('Delete account', confirmDeleteAccount, 'danger')}
+        </>,
+      )}
+
+      {group(
+        'About',
+        <>
+          {button('Privacy Policy', () => void Linking.openURL('https://couple-sync.yashiel.dev/privacy'))}
+          {button('Terms of Service', () => void Linking.openURL('https://couple-sync.yashiel.dev/terms'))}
         </>,
       )}
 
