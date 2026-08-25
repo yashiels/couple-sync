@@ -206,15 +206,15 @@ describe('deleteAccount', () => {
     expect(stamp).toBeGreaterThan(commit); // completed only after the out-of-tx Firebase delete
   });
 
-  it('locks the user row FOR UPDATE first, to serialize against invite redemption', async () => {
+  it('locks the user row FOR UPDATE before reading the couple, to serialize against invite redemption', async () => {
     seedPair();
     await deleteAccount('uid-a');
     // The FOR UPDATE on the user row must precede reading the couple, so a concurrent redeem (which
     // also locks the user rows) cannot slip a new couple in between the read and the delete.
-    const lockAt = events.findIndex((e) => e.startsWith('SELECT couple_id FROM users WHERE uid = $1 FOR UPDATE'));
+    const rowLockAt = events.findIndex((e) => e.startsWith('SELECT couple_id FROM users WHERE uid = $1 FOR UPDATE'));
     const coupleAt = events.findIndex((e) => e.startsWith('SELECT * FROM couples WHERE user_a_uid'));
-    expect(lockAt).toBeGreaterThanOrEqual(0);
-    expect(lockAt).toBeLessThan(coupleAt);
+    expect(rowLockAt).toBeGreaterThanOrEqual(0);
+    expect(rowLockAt).toBeLessThan(coupleAt);
   });
 
   it('locks global deletion, then per-account, then the couple — in that order', async () => {
@@ -222,12 +222,14 @@ describe('deleteAccount', () => {
     await deleteAccount('uid-a');
     // Global deletion lock is FIRST (serializes deletions; avoids the two-partner deadlock)...
     const globalAt = events.findIndex((e) => e.includes('account-deletion'));
-    // ...then the per-uid lock (serializes with /auth/verify)...
-    const uidLockAt = events.findIndex((e) => e.startsWith('SELECT couple_id FROM users WHERE uid = $1 FOR UPDATE'));
+    // ...then the per-uid advisory lock (hashtext($1), NOT the constant one) — shared with /auth/verify...
+    const uidLockAt = events.findIndex(
+      (e) => e.includes('pg_advisory_xact_lock') && !e.includes('account-deletion'),
+    );
     // ...then the couple advisory lock before the couple rows are deleted (serializes refreshOverlap).
     const deleteCouplesAt = events.findIndex((e) => e.startsWith('DELETE FROM couples WHERE user_a_uid'));
     const lastLockAt = events.map((e) => e.includes('pg_advisory_xact_lock')).lastIndexOf(true);
-    expect(globalAt).toBeGreaterThanOrEqual(0);
+    expect(globalAt).toBe(1); // right after BEGIN — nothing precedes the global lock
     expect(globalAt).toBeLessThan(uidLockAt);
     expect(lastLockAt).toBeLessThan(deleteCouplesAt);
   });
