@@ -24,7 +24,12 @@ import type { CoupleRow } from './wire.js';
  */
 export async function deleteAccount(uid: string): Promise<void> {
   const notify = await withTx(async (c) => {
-    // Per-account advisory lock, FIRST. /auth/verify takes the same lock (hashtext(uid)) around its
+    // A single global deletion lock, FIRST — before any per-row or per-couple lock. Two partners
+    // deleting at once would otherwise deadlock: each locks its own user row, then one holds the couple
+    // advisory lock and waits to SET NULL the partner's row while the partner holds that row and waits
+    // for the couple lock. Serializing deletions removes the cycle; they are rare, so the cost is nil.
+    await c.query(`SELECT pg_advisory_xact_lock(hashtext('couple-sync:account-deletion'))`);
+    // Per-account advisory lock. /auth/verify takes the same lock (hashtext(uid)) around its
     // tombstone-check + upsert, so the two serialize: a verify cannot read "no tombstone", pause, and
     // then recreate the row this deletion is committing (a TOCTOU resurrection).
     await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [uid]);

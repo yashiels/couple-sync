@@ -217,16 +217,19 @@ describe('deleteAccount', () => {
     expect(lockAt).toBeLessThan(coupleAt);
   });
 
-  it('holds the per-account lock first, then refreshOverlap advisory lock before deleting the couple', async () => {
+  it('locks global deletion, then per-account, then the couple — in that order', async () => {
     seedPair();
     await deleteAccount('uid-a');
-    // The very first statement is the hashtext(uid) account lock (serializes with /auth/verify).
-    const firstLock = events.findIndex((e) => e.includes('pg_advisory_xact_lock'));
-    expect(firstLock).toBeGreaterThanOrEqual(0);
-    // A couple advisory lock is taken before the couple rows are deleted (serializes with refreshOverlap).
-    const lastLock = events.lastIndexOf(events.filter((e) => e.includes('pg_advisory_xact_lock')).at(-1)!);
+    // Global deletion lock is FIRST (serializes deletions; avoids the two-partner deadlock)...
+    const globalAt = events.findIndex((e) => e.includes('account-deletion'));
+    // ...then the per-uid lock (serializes with /auth/verify)...
+    const uidLockAt = events.findIndex((e) => e.startsWith('SELECT couple_id FROM users WHERE uid = $1 FOR UPDATE'));
+    // ...then the couple advisory lock before the couple rows are deleted (serializes refreshOverlap).
     const deleteCouplesAt = events.findIndex((e) => e.startsWith('DELETE FROM couples WHERE user_a_uid'));
-    expect(lastLock).toBeLessThan(deleteCouplesAt);
+    const lastLockAt = events.map((e) => e.includes('pg_advisory_xact_lock')).lastIndexOf(true);
+    expect(globalAt).toBeGreaterThanOrEqual(0);
+    expect(globalAt).toBeLessThan(uidLockAt);
+    expect(lastLockAt).toBeLessThan(deleteCouplesAt);
   });
 
   it('notifies the partner so their app resets, exactly as unpair does', async () => {
