@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 
 import type { OverlapWindow } from '../../backend/src/wire';
 import { fontSize, radius, spacing, useColors } from '../theme';
-import { formatDuration, formatWindowRange } from '../time';
+import { formatDuration, formatWindowRange, windowIsLate } from '../time';
 
 /**
  * One overlap window, in both partners' zones — the whole point of the app is that 19:00 for one of
@@ -31,10 +31,11 @@ export function WindowCard({
   const theirs = formatWindowRange(window, partnerZone);
   const duration = formatDuration(window.durationMinutes);
 
-  // `reasonableBoth` is couple-level, not per-window (§3): it is false when either partner turned
-  // late-night windows on, which means the list may contain times outside 07:00–23:00. So the marker
-  // says *may*, and it is a glyph plus words — a hue alone would vanish in greyscale.
-  const lateNight = !window.reasonableBoth;
+  // Per-window, not the couple-level `reasonableBoth` flag: that flag is false for the whole list the
+  // moment either partner turns late-night windows on, which badged every card — even a midday one.
+  // This marks only windows that actually fall outside 07:00–23:00 for one of you. A glyph plus words,
+  // since a hue alone would vanish in greyscale.
+  const lateNight = windowIsLate(window, yourZone, partnerZone);
 
   return (
     <View

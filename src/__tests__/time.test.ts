@@ -16,11 +16,37 @@ import {
   weekIndex,
   weekRange,
   weekStart,
+  windowIsLate,
 } from '../time';
 
 function window(startUtc: number, score: number): OverlapWindow {
   return { startUtc, endUtc: startUtc + 3_600_000, durationMinutes: 60, score, reasonableBoth: true };
 }
+
+describe('windowIsLate — per-window, not the couple-level flag', () => {
+  const at = (h: number, m = 0) => Date.UTC(2026, 7, 10, h, m); // a Monday in UTC
+  const win = (startUtc: number, endUtc: number) => ({ startUtc, endUtc });
+
+  it('is false for a midday window in both zones', () => {
+    expect(windowIsLate(win(at(13), at(14)), 'UTC', 'UTC')).toBe(false);
+  });
+  it('treats exactly 07:00–23:00 as not late', () => {
+    expect(windowIsLate(win(at(7), at(23)), 'UTC', 'UTC')).toBe(false);
+  });
+  it('is true when a window ends after 23:00', () => {
+    expect(windowIsLate(win(at(22, 30), at(23, 30)), 'UTC', 'UTC')).toBe(true);
+  });
+  it('is true when a window starts before 07:00', () => {
+    expect(windowIsLate(win(at(6), at(7)), 'UTC', 'UTC')).toBe(true);
+  });
+  it('is true when a window crosses midnight', () => {
+    expect(windowIsLate(win(at(23, 30), Date.UTC(2026, 7, 11, 0, 30)), 'UTC', 'UTC')).toBe(true);
+  });
+  it('is true when it is late in only ONE partner’s zone', () => {
+    // 13:00 UTC is midday in UTC but ~01:00 in Auckland (+12) — late for that partner.
+    expect(windowIsLate(win(at(13), at(14)), 'UTC', 'Pacific/Auckland')).toBe(true);
+  });
+});
 
 describe('earliestWindow', () => {
   it('picks the earliest start, NOT windows[0] — the list is score-sorted', () => {

@@ -41,6 +41,32 @@ export function formatWindowRange(
   return `${start.toFormat(`${DAY}, ${TIME}`)} – ${end.toFormat(sameDay ? TIME : `${DAY}, ${TIME}`)}`;
 }
 
+// Waking hours, per §3's "reasonable" band. A window is "late" if it touches outside this in a zone.
+const WAKING_START = 7; // 07:00
+const WAKING_END = 23; // 23:00
+
+function outsideWaking(window: Pick<OverlapWindow, 'startUtc' | 'endUtc'>, zone: string): boolean {
+  const start = DateTime.fromMillis(window.startUtc, { zone });
+  const end = DateTime.fromMillis(window.endUtc, { zone });
+  // Crosses midnight in this zone → definitely into the night.
+  if (!start.hasSame(end, 'day')) return true;
+  return start.hour + start.minute / 60 < WAKING_START || end.hour + end.minute / 60 > WAKING_END;
+}
+
+/**
+ * Whether THIS window actually falls in late/early hours for either partner — a display-only check
+ * (reads the local hour of an already-computed window, no overlap math). Replaces the couple-level
+ * `reasonableBoth` flag for the "May run late" badge, so a midday window is not mislabelled just
+ * because late-night windows are switched on.
+ */
+export function windowIsLate(
+  window: Pick<OverlapWindow, 'startUtc' | 'endUtc'>,
+  zoneA: string,
+  zoneB: string,
+): boolean {
+  return outsideWaking(window, zoneA) || outsideWaking(window, zoneB);
+}
+
 /** "in 3h 20m", "in 2 days", "in <1m", "now". Never a bare millisecond count. */
 export function formatCountdown(targetUtc: number, now: number = Date.now()): string {
   if (targetUtc <= now) return 'now';
