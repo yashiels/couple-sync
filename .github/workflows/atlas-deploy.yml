@@ -1,0 +1,65 @@
+name: "Deploy: Backend (Atlas via SSH)"
+
+# Deploy the couple-sync backend to Atlas on any change under backend/ or the Atlas deploy files,
+# using the same git-tracked CI + Tailscale + SSH pattern as homelab-config's llm-gw-deploy: rsync
+# the backend source + Atlas compose to atlas:~/apps/couple-sync, then run atlas-deploy.sh there
+# (docker compose up -d --build — the image is BUILT ON ATLAS, no GHCR/Watchtower). The .env stays
+# on Atlas (op-injected, never rsynced).
+#
+# Push-to-main / manual only — never pull_request — so a fork PR can never deploy.
+# Requires repo secrets: TS_AUTHKEY_CI, ATLAS_SSH_KEY, ATLAS_HOST, ATLAS_USER.
+on:
+  push:
+    branches: [main]
+    paths:
+      - backend/**
+      - compose.atlas.yml
+      - atlas-deploy.sh
+      - atlas.env.tpl
+      - .github/workflows/atlas-deploy.yml
+  workflow_dispatch: {}
+
+concurrency:
+  group: atlas-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-to-atlas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Connect to tailnet
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY_CI }}
+
+      - name: SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.ATLAS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p 2222 -H "${{ secrets.ATLAS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Sync + deploy to Atlas
+        # Atlas Tailscale SSH on :22 rejects the tag:ci node; system sshd on :2222 accepts the deploy
+        # key (ACL grant tag:ci -> atlas:2222). .env stays on Atlas.
+        env:
+          SSH_OPTS: -p 2222 -i /home/runner/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new
+        run: |
+          DEST="${{ secrets.ATLAS_USER }}@${{ secrets.ATLAS_HOST }}"
+          ssh $SSH_OPTS "$DEST" 'mkdir -p ~/apps/couple-sync'
+          # backend build context — drop local artifacts; --delete keeps the remote tree in sync
+          rsync -az --delete -e "ssh $SSH_OPTS" \
+            --exclude 'node_modules' --exclude 'dist' --exclude '.env' \
+            backend/ "$DEST:~/apps/couple-sync/backend/"
+          # Atlas deploy files (compose, script, env template). Never rsync .env.
+          rsync -az -e "ssh $SSH_OPTS" \
+            compose.atlas.yml atlas-deploy.sh atlas.env.tpl \
+            "$DEST:~/apps/couple-sync/"
+          ssh $SSH_OPTS "$DEST" 'bash ~/apps/couple-sync/atlas-deploy.sh'

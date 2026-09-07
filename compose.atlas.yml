@@ -1,0 +1,58 @@
+# couple-sync on Atlas — built ON the host by atlas-deploy.sh (rsynced there by the atlas-deploy
+# CI workflow), fronted by a Cloudflare Tunnel. Nothing is published on a host port: the api is
+# reachable only on the internal docker network and, outbound, via the tunnel. This replaces the
+# old GHCR image + Watchtower pull (docker-publish.yml) with the same build-on-Atlas pattern the
+# LLM gateway uses. Every value comes from ~/apps/couple-sync/.env (op-injected, never committed).
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: couple_sync
+      POSTGRES_USER: couple_sync
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U couple_sync -d couple_sync"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [internal]
+
+  api:
+    # Built on Atlas from ./backend (rsynced by CI). The image's CMD runs migrations then boots.
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://couple_sync:${POSTGRES_PASSWORD}@db:5432/couple_sync
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON}
+      # No default: config.ts refuses an unset value and refuses '*'.
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "3000"
+    networks: [internal, web]
+
+  # Outbound-only tunnel: reaches Cloudflare's edge from behind CGNAT, forwards
+  # couple-sync.yashiel.dev -> http://api:3000. Ingress is configured remotely (dashboard/API).
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    networks: [web]
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+
+networks:
+  internal:
+  web:
