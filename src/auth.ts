@@ -111,7 +111,10 @@ export async function ensureNarrowedScope(): Promise<
     if (res.type !== 'success') return 'no-session';
     scopes = res.data.scopes ?? [];
   } catch {
-    return 'no-session';
+    // A thrown SDK error is not the same as "no saved credential" (that arrives as a normal
+    // noSavedCredentialFound response). Treating a transient failure as no-session would let a
+    // session holding the legacy grant bootstrap unmigrated.
+    return 'migration-error';
   }
   // Only the legacy grant triggers migration. Its absence — freebusy present, or no calendar scope at
   // all — needs nothing here.

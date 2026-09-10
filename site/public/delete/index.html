@@ -59,8 +59,8 @@
         <p>
           After deletion completes we keep only the account's internal identifier — a random string
           with no personal details attached — plus the deletion timestamps, so a deleted account cannot
-          be silently recreated. Data held by Firebase (your sign-in identity and push token) is removed
-          asynchronously shortly after. See the <a href="/privacy" class="ink">Privacy Policy</a> for
+          be silently recreated. The stored push-notification token is deleted with your account; only the
+          Firebase sign-in identity itself is removed asynchronously shortly after. See the <a href="/privacy" class="ink">Privacy Policy</a> for
           the full picture.
         </p>
       </main>

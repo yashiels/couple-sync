@@ -140,6 +140,14 @@ describe('ensureNarrowedScope', () => {
     expect(mocks.googleSignOut).not.toHaveBeenCalled();
   });
 
+  it('fails closed when silent sign-in throws — a transient SDK error is not "no saved credential"', async () => {
+    const { ensureNarrowedScope } = await setup();
+    mocks.signInSilently.mockRejectedValue(new Error('play services unavailable'));
+
+    await expect(ensureNarrowedScope()).resolves.toBe('migration-error');
+    expect(mocks.revokeAccess).not.toHaveBeenCalled();
+  });
+
   it('leaves a session with NO calendar scope alone — declining consent is supported, not migrated', async () => {
     // The bug this guards: keying migration off freebusy's absence would sign out (every launch) any
     // user who never granted calendar access, an infinite loop. Only the legacy scope triggers it.
@@ -159,11 +167,12 @@ describe('ensureNarrowedScope', () => {
     expect(mocks.googleSignOut).not.toHaveBeenCalled();
   });
 
-  it('reports no-session (never crashes) when signInSilently rejects', async () => {
+  it('blocks bootstrap (never crashes) when signInSilently rejects', async () => {
     const { ensureNarrowedScope } = await setup();
     mocks.signInSilently.mockRejectedValue(new Error('token recovery failed'));
 
-    await expect(ensureNarrowedScope()).resolves.toBe('no-session');
+    await expect(ensureNarrowedScope()).resolves.toBe('migration-error');
+    expect(mocks.googleSignOut).not.toHaveBeenCalled();
   });
 });
 

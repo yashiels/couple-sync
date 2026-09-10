@@ -106,8 +106,9 @@
           permanent and removes your account, blocks, shared free time, calendar connection, and
           notification tokens, and unpairs you both. Afterwards we retain only the account's internal
           identifier (a random string with no personal details attached) and the deletion timestamps, so
-          a deleted account cannot be silently recreated; data held by Firebase (sign-in identity, push
-          tokens) is removed asynchronously shortly after. If you email
+          a deleted account cannot be silently recreated. The stored push-notification token is deleted with
+          your account; only the Firebase sign-in identity itself is removed asynchronously shortly
+          after. If you email
           <a href="mailto:support@yashiel.dev" class="ink">support@yashiel.dev</a> to request deletion,
           your email address is used only to verify and complete that request.
         </p>
