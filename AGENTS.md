@@ -68,8 +68,7 @@ prebuild) and runs exactly the commands above. A locally-skipped test is a red p
 
 ## Non-negotiables (REBUILD-SPEC §0 — do not relitigate)
 
-- Android + iOS builds; Google sign-in only. No Apple Sign-In, no email/password, no anonymous auth.
-  (iOS ships via TestFlight, built in CI on macOS — see `.github/workflows/ios-release.yml`.)
+- Android builds only; Google sign-in only. No Apple Sign-In, no email/password, no anonymous auth.
 - Signing in with Google *is* connecting the calendar — no connect screen. But never assume the scope
   was granted: `sync()` returns `'scope-missing'`, surfaced as one inline row.
 - **Google Calendar freebusy only.** `freeBusy.query`, never `events.list`. An event title is never

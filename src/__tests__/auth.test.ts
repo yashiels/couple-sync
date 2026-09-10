@@ -130,13 +130,13 @@ describe('ensureNarrowedScope', () => {
     expect(mocks.googleSignOut).toHaveBeenCalledOnce();
   });
 
-  it('does NOT sign out when revokeAccess fails — that would loop; it proceeds and retries next launch', async () => {
+  it('fails closed when revokeAccess fails without signing out into a cached-consent loop', async () => {
     const { ensureNarrowedScope } = await setup();
     mocks.signInSilently.mockResolvedValue(silentSuccess([READONLY]));
     mocks.revokeAccess.mockRejectedValue(new Error('revoke failed'));
 
     // Signing out here would re-grant the same cached readonly consent on re-sign-in and loop forever.
-    await expect(ensureNarrowedScope()).resolves.toBe('ok');
+    await expect(ensureNarrowedScope()).resolves.toBe('migration-error');
     expect(mocks.googleSignOut).not.toHaveBeenCalled();
   });
 

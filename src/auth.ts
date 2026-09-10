@@ -93,13 +93,17 @@ export async function signInWithGoogle(): Promise<void> {
  * launch — every user who never granted calendar access, an infinite loop.
  *
  * Fails closed: on `'needs-reconsent'` the caller must NOT sync — the user is already signed out and the
- * guard chain routes to /auth. `'no-session'` means there is no Google grant to migrate (the normal
- * `sync()` → `'scope-missing'` path handles that), so the caller proceeds.
+ * guard chain routes to /auth. `'migration-error'` blocks bootstrap until revocation can be retried,
+ * keeping the session to avoid re-sign-in restoring cached readonly consent. `'no-session'` means
+ * there is no Google grant to migrate (the normal `sync()` → `'scope-missing'` path handles that),
+ * so the caller proceeds.
  *
  * Ceiling: once the beta cohort has all re-consented this gate is dead weight; it can be deleted after
  * the migration window closes. It stays cheap in the meantime — the `'ok'` fast-path is one silent call.
  */
-export async function ensureNarrowedScope(): Promise<'ok' | 'needs-reconsent' | 'no-session'> {
+export async function ensureNarrowedScope(): Promise<
+  'ok' | 'needs-reconsent' | 'no-session' | 'migration-error'
+> {
   if (isE2E()) return 'ok';
   let scopes: string[];
   try {
@@ -112,15 +116,11 @@ export async function ensureNarrowedScope(): Promise<'ok' | 'needs-reconsent' | 
   // Only the legacy grant triggers migration. Its absence — freebusy present, or no calendar scope at
   // all — needs nothing here.
   if (!scopes.includes(LEGACY_CALENDAR_SCOPE)) return 'ok';
-  // Still on the broad grant. Revoke it so the re-consent asks for freebusy only — but ONLY sign out
-  // once the revoke actually succeeded. If revoke fails, signing out would loop: the re-sign-in would
-  // re-grant the same cached readonly consent, land back here, and sign out again. So on a failed
-  // revoke, proceed instead — the app calls freebusy only regardless, and the next launch retries the
-  // migration (revoke may succeed then).
+  // Block on failed revocation: signing out would restore cached readonly consent and loop.
   try {
     await GoogleSignin.revokeAccess();
   } catch {
-    return 'ok';
+    return 'migration-error';
   }
   await signOut();
   return 'needs-reconsent';

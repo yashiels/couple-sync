@@ -104,9 +104,12 @@
           <a href="/delete" class="ink">delete your account and all its data</a> at any time — in the
           app under <strong>Settings &rarr; Delete account</strong>, or by request. Deletion is
           permanent and removes your account, blocks, shared free time, calendar connection, and
-          notification tokens, and unpairs you both. Afterwards we retain only a minimal record that the
-          account identifier was deleted (no personal details) so a stale sign-in cannot silently
-          recreate it.
+          notification tokens, and unpairs you both. Afterwards we retain only the account's internal
+          identifier (a random string with no personal details attached) and the deletion timestamps, so
+          a deleted account cannot be silently recreated; data held by Firebase (sign-in identity, push
+          tokens) is removed asynchronously shortly after. If you email
+          <a href="mailto:support@yashiel.dev" class="ink">support@yashiel.dev</a> to request deletion,
+          your email address is used only to verify and complete that request.
         </p>
 
         <h2>Your controls</h2>

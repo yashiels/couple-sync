@@ -43,8 +43,7 @@ npm start                 # subsequent runs: just the bundler
 ```
 
 A **development build** is required — `@react-native-firebase/*` ships native modules and remote push
-needs a real build, so Expo Go cannot load this app. The iOS build is produced in CI and distributed
-via TestFlight (`.github/workflows/ios-release.yml`, on a `macos-26` runner — the toolchain it needs).
+needs a real build, so Expo Go cannot load this app. Android only — iOS is not part of v1.
 
 ## Environment variables
 

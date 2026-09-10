@@ -45,10 +45,12 @@ async function bootstrap(): Promise<void> {
   const store = useStore.getState();
   store.setHydrationError(null);
   try {
-    // Migrate a user still holding the legacy calendar.readonly grant to the narrowed calendar.freebusy
-    // scope BEFORE anything else: on 'needs-reconsent' the user is already signed out, so there is
-    // nothing to connect or hydrate — the guard chain routes to /auth for a fresh, narrowed consent.
-    if ((await ensureNarrowedScope()) === 'needs-reconsent') return;
+    // The legacy grant must be revoked before bootstrap; failed revocation stays on the retry screen.
+    const scopeMigration = await ensureNarrowedScope();
+    if (scopeMigration === 'needs-reconsent') return;
+    if (scopeMigration === 'migration-error') {
+      throw new Error('Could not update calendar permissions. Please try again.');
+    }
     connect(); // inside the try: a misconfigured API_BASE_URL throws here, and that is a retry screen
     await api.verify(); // upserts the user row from the token claims
     const coupleId = await hydrateFromServer();
