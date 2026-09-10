@@ -27,32 +27,42 @@
       <main class="prose">
         <p class="kicker">Privacy</p>
         <h1>It sees <em>when</em>, never <em>what</em>.</h1>
-        <p class="updated">Last updated · 9 August 2026</p>
+        <p class="updated">Last updated · 25 August 2026</p>
 
         <h2>The short version</h2>
         <p>
-          Couple Sync reads <strong>busy/free intervals only</strong> from Google Calendar — never an
-          event title, guest list, location, or description. Your partner sees <em>when</em> you're
-          free, never <em>what</em> you're doing. No ads, no data sales, no analytics trackers.
+          Couple Sync reads <strong>busy/free times only</strong> — from Google Calendar and from the
+          calendars already on your phone — never an event title, guest list, location, or
+          description. Your partner sees <em>when</em> you're free, never <em>what</em> you're doing.
+          No ads, no data sales, no analytics trackers.
         </p>
 
-        <h2>What we store</h2>
+        <h2>What we collect and store</h2>
         <ol>
           <li>
-            <strong>Your Google account basics</strong> — email, display name, and profile photo,
-            from Google sign-in (handled by Firebase Authentication).
+            <strong>Your Google account basics</strong> — email, display name, profile photo, and a
+            Google account identifier, from Google sign-in (handled by Firebase Authentication).
           </li>
           <li>
-            <strong>Busy/free intervals</strong> — start and end times of busy periods, fetched via
-            Google's free/busy API. The API never returns event details, so we never see them.
+            <strong>Google Calendar free/busy</strong> — start and end times of busy periods, fetched
+            with the <code>calendar.freebusy</code> scope. That scope returns only busy/free times, so
+            event titles and details are never requested or seen.
           </li>
           <li>
-            <strong>Your timezone</strong>, so overlap windows are computed at the right local times.
+            <strong>On-device calendar busy times</strong> — if you allow calendar access on your
+            phone, the start and end times of timed events from the device calendars you enable (which
+            can include work or other accounts already synced to the phone). Only start/end times are
+            read; titles and details never leave your device. You can turn this off per calendar in
+            Settings, or deny the permission entirely.
+          </li>
+          <li><strong>Your timezone</strong>, so overlap windows are shown at the right local times.</li>
+          <li>
+            <strong>Your pairing</strong> — the link between you and the one partner you pair with.
           </li>
           <li>
-            <strong>Blocks you create in the app</strong> — including an optional title. A block
-            marked <em>only me</em> shapes the overlap result, but its title never leaves the server
-            to your partner.
+            <strong>Blocks you create in the app</strong> — start/end, and an optional title and
+            category you type. A block marked <em>only me</em> shapes the overlap result, but its title
+            and category never leave the server to your partner.
           </li>
           <li>
             <strong>A push-notification token</strong> (Firebase Cloud Messaging) so your partner's
@@ -62,27 +72,53 @@
 
         <h2>How it's used</h2>
         <p>
-          Intervals from both partners are compared on our server to compute mutual free windows,
-          which are sent to the two of you and nobody else. There are no other users, no social
+          Busy/free times from both partners are compared on our server to compute your mutual free
+          windows, which are sent to the two of you and nobody else. Your data is used only to provide
+          the app — never for advertising, profiling, or sale. There are no other users, no social
           graph, no public profile.
         </p>
 
-        <h2>Where it lives</h2>
+        <h2>Who processes it</h2>
         <p>
-          Data is stored in a single self-hosted PostgreSQL database operated by the developer.
-          Identity and push delivery are handled by Google Firebase. Traffic is encrypted in transit
-          (TLS via Cloudflare). Data is not shared with, sold to, or processed by any other third
-          party.
+          Your data is stored in a single self-hosted PostgreSQL database operated by the developer. Two
+          service providers process data on our behalf: <strong>Google Firebase</strong> (sign-in
+          identity and push-notification delivery) and <strong>Cloudflare</strong> (hosting the website
+          and securely proxying app traffic; TLS in transit). It is not shared with, sold to, or
+          processed by anyone else.
+        </p>
+
+        <h2>Google API Services — Limited Use</h2>
+        <p>
+          Couple Sync's use of information from Google APIs adheres to the
+          <a href="https://developers.google.com/terms/api-services-user-data-policy" class="ink"
+            >Google API Services User Data Policy</a
+          >, including its Limited Use requirements. Google Calendar data (free/busy only) is used solely
+          to compute your shared free time, is never transferred to others except as needed to provide
+          the app, is never used for advertising, and is never read by humans except with your consent
+          or for security/legal reasons.
+        </p>
+
+        <h2>Retention &amp; deletion</h2>
+        <p>
+          We keep your data only while your account exists. You can
+          <a href="/delete" class="ink">delete your account and all its data</a> at any time — in the
+          app under <strong>Settings &rarr; Delete account</strong>, or by request. Deletion is
+          permanent and removes your account, blocks, shared free time, calendar connection, and
+          notification tokens, and unpairs you both. Afterwards we retain only the account's internal
+          identifier (a random string with no personal details attached) and the deletion timestamps, so
+          a deleted account cannot be silently recreated. The stored push-notification token is deleted with
+          your account; only the Firebase sign-in identity itself is removed asynchronously shortly
+          after. If you email
+          <a href="mailto:support@yashiel.dev" class="ink">support@yashiel.dev</a> to request deletion,
+          your email address is used only to verify and complete that request.
         </p>
 
         <h2>Your controls</h2>
         <p>
-          Calendar access is read-only and can be revoked at any time in your
-          <a href="https://myaccount.google.com/permissions" class="ink">Google account permissions</a>
-          — Couple Sync simply stops seeing new busy periods. To delete your account and all stored
-          data, open an issue on
-          <a href="https://github.com/yashiels/couple-sync/issues" class="ink">GitHub</a> and it will
-          be removed.
+          Google Calendar access is free/busy only and can be revoked at any time in your
+          <a href="https://myaccount.google.com/permissions" class="ink">Google account permissions</a>;
+          on-device calendar access can be revoked in your phone's system settings. In either case
+          Couple Sync simply stops reading new busy times.
         </p>
       </main>
 

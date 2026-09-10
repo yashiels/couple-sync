@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { DateTime } from 'luxon';
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import type { BlockWithOccurrences, OverlapWindow } from '../../backend/src/wire';
@@ -78,6 +78,26 @@ export function WeekGrid({
   const scrolledOnce = useRef(false);
   const monday = DateTime.fromMillis(weekStartUtc, { zone });
   const todayIso = DateTime.fromMillis(today, { zone }).toISODate();
+
+  // A live "now" line. Its own minute clock rather than the static `today` prop (captured once at the
+  // calendar's mount), so the line actually moves and can cross into the next day's column at midnight.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const now = Date.now();
+    let interval: ReturnType<typeof setInterval> | undefined;
+    const timeout = setTimeout(() => {
+      setNowMs(Date.now());
+      interval = setInterval(() => setNowMs(Date.now()), 60_000);
+    }, 60_000 - (now % 60_000)); // align to the minute boundary
+    return () => {
+      clearTimeout(timeout);
+      if (interval) clearInterval(interval);
+    };
+  }, []);
+  const nowDt = DateTime.fromMillis(nowMs, { zone });
+  const nowDayIndex = Math.floor(nowDt.startOf('day').diff(monday.startOf('day'), 'days').days);
+  const nowTop = (nowDt.hour * 60 + nowDt.minute) * PX_PER_MINUTE;
+  const nowOnGrid = nowDayIndex >= 0 && nowDayIndex < DAYS;
 
   const placedWindows = windows
     .map((window) => ({
@@ -295,6 +315,31 @@ export function WeekGrid({
                     </Pressable>
                   );
                 })}
+
+              {/* The current-time line, drawn last so it sits above blocks and windows, and only in
+                  today's column. pointerEvents none so it never intercepts a tap meant for a block. A
+                  dot plus a line (not colour alone) keeps it legible in greyscale. */}
+              {nowOnGrid && day === nowDayIndex ? (
+                <View
+                  pointerEvents="none"
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                  style={{ position: 'absolute', left: 0, right: 0, top: nowTop, height: 0 }}
+                >
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: -3,
+                      top: -3,
+                      width: 7,
+                      height: 7,
+                      borderRadius: 4,
+                      backgroundColor: colors.danger,
+                    }}
+                  />
+                  <View style={{ height: 2, backgroundColor: colors.danger }} />
+                </View>
+              ) : null}
             </View>
           ))}
         </View>

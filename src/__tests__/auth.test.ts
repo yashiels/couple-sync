@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
   getUser: vi.fn<() => Promise<Omit<UserRow, 'fcm_tokens'>>>(),
   latestOverlap: vi.fn<() => Promise<{ windows: []; computed_at: number }>>(),
   disconnect: vi.fn(),
+  signInSilently: vi.fn(),
+  revokeAccess: vi.fn(),
+  googleSignOut: vi.fn(),
   /** Mutable so the fail-fast test can empty it without unmocking (the real module needs RN). */
   extra: { googleWebClientId: 'web-client-id' } as Record<string, string>,
 }));
@@ -31,7 +34,14 @@ vi.mock('@react-native-firebase/auth', () => ({
   signOut: async () => undefined,
 }));
 vi.mock('@react-native-google-signin/google-signin', () => ({
-  GoogleSignin: { configure: vi.fn(), signIn: vi.fn(), signOut: vi.fn(), getTokens: vi.fn() },
+  GoogleSignin: {
+    configure: vi.fn(),
+    signIn: vi.fn(),
+    signOut: mocks.googleSignOut,
+    getTokens: vi.fn(),
+    signInSilently: mocks.signInSilently,
+    revokeAccess: mocks.revokeAccess,
+  },
 }));
 vi.mock('../ws', () => ({ connect: vi.fn(), disconnect: mocks.disconnect }));
 // signOut deletes the FCM token first; the real module reaches expo-notifications and FCM. The
@@ -84,6 +94,86 @@ beforeEach(() => {
   mocks.getCouple.mockReset().mockResolvedValue(couple);
   mocks.getUser.mockReset().mockResolvedValue(userRow({ uid: 'u2' }));
   mocks.latestOverlap.mockReset().mockResolvedValue({ windows: [], computed_at: 5 });
+  mocks.signInSilently.mockReset();
+  mocks.revokeAccess.mockReset().mockResolvedValue(null);
+  mocks.googleSignOut.mockReset().mockResolvedValue(undefined);
+});
+
+const FREEBUSY = 'https://www.googleapis.com/auth/calendar.freebusy';
+const READONLY = 'https://www.googleapis.com/auth/calendar.readonly';
+const silentSuccess = (scopes: string[]) => ({ type: 'success' as const, data: { scopes } });
+
+describe('ensureNarrowedScope', () => {
+  it('is a no-op when the session already holds only the narrowed freebusy scope', async () => {
+    const { ensureNarrowedScope } = await setup();
+    mocks.signInSilently.mockResolvedValue(silentSuccess([FREEBUSY]));
+
+    await expect(ensureNarrowedScope()).resolves.toBe('ok');
+    expect(mocks.revokeAccess).not.toHaveBeenCalled();
+    expect(mocks.googleSignOut).not.toHaveBeenCalled();
+  });
+
+  it('revokes and signs out a session still holding the legacy readonly scope', async () => {
+    const { ensureNarrowedScope } = await setup();
+    mocks.signInSilently.mockResolvedValue(silentSuccess([READONLY]));
+
+    await expect(ensureNarrowedScope()).resolves.toBe('needs-reconsent');
+    expect(mocks.revokeAccess).toHaveBeenCalledOnce();
+    expect(mocks.googleSignOut).toHaveBeenCalledOnce();
+  });
+
+  it('migrates even when both scopes are present — readonly must be gone', async () => {
+    const { ensureNarrowedScope } = await setup();
+    mocks.signInSilently.mockResolvedValue(silentSuccess([FREEBUSY, READONLY]));
+
+    await expect(ensureNarrowedScope()).resolves.toBe('needs-reconsent');
+    expect(mocks.googleSignOut).toHaveBeenCalledOnce();
+  });
+
+  it('fails closed when revokeAccess fails without signing out into a cached-consent loop', async () => {
+    const { ensureNarrowedScope } = await setup();
+    mocks.signInSilently.mockResolvedValue(silentSuccess([READONLY]));
+    mocks.revokeAccess.mockRejectedValue(new Error('revoke failed'));
+
+    // Signing out here would re-grant the same cached readonly consent on re-sign-in and loop forever.
+    await expect(ensureNarrowedScope()).resolves.toBe('migration-error');
+    expect(mocks.googleSignOut).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when silent sign-in throws — a transient SDK error is not "no saved credential"', async () => {
+    const { ensureNarrowedScope } = await setup();
+    mocks.signInSilently.mockRejectedValue(new Error('play services unavailable'));
+
+    await expect(ensureNarrowedScope()).resolves.toBe('migration-error');
+    expect(mocks.revokeAccess).not.toHaveBeenCalled();
+  });
+
+  it('leaves a session with NO calendar scope alone — declining consent is supported, not migrated', async () => {
+    // The bug this guards: keying migration off freebusy's absence would sign out (every launch) any
+    // user who never granted calendar access, an infinite loop. Only the legacy scope triggers it.
+    const { ensureNarrowedScope } = await setup();
+    mocks.signInSilently.mockResolvedValue(silentSuccess([]));
+
+    await expect(ensureNarrowedScope()).resolves.toBe('ok');
+    expect(mocks.revokeAccess).not.toHaveBeenCalled();
+    expect(mocks.googleSignOut).not.toHaveBeenCalled();
+  });
+
+  it('reports no-session when there is no saved Google credential', async () => {
+    const { ensureNarrowedScope } = await setup();
+    mocks.signInSilently.mockResolvedValue({ type: 'noSavedCredentialFound', data: null });
+
+    await expect(ensureNarrowedScope()).resolves.toBe('no-session');
+    expect(mocks.googleSignOut).not.toHaveBeenCalled();
+  });
+
+  it('blocks bootstrap (never crashes) when signInSilently rejects', async () => {
+    const { ensureNarrowedScope } = await setup();
+    mocks.signInSilently.mockRejectedValue(new Error('token recovery failed'));
+
+    await expect(ensureNarrowedScope()).resolves.toBe('migration-error');
+    expect(mocks.googleSignOut).not.toHaveBeenCalled();
+  });
 });
 
 describe('hydrateFromServer', () => {

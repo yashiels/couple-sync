@@ -4,12 +4,14 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { ActivityIndicator, AppState, type AppStateStatus, Pressable, Text, View } from 'react-native';
 
-import { api } from '../src/api';
+import { api, ApiError } from '../src/api';
 import {
   configureGoogleSignIn,
+  ensureNarrowedScope,
   hydrateFromServer,
   onAuthChange,
   setFirstPairHandler,
+  signOut,
 } from '../src/auth';
 import { clearSyncLimiter, sync } from '../src/calendar';
 import { attachTapHandler, requestPermissionAndRegister } from '../src/notifications';
@@ -43,6 +45,12 @@ async function bootstrap(): Promise<void> {
   const store = useStore.getState();
   store.setHydrationError(null);
   try {
+    // The legacy grant must be revoked before bootstrap; failed revocation stays on the retry screen.
+    const scopeMigration = await ensureNarrowedScope();
+    if (scopeMigration === 'needs-reconsent') return;
+    if (scopeMigration === 'migration-error') {
+      throw new Error('Could not update calendar permissions. Please try again.');
+    }
     connect(); // inside the try: a misconfigured API_BASE_URL throws here, and that is a retry screen
     await api.verify(); // upserts the user row from the token claims
     const coupleId = await hydrateFromServer();
@@ -55,6 +63,13 @@ async function bootstrap(): Promise<void> {
     // sync() (calendar.googleGateMs) instead of held in memory. The device source refreshes anyway.
     if (coupleId) void sync(coupleId).catch(() => undefined);
   } catch (err) {
+    // A deleted account 410s on /auth/verify (the non-resurrection guard). Don't strand it on the
+    // "Could not load / Try again" screen — retrying would just 410 forever. Sign out so the store
+    // clears and the guard chain routes cleanly back to /auth.
+    if (err instanceof ApiError && err.status === 410) {
+      await signOut().catch(() => undefined);
+      return;
+    }
     store.setHydrationError(err instanceof Error ? err.message : 'could not reach the server');
   } finally {
     store.setHydrated(true);

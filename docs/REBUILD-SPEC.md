@@ -57,8 +57,8 @@ simplifications with a short comment naming the ceiling and the upgrade path.
 
 ## 1. Screens
 
-**Android is the only build target for v1. Google is the only sign-in method.** Apple Sign-In and iOS
-are deferred — Apple Sign-In needs a paid developer account and is iOS-only.
+**Android is the only build target in v1. Google is the only sign-in method.** Apple Sign-In and
+iOS builds are non-goals (see §8) — sign-in is Google-only.
 
 **Three tabs**, not five. The product loop is *connect Gmail -> we pull free/busy -> we show both
 partners' free spots*, and the screen count follows that loop and nothing else.

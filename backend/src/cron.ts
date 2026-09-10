@@ -1,5 +1,6 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { deleteAccount, reconcilePendingDeletions } from './account.js';
 import { config } from './config.js';
 import { query } from './db.js';
 import { HttpError } from './http.js';
@@ -26,22 +27,47 @@ export async function expireStaleInvites(): Promise<number> {
 }
 
 /**
- * POST /admin/cleanup. Registered on the instance rather than added to index.ts's `routePlugins`,
- * because it is guarded by ADMIN_TOKEN instead of requireAuth — guards.matrix.test.ts excludes it by
- * name and cron.test.ts covers it instead.
+ * Shared ADMIN_TOKEN gate for the admin routes. 503 (not 401) when unset means the endpoint is
+ * disabled, not that the caller got it wrong. The token rides its own `x-admin-token` header, never
+ * Authorization — every other route reads a Firebase ID token from there, and one header meaning two
+ * credentials is how a route ends up accepting either. An empty/absent header runs the same fixed-width
+ * comparison as a wrong one.
+ */
+function assertAdmin(req: FastifyRequest): void {
+  if (EXPECTED === null) throw new HttpError(503, 'admin_disabled');
+  const supplied = req.headers['x-admin-token'];
+  if (typeof supplied !== 'string' || !timingSafeEqual(digest(supplied), EXPECTED)) {
+    throw new HttpError(401, 'unauthorized');
+  }
+}
+
+/**
+ * Admin routes. Registered on the instance rather than added to index.ts's `routePlugins`, because they
+ * are guarded by ADMIN_TOKEN instead of requireAuth — guards.matrix.test.ts excludes them by name and
+ * cron.test.ts covers them instead.
  */
 export function registerAdminRoutes(app: FastifyInstance): void {
   app.post('/admin/cleanup', async (req) => {
-    // 503, not 401: an unset token means the endpoint is disabled, not that the caller got it wrong.
-    if (EXPECTED === null) throw new HttpError(503, 'admin_disabled');
-    // Its own header, not Authorization: every other route reads a Firebase ID token from there, and
-    // one header that means two different credentials is how a route ends up accepting either.
-    const supplied = req.headers['x-admin-token'];
-    // An empty or absent header goes through the same fixed-width comparison as a wrong one.
-    if (typeof supplied !== 'string' || !timingSafeEqual(digest(supplied), EXPECTED)) {
-      throw new HttpError(401, 'unauthorized');
-    }
+    assertAdmin(req);
     return { expired: await expireStaleInvites() };
+  });
+
+  // Operator fulfillment of a verified web deletion request (§B1): the public delete page cannot
+  // self-authenticate, so an operator who has verified the requester owns the account email runs this.
+  // Resolves email -> uid, then the same deleteAccount() the self-serve route uses.
+  app.post('/admin/delete-account', async (req) => {
+    assertAdmin(req);
+    const { email, uid } = (req.body ?? {}) as { email?: unknown; uid?: unknown };
+    let target = typeof uid === 'string' && uid.trim() ? uid.trim() : null;
+    if (!target && typeof email === 'string' && email.trim()) {
+      const [row] = await query<{ uid: string }>('SELECT uid FROM users WHERE email = $1', [
+        email.trim(),
+      ]);
+      target = row?.uid ?? null;
+    }
+    if (!target) throw new HttpError(404, 'unknown_user');
+    await deleteAccount(target);
+    return { deleted: target };
   });
 }
 
@@ -61,6 +87,14 @@ const TICK_MS = 15 * 60_000;
 export function startInviteExpiryTimer(): NodeJS.Timeout {
   let lastRun = '';
   return setInterval(() => {
+    // Every tick, not just at 03:00: finish any account deletion that committed in Postgres but whose
+    // Firebase Auth delete did not complete (a crash between the two). Cheap and idempotent — the
+    // partial-index query returns nothing in the common case — and mandatory, because until it runs the
+    // /auth/verify tombstone lock keeps the user out while their Firebase Auth record still exists.
+    void reconcilePendingDeletions().catch((err: unknown) => {
+      console.error('[cron] deletion reconcile failed', err);
+    });
+
     const now = new Date();
     const day = now.toISOString().slice(0, 10);
     if (now.getUTCHours() !== 3 || day === lastRun) return;

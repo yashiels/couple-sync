@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.freebusy';
 const FREEBUSY_URL = 'https://www.googleapis.com/calendar/v3/freeBusy';
 const HOUR_MS = 60 * 60 * 1000;
 const NOW = Date.UTC(2026, 7, 4, 12, 0, 0);

@@ -56,6 +56,7 @@ const ROUTES: Route[] = [
   { m: 'POST', u: '/auth/verify' },
   { m: 'POST', u: '/auth/fcm-token', payload: () => ({ token: 'fcm-1' }) },
   { m: 'DELETE', u: '/auth/fcm-token', payload: () => ({ token: 'fcm-1' }) },
+  { m: 'DELETE', u: '/account' },
   { m: 'GET', u: '/users/me' },
   { m: 'GET', u: '/users/:uid', at: () => '/users/uid-b' },
   { m: 'PATCH', u: '/users/:uid', at: () => '/users/uid-b', payload: () => ({ timezone: 'UTC' }) },
@@ -170,14 +171,15 @@ describe('every couple-scoped route calls assertMember', () => {
 });
 
 describe('the table itself', () => {
-  it('matches every registered route except /health and /admin/cleanup', () => {
+  it('matches every registered route except /health and the ADMIN_TOKEN routes', () => {
     const live = new Set(
       seen
         // Fastify auto-adds HEAD for every GET, and CORS adds OPTIONS. Neither is a separately
         // authored route, and both would look like permanent gaps in the table.
         .filter(([method]) => method !== 'HEAD' && method !== 'OPTIONS')
-        // /health is public by design; /admin/cleanup (Task 8) is guarded by ADMIN_TOKEN instead.
-        .filter(([, url]) => url !== '/health' && url !== '/admin/cleanup')
+        // /health is public by design; the /admin/* routes are guarded by ADMIN_TOKEN instead of
+        // requireAuth, so cron.test.ts owns them and this matrix excludes them by name.
+        .filter(([, url]) => url !== '/health' && url !== '/admin/cleanup' && url !== '/admin/delete-account')
         .map(([method, url]) => `${method} ${url}`),
     );
     const declared = new Set(ROUTES.map((r) => `${r.m} ${r.u}`));

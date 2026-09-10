@@ -4,12 +4,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserRow } from '../wire.js';
 
 vi.mock('../firebase.js', () => ({ verifyIdToken: vi.fn() }));
-vi.mock('../db.js', () => ({ query: vi.fn() }));
+vi.mock('../db.js', () => ({ query: vi.fn(), withTx: vi.fn() }));
+// The deletion internals are exercised in account.test.ts; deleteAccount is mocked so these tests are
+// purely about the route wiring — the non-resurrection guard on /auth/verify and DELETE /account.
+vi.mock('../account.js', () => ({ deleteAccount: vi.fn(async () => {}) }));
 
 const { verifyIdToken } = await import('../firebase.js');
-const { query } = await import('../db.js');
+const { query, withTx } = await import('../db.js');
+const { deleteAccount } = await import('../account.js');
 const { registerErrorHandler } = await import('../http.js');
 const authRoutes = (await import('../routes/auth.js')).default;
+
+/** uids with a tombstone — the fake deleted_accounts table the verify guard reads. */
+const deletedUids = new Set<string>();
 
 const JHB = 'Africa/Johannesburg';
 const NOW = Date.parse('2026-06-03T10:00:00Z');
@@ -83,6 +90,10 @@ function upsert(sql: string, params: unknown[]): UserRow {
 }
 
 async function fakeQuery(sql: string, params: unknown[] = []): Promise<Record<string, unknown>[]> {
+  if (sql.includes('pg_advisory_xact_lock')) return [];
+  if (sql.includes('deleted_accounts')) {
+    return deletedUids.has(String(params[0])) ? [{ '?column?': 1 }] : [];
+  }
   if (sql.includes('INSERT INTO users')) return [{ ...upsert(sql, params) }];
 
   if (/^UPDATE users/.test(sql.trim())) {
@@ -129,6 +140,11 @@ beforeEach(() => {
     async (token: string) => ({ uid: token, sub: token }) as DecodedIdToken,
   );
   vi.mocked(query).mockImplementation(fakeQuery as typeof query);
+  // verify runs its check+upsert in one transaction; the fake tx just threads fakeQuery through.
+  vi.mocked(withTx).mockImplementation((async (fn: (q: { query: typeof fakeQuery }) => unknown) =>
+    fn({ query: fakeQuery })) as typeof withTx);
+  deletedUids.clear();
+  vi.mocked(deleteAccount).mockResolvedValue(undefined);
 });
 
 describe('POST /auth/verify', () => {
@@ -267,5 +283,34 @@ describe('DELETE /auth/fcm-token', () => {
     // A shared handset: signing out of A must not strip B's registration of the same token.
     expect(users.get('uid-a')?.fcm_tokens).toEqual([]);
     expect(users.get('uid-b')?.fcm_tokens).toEqual(['tok-shared']);
+  });
+});
+
+describe('POST /auth/verify — non-resurrection', () => {
+  it('410s a deleted account instead of recreating its row', async () => {
+    deletedUids.add('uid-gone');
+
+    const res = await verify('uid-gone', { email: 'gone@example.com' });
+
+    expect(res.statusCode).toBe(410);
+    // The upsert never ran: a token that outlived the account cannot bring it back.
+    expect(users.has('uid-gone')).toBe(false);
+  });
+});
+
+describe('DELETE /account', () => {
+  it('deletes the caller own account (self-only via the verified uid) and returns ok', async () => {
+    const res = await app().inject({ method: 'DELETE', url: '/account', headers: as('uid-a') });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
+    expect(deleteAccount).toHaveBeenCalledWith('uid-a');
+  });
+
+  it('requires auth — no Bearer token is rejected before any deletion', async () => {
+    const res = await app().inject({ method: 'DELETE', url: '/account' });
+
+    expect(res.statusCode).toBe(401);
+    expect(deleteAccount).not.toHaveBeenCalled();
   });
 });
