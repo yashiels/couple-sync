@@ -28,7 +28,9 @@ export async function deleteAccount(uid: string): Promise<void> {
     // unpair, and block writes take the SHARED side of that same global lock before their invite,
     // user-row, or couple locks, so none can form a cycle with deletion. Deletion takes it
     // EXCLUSIVE, so it waits for those writes to drain but they never block each other.
-    await c.query(`SELECT pg_advisory_xact_lock(hashtext('couple-sync:account-deletion'))`);
+    // Two-argument hashtext: the global lock lives in its own advisory-lock namespace, so a couple
+    // id whose 32-bit hash collides with it cannot make two shared holders try to upgrade one key.
+    await c.query(`SELECT pg_advisory_xact_lock(hashtext('couple-sync'), hashtext('account-deletion'))`);
     // Per-account advisory lock. /auth/verify takes the same lock (hashtext(uid)) around its
     // tombstone-check + upsert, so the two serialize: a verify cannot read "no tombstone", pause, and
     // then recreate the row this deletion is committing (a TOCTOU resurrection).

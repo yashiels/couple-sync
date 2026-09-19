@@ -41,7 +41,7 @@ export default async function invitesRoutes(app: FastifyInstance): Promise<void>
     // two autocommit statements a concurrent deleteAccount can remove this user, and the invite's
     // created_by_uid FK then fails with a 500.
     const created = await withTx(async (c) => {
-      await c.query(`SELECT pg_advisory_xact_lock_shared(hashtext('couple-sync:account-deletion'))`);
+      await c.query(`SELECT pg_advisory_xact_lock_shared(hashtext('couple-sync'), hashtext('account-deletion'))`);
       const [me] = await c.query<{ couple_id: string | null }>(
         'SELECT couple_id FROM users WHERE uid = $1',
         [req.uid],
@@ -76,7 +76,7 @@ export default async function invitesRoutes(app: FastifyInstance): Promise<void>
     const { coupleId, inviterUid } = await withTx(async (c) => {
       // Shared side of the account-deletion lock: orders this write ahead of the invite row lock
       // without serializing unrelated redemptions against each other.
-      await c.query(`SELECT pg_advisory_xact_lock_shared(hashtext('couple-sync:account-deletion'))`);
+      await c.query(`SELECT pg_advisory_xact_lock_shared(hashtext('couple-sync'), hashtext('account-deletion'))`);
       const [invite] = await c.query<InviteRow>(
         'SELECT * FROM invites WHERE code = $1 FOR UPDATE',
         [code],
