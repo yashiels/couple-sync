@@ -176,7 +176,8 @@ async function runInTx(
   }
 
   if (sql.includes('pg_advisory_xact_lock')) {
-    await acquire(String(params[0]), releasers);
+    const key = sql.includes('account-deletion') ? 'account-deletion' : String(params[0]);
+    await acquire(key, releasers);
     return [];
   }
 
@@ -649,6 +650,17 @@ describe('POST /blocks', () => {
     expect(res.statusCode).toBe(201);
     expect(res.json<{ block: BlockRow }>().block.source).toBe('manual');
     expect(timeblocks[0]?.source).toBe('manual');
+  });
+
+  it('takes the global deletion lock before the couple lock', async () => {
+    seedPair();
+
+    await post(body());
+
+    expect(events.filter((event) => event.startsWith('lock:')).slice(0, 2)).toEqual([
+      'lock:account-deletion',
+      'lock:c1',
+    ]);
   });
 
   it('triggers refreshOverlap and broadcasts block:set', async () => {

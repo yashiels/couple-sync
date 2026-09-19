@@ -108,6 +108,11 @@ async function runInTx(
   await new Promise((res) => setImmediate(res));
   if (failOn && sql.includes(failOn)) throw new Error('constraint violation');
 
+  if (sql.includes('account-deletion')) {
+    await acquire('account-deletion', releasers);
+    return [];
+  }
+
   if (/FROM invites WHERE code = \$1 FOR UPDATE/.test(sql)) {
     await acquire(`invite:${String(params[0])}`, releasers);
     const row = invites.get(String(params[0]));
@@ -434,7 +439,7 @@ describe('POST /invites/:code/redeem', () => {
     expect(couples.size).toBe(0);
   });
 
-  it('locks both user rows ordered by uid, not just the invite', async () => {
+  it('takes the global deletion lock first, then the invite and ordered user rows', async () => {
     seedUser('uid-a');
     seedUser('uid-z');
     // The redeemer is passed first but sorts last, so param order and lock order differ: an
@@ -444,6 +449,7 @@ describe('POST /invites/:code/redeem', () => {
     await redeem(app(), 'ABC234', 'uid-z');
 
     expect(events.filter((e) => e.startsWith('lock:'))).toEqual([
+      'lock:account-deletion',
       'lock:invite:ABC234',
       'lock:user:uid-a',
       'lock:user:uid-z',
@@ -501,8 +507,9 @@ describe('POST /invites/:code/redeem', () => {
     await redeem(app(), 'ABC234', 'uid-b');
 
     const tx = events.filter((e) => e.startsWith('tx:')).map((e) => e.slice(3));
-    expect(tx[0]).toMatch(/^SELECT .* FROM invites WHERE code = \$1 FOR UPDATE$/);
-    expect(tx[1]).toBe(
+    expect(tx[0]).toContain('account-deletion');
+    expect(tx[1]).toMatch(/^SELECT .* FROM invites WHERE code = \$1 FOR UPDATE$/);
+    expect(tx[2]).toBe(
       'SELECT uid, couple_id, timezone FROM users WHERE uid IN ($1, $2) ORDER BY uid FOR UPDATE',
     );
     // Every write went through the transaction, none through the pool, and all before one COMMIT.

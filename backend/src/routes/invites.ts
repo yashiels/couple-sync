@@ -67,6 +67,8 @@ export default async function invitesRoutes(app: FastifyInstance): Promise<void>
     const now = Date.now();
 
     const { coupleId, inviterUid } = await withTx(async (c) => {
+      // Serializes with account deletion before either path takes narrower locks.
+      await c.query(`SELECT pg_advisory_xact_lock(hashtext('couple-sync:account-deletion'))`);
       const [invite] = await c.query<InviteRow>(
         'SELECT * FROM invites WHERE code = $1 FOR UPDATE',
         [code],

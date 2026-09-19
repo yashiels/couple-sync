@@ -141,7 +141,7 @@ function rangeFromQuery(source: unknown): { from: number; to: number } {
 }
 
 /**
- * The couple, re-read under its advisory lock — the first statement of every write transaction.
+ * The couple, re-read under its advisory lock after the global account-deletion lock.
  * assertMember already answered 403 for this caller, but it answered before the lock was held, and
  * unpair takes this same lock: without the re-check a write that lost that race inserts a block
  * after the unpair deleted them all, and the refreshOverlap that follows recreates overlaps_latest
@@ -149,6 +149,8 @@ function rangeFromQuery(source: unknown): { from: number; to: number } {
  * a window open.
  */
 async function lockCouple(c: Querier, coupleId: string, uid: string): Promise<CoupleRow> {
+  // Serializes with account deletion before either path takes narrower locks.
+  await c.query(`SELECT pg_advisory_xact_lock(hashtext('couple-sync:account-deletion'))`);
   await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [coupleId]);
   const [couple] = await c.query<CoupleRow>('SELECT * FROM couples WHERE id = $1', [coupleId]);
   if (!couple || couple.status !== 'active') throw new HttpError(403, 'forbidden');

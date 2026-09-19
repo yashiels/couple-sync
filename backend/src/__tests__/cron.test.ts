@@ -61,6 +61,7 @@ type Cron = typeof import('../cron.js');
 interface Loaded extends Cron {
   app: FastifyInstance;
   query: ReturnType<typeof vi.fn>;
+  deleteAccount: ReturnType<typeof vi.fn>;
   createHash: ReturnType<typeof vi.fn>;
   timingSafeEqual: ReturnType<typeof vi.fn>;
 }
@@ -83,6 +84,7 @@ async function loadCron(adminToken: string | null): Promise<Loaded> {
 
   const cron = await import('../cron.js');
   const { query } = await import('../db.js');
+  const { deleteAccount } = await import('../account.js');
   const { registerErrorHandler } = await import('../http.js');
   const crypto = await import('node:crypto');
 
@@ -95,6 +97,7 @@ async function loadCron(adminToken: string | null): Promise<Loaded> {
     ...cron,
     app,
     query: vi.mocked(query) as unknown as ReturnType<typeof vi.fn>,
+    deleteAccount: vi.mocked(deleteAccount) as unknown as ReturnType<typeof vi.fn>,
     createHash: crypto.createHash as unknown as ReturnType<typeof vi.fn>,
     timingSafeEqual: crypto.timingSafeEqual as unknown as ReturnType<typeof vi.fn>,
   };
@@ -105,6 +108,14 @@ const cleanup = (app: FastifyInstance, token?: string) =>
     method: 'POST',
     url: '/admin/cleanup',
     headers: token === undefined ? {} : { 'x-admin-token': token },
+  });
+
+const deleteAdmin = (app: FastifyInstance, body: Record<string, unknown>) =>
+  app.inject({
+    method: 'POST',
+    url: '/admin/delete-account',
+    headers: { 'x-admin-token': TOKEN },
+    payload: body,
   });
 
 beforeEach(() => {
@@ -199,6 +210,66 @@ describe('POST /admin/cleanup', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ expired: 2 });
+  });
+});
+
+describe('POST /admin/delete-account', () => {
+  it('400s when neither uid nor email is supplied', async () => {
+    const { app, query, deleteAccount } = await loadCron(TOKEN);
+
+    const res = await deleteAdmin(app, {});
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'exactly_one_identifier_required' });
+    expect(query).not.toHaveBeenCalled();
+    expect(deleteAccount).not.toHaveBeenCalled();
+  });
+
+  it('400s when both uid and email are supplied', async () => {
+    const { app, query, deleteAccount } = await loadCron(TOKEN);
+
+    const res = await deleteAdmin(app, { uid: 'uid-a', email: 'a@example.com' });
+
+    expect(res.statusCode).toBe(400);
+    expect(query).not.toHaveBeenCalled();
+    expect(deleteAccount).not.toHaveBeenCalled();
+  });
+
+  it('404s without creating a tombstone for an unknown uid', async () => {
+    const { app, query, deleteAccount } = await loadCron(TOKEN);
+    query.mockResolvedValueOnce([]);
+
+    const res = await deleteAdmin(app, { uid: 'missing' });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: 'unknown_user' });
+    expect(deleteAccount).not.toHaveBeenCalled();
+  });
+
+  it('deletes a known uid and accepts an existing tombstone idempotently', async () => {
+    const { app, query, deleteAccount } = await loadCron(TOKEN);
+    query.mockResolvedValue([{ uid: 'uid-a' }]);
+
+    const first = await deleteAdmin(app, { uid: ' uid-a ' });
+    const second = await deleteAdmin(app, { uid: 'uid-a' });
+
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+    expect(first.json()).toEqual({ deleted: 'uid-a' });
+    expect(deleteAccount).toHaveBeenCalledTimes(2);
+    expect(deleteAccount).toHaveBeenNthCalledWith(1, 'uid-a');
+    expect(deleteAccount).toHaveBeenNthCalledWith(2, 'uid-a');
+  });
+
+  it('resolves email through users before deleting', async () => {
+    const { app, query, deleteAccount } = await loadCron(TOKEN);
+    query.mockResolvedValueOnce([{ uid: 'uid-a' }]);
+
+    const res = await deleteAdmin(app, { email: ' a@example.com ' });
+
+    expect(res.statusCode).toBe(200);
+    expect(query).toHaveBeenCalledWith('SELECT uid FROM users WHERE email = $1', ['a@example.com']);
+    expect(deleteAccount).toHaveBeenCalledWith('uid-a');
   });
 });
 

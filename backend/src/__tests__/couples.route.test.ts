@@ -129,7 +129,8 @@ async function runInTx(
   if (failOn && sql.includes(failOn)) throw new Error('constraint violation');
 
   if (sql.includes('pg_advisory_xact_lock')) {
-    await acquire(String(params[0]), releasers);
+    const key = sql.includes('account-deletion') ? 'account-deletion' : String(params[0]);
+    await acquire(key, releasers);
     return [];
   }
 
@@ -386,7 +387,7 @@ describe('POST /couples/:id/unpair', () => {
     expect(sendTo).not.toHaveBeenCalled();
   });
 
-  it('takes the same pg_advisory_xact_lock(hashtext(coupleId)) as refreshOverlap', async () => {
+  it('takes the global deletion lock before refreshOverlap\'s couple lock', async () => {
     seedPair();
 
     await refreshOverlap('c1', null, log);
@@ -395,12 +396,13 @@ describe('POST /couples/:id/unpair', () => {
     await unpair(app(), 'c1', 'uid-a');
     const fromUnpair = events.filter((e) => e.includes('pg_advisory_xact_lock'));
 
-    // Identical statement text, identical key: two different lock expressions would not serialize.
-    expect(fromUnpair).toEqual(fromRefresh);
-    expect(fromUnpair[0]).toBe('tx:SELECT pg_advisory_xact_lock(hashtext($1))');
-    // And it is the FIRST statement of the transaction, so nothing is read before the lock is held.
-    expect(events[0]).toBe('tx:SELECT pg_advisory_xact_lock(hashtext($1))');
-    expect(events[1]).toBe('lock:c1');
+    expect(fromUnpair[0]).toContain('account-deletion');
+    // Identical couple-lock statement text and key: refresh and unpair still serialize.
+    expect(fromUnpair[1]).toBe(fromRefresh[0]);
+    expect(events[0]).toContain('account-deletion');
+    expect(events[1]).toBe('lock:account-deletion');
+    expect(events[2]).toBe('tx:SELECT pg_advisory_xact_lock(hashtext($1))');
+    expect(events[3]).toBe('lock:c1');
   });
 
   it('a refresh that started before an unpair does not recreate overlaps_latest afterwards', async () => {
