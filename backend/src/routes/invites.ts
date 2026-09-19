@@ -37,27 +37,34 @@ export default async function invitesRoutes(app: FastifyInstance): Promise<void>
   app.addHook('preHandler', requireAuth);
 
   app.post('/invites', async (req, reply) => {
-    const [me] = await query<{ couple_id: string | null }>(
-      'SELECT couple_id FROM users WHERE uid = $1',
-      [req.uid],
-    );
-    if (!me) throw new HttpError(404, 'unknown_user');
-    if (me.couple_id) throw new HttpError(409, 'already_paired');
-
-    const now = Date.now();
-    // Invite rows are kept forever (§2), so codes accumulate and a collision is a matter of when.
-    // Retrying is cheaper than the 500 a bare INSERT would produce.
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const [row] = await query<Pick<InviteRow, 'code' | 'expires_at'>>(
-        `INSERT INTO invites (code, created_by_uid, expires_at, status, created_at)
-         VALUES ($1, $2, $3, 'pending', $4)
-         ON CONFLICT (code) DO NOTHING
-         RETURNING code, expires_at`,
-        [newCode(), req.uid, now + TTL_MS, now],
+    // The read and the INSERT must share one transaction under the account-deletion lock: between
+    // two autocommit statements a concurrent deleteAccount can remove this user, and the invite's
+    // created_by_uid FK then fails with a 500.
+    const created = await withTx(async (c) => {
+      await c.query(`SELECT pg_advisory_xact_lock_shared(hashtext('couple-sync'), hashtext('account-deletion'))`);
+      const [me] = await c.query<{ couple_id: string | null }>(
+        'SELECT couple_id FROM users WHERE uid = $1',
+        [req.uid],
       );
-      if (row) return reply.code(201).send({ code: row.code, expires_at: row.expires_at });
-    }
-    throw new HttpError(503, 'code_generation_failed');
+      if (!me) throw new HttpError(404, 'unknown_user');
+      if (me.couple_id) throw new HttpError(409, 'already_paired');
+
+      const now = Date.now();
+      // Invite rows are kept forever (§2), so codes accumulate and a collision is a matter of when.
+      // Retrying is cheaper than the 500 a bare INSERT would produce.
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const [row] = await c.query<Pick<InviteRow, 'code' | 'expires_at'>>(
+          `INSERT INTO invites (code, created_by_uid, expires_at, status, created_at)
+           VALUES ($1, $2, $3, 'pending', $4)
+           ON CONFLICT (code) DO NOTHING
+           RETURNING code, expires_at`,
+          [newCode(), req.uid, now + TTL_MS, now],
+        );
+        if (row) return row;
+      }
+      throw new HttpError(503, 'code_generation_failed');
+    });
+    return reply.code(201).send({ code: created.code, expires_at: created.expires_at });
   });
 
   app.post('/invites/:code/redeem', async (req) => {
@@ -67,6 +74,9 @@ export default async function invitesRoutes(app: FastifyInstance): Promise<void>
     const now = Date.now();
 
     const { coupleId, inviterUid } = await withTx(async (c) => {
+      // Shared side of the account-deletion lock: orders this write ahead of the invite row lock
+      // without serializing unrelated redemptions against each other.
+      await c.query(`SELECT pg_advisory_xact_lock_shared(hashtext('couple-sync'), hashtext('account-deletion'))`);
       const [invite] = await c.query<InviteRow>(
         'SELECT * FROM invites WHERE code = $1 FOR UPDATE',
         [code],

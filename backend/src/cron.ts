@@ -58,10 +58,25 @@ export function registerAdminRoutes(app: FastifyInstance): void {
   app.post('/admin/delete-account', async (req) => {
     assertAdmin(req);
     const { email, uid } = (req.body ?? {}) as { email?: unknown; uid?: unknown };
-    let target = typeof uid === 'string' && uid.trim() ? uid.trim() : null;
-    if (!target && typeof email === 'string' && email.trim()) {
+    const suppliedUid = typeof uid === 'string' && uid.trim() ? uid.trim() : null;
+    const suppliedEmail = typeof email === 'string' && email.trim() ? email.trim() : null;
+    if ((suppliedUid === null) === (suppliedEmail === null)) {
+      throw new HttpError(400, 'exactly_one_identifier_required');
+    }
+
+    let target: string | null = null;
+    if (suppliedUid) {
+      const [row] = await query<{ uid: string }>(
+        `SELECT uid FROM users WHERE uid = $1
+         UNION
+         SELECT uid FROM deleted_accounts WHERE uid = $1
+         LIMIT 1`,
+        [suppliedUid],
+      );
+      target = row?.uid ?? null;
+    } else if (suppliedEmail) {
       const [row] = await query<{ uid: string }>('SELECT uid FROM users WHERE email = $1', [
-        email.trim(),
+        suppliedEmail,
       ]);
       target = row?.uid ?? null;
     }

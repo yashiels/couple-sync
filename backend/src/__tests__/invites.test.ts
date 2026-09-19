@@ -108,6 +108,11 @@ async function runInTx(
   await new Promise((res) => setImmediate(res));
   if (failOn && sql.includes(failOn)) throw new Error('constraint violation');
 
+  if (sql.includes('account-deletion')) {
+    await acquire('account-deletion', releasers);
+    return [];
+  }
+
   if (/FROM invites WHERE code = \$1 FOR UPDATE/.test(sql)) {
     await acquire(`invite:${String(params[0])}`, releasers);
     const row = invites.get(String(params[0]));
@@ -155,6 +160,18 @@ async function runInTx(
       }
     });
     return [];
+  }
+
+  if (/SELECT couple_id FROM users WHERE uid = \$1/.test(sql)) {
+    const row = users.get(String(params[0]));
+    return row ? [{ couple_id: row.couple_id }] : [];
+  }
+
+  if (sql.includes('INSERT INTO invites')) {
+    const [code, uid, expiresAt, createdAt] = params as [string, string, number, number];
+    if (invites.has(code)) return []; // ON CONFLICT (code) DO NOTHING
+    staged.push(() => seedInvite(code, uid, { expires_at: expiresAt, created_at: createdAt }));
+    return [{ code, expires_at: expiresAt }];
   }
 
   throw new Error(`unrouted tx statement: ${sql}`);
@@ -280,6 +297,23 @@ describe('POST /invites', () => {
     expect(res.statusCode).toBe(409);
     expect(res.json()).toEqual({ error: 'already_paired' });
     expect(invites.size).toBe(0);
+  });
+
+  it('reads the user and inserts the invite in ONE transaction under the deletion lock', async () => {
+    seedUser('uid-a');
+
+    const res = await app().inject({ method: 'POST', url: '/invites', headers: as('uid-a') });
+
+    expect(res.statusCode).toBe(201);
+    // Two autocommit statements would let a concurrent deleteAccount remove the user between the
+    // read and the INSERT, failing created_by_uid's FK with a 500. One transaction, deletion lock
+    // first, closes that window.
+    const tx = events.filter((e) => e.startsWith('tx:') || e === 'lock:account-deletion');
+    expect(events.some((e) => e.startsWith('pool:'))).toBe(false);
+    expect(tx[0]).toContain('account-deletion');
+    expect(tx[1]).toBe('lock:account-deletion');
+    expect(tx.some((e) => e.includes('SELECT couple_id FROM users'))).toBe(true);
+    expect(tx.some((e) => e.includes('INSERT INTO invites'))).toBe(true);
   });
 });
 
@@ -434,7 +468,7 @@ describe('POST /invites/:code/redeem', () => {
     expect(couples.size).toBe(0);
   });
 
-  it('locks both user rows ordered by uid, not just the invite', async () => {
+  it('takes the global deletion lock first, then the invite and ordered user rows', async () => {
     seedUser('uid-a');
     seedUser('uid-z');
     // The redeemer is passed first but sorts last, so param order and lock order differ: an
@@ -444,6 +478,7 @@ describe('POST /invites/:code/redeem', () => {
     await redeem(app(), 'ABC234', 'uid-z');
 
     expect(events.filter((e) => e.startsWith('lock:'))).toEqual([
+      'lock:account-deletion',
       'lock:invite:ABC234',
       'lock:user:uid-a',
       'lock:user:uid-z',
@@ -501,8 +536,9 @@ describe('POST /invites/:code/redeem', () => {
     await redeem(app(), 'ABC234', 'uid-b');
 
     const tx = events.filter((e) => e.startsWith('tx:')).map((e) => e.slice(3));
-    expect(tx[0]).toMatch(/^SELECT .* FROM invites WHERE code = \$1 FOR UPDATE$/);
-    expect(tx[1]).toBe(
+    expect(tx[0]).toContain('account-deletion');
+    expect(tx[1]).toMatch(/^SELECT .* FROM invites WHERE code = \$1 FOR UPDATE$/);
+    expect(tx[2]).toBe(
       'SELECT uid, couple_id, timezone FROM users WHERE uid IN ($1, $2) ORDER BY uid FOR UPDATE',
     );
     // Every write went through the transaction, none through the pool, and all before one COMMIT.
