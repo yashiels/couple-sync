@@ -24,9 +24,10 @@ import type { CoupleRow } from './wire.js';
  */
 export async function deleteAccount(uid: string): Promise<void> {
   const notify = await withTx(async (c) => {
-    // Complete order: global account-deletion lock -> per-uid -> per-couple. Redeem, unpair, and
-    // block writes take the global lock before their invite, user-row, or couple locks, so none can
-    // form a cycle with deletion. Deletions are rare, so global serialization is effectively free.
+    // Complete order: global account-deletion lock -> per-uid -> per-couple. Invite create/redeem,
+    // unpair, and block writes take the SHARED side of that same global lock before their invite,
+    // user-row, or couple locks, so none can form a cycle with deletion. Deletion takes it
+    // EXCLUSIVE, so it waits for those writes to drain but they never block each other.
     await c.query(`SELECT pg_advisory_xact_lock(hashtext('couple-sync:account-deletion'))`);
     // Per-account advisory lock. /auth/verify takes the same lock (hashtext(uid)) around its
     // tombstone-check + upsert, so the two serialize: a verify cannot read "no tombstone", pause, and

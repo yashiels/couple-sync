@@ -149,8 +149,9 @@ function rangeFromQuery(source: unknown): { from: number; to: number } {
  * a window open.
  */
 async function lockCouple(c: Querier, coupleId: string, uid: string): Promise<CoupleRow> {
-  // Serializes with account deletion before either path takes narrower locks.
-  await c.query(`SELECT pg_advisory_xact_lock(hashtext('couple-sync:account-deletion'))`);
+  // Shared side of the account-deletion lock: it orders this write ahead of any narrower lock,
+  // but shared holders do not block each other, so unrelated couples still write concurrently.
+  await c.query(`SELECT pg_advisory_xact_lock_shared(hashtext('couple-sync:account-deletion'))`);
   await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [coupleId]);
   const [couple] = await c.query<CoupleRow>('SELECT * FROM couples WHERE id = $1', [coupleId]);
   if (!couple || couple.status !== 'active') throw new HttpError(403, 'forbidden');

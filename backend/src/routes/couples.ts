@@ -18,8 +18,9 @@ export default async function couplesRoutes(app: FastifyInstance): Promise<void>
     const { id } = req.params as { id: string };
 
     const couple = await withTx(async (c) => {
-      // Serializes with account deletion before either path takes narrower locks.
-      await c.query(`SELECT pg_advisory_xact_lock(hashtext('couple-sync:account-deletion'))`);
+      // Shared side of the account-deletion lock: orders this write ahead of the couple lock
+      // without serializing unrelated couples against each other.
+      await c.query(`SELECT pg_advisory_xact_lock_shared(hashtext('couple-sync:account-deletion'))`);
       // The same advisory lock refreshOverlap takes, after the global deletion lock. Without
       // it a refresh already mid-compute can upsert overlaps_latest after the DELETE below and
       // resurrect the row for a couple that no longer exists — invisible until someone wonders why
