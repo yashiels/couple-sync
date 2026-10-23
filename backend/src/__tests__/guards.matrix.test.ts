@@ -188,3 +188,30 @@ describe('the table itself', () => {
     expect([...live].sort()).toEqual([...declared].sort());
   });
 });
+
+describe('malformed protected URLs cannot bypass authentication', () => {
+  it.each([
+    ['/users/me', 401],
+    ['/users/me?x', 401],
+    ['/users/%6de', 401],
+    ['//users/me', 404],
+    ['/users/me/', 404],
+    ['/users%2Fme', 404],
+    ['/./users/me', 401],
+    ['/users/me%00', 401],
+  ] as const)('%s rejects unauthenticated requests with %s', async (url, status) => {
+    vi.mocked(query).mockClear();
+    vi.mocked(withTx).mockClear();
+    vi.mocked(verifyIdToken).mockClear();
+
+    const res = await app.inject({ method: 'GET', url });
+
+    expect(res.statusCode).toBe(status);
+    if (status === 401) expect(res.json()).toEqual({ error: 'missing_token' });
+    else expect(res.json()).toMatchObject({ error: 'Not Found', statusCode: 404 });
+    expect(res.json()).not.toHaveProperty('user');
+    expect(query).not.toHaveBeenCalled();
+    expect(withTx).not.toHaveBeenCalled();
+    expect(verifyIdToken).not.toHaveBeenCalled();
+  });
+});
