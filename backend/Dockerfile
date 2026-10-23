@@ -1,5 +1,5 @@
 # Build stage: full deps, tsc, and the migrations copy (`pnpm build` does both).
-FROM node:22-alpine AS build
+FROM node:22.23.4-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS build
 WORKDIR /app
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable
@@ -13,7 +13,7 @@ RUN pnpm build
 # stage's node_modules, because pnpm's store lives inside node_modules and copying it across
 # stages is the fragile option. Ceiling: two installs per image build; fix by caching the pnpm
 # store with a BuildKit cache mount if build time ever matters.
-FROM node:22-alpine AS runtime
+FROM node:22.23.4-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0

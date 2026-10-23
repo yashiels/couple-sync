@@ -13,7 +13,8 @@ cd "$(dirname "$0")"
 }
 
 # Never --remove-orphans: other stacks (llm-gateway, portainer) coexist on Atlas.
-docker compose -p couple-sync --env-file .env -f compose.atlas.yml up -d --build
+docker compose -p couple-sync --env-file .env -f compose.atlas.yml build --pull api
+docker compose -p couple-sync --env-file .env -f compose.atlas.yml up -d
 docker image prune -f >/dev/null 2>&1 || true
 
 echo "=== deployed ==="
