@@ -85,15 +85,15 @@ jobs:
         with:
           export-env: true
         env:
-          ANDROID_KEYSTORE_BASE64: op://Nexion/couple-sync/keystore_base64
-          ANDROID_KEYSTORE_PASSWORD: op://Nexion/couple-sync/keystore_password
-          ANDROID_KEY_ALIAS: op://Nexion/couple-sync/key_alias
-          ANDROID_KEY_PASSWORD: op://Nexion/couple-sync/key_password
-          GOOGLE_SERVICES_JSON: op://Nexion/couple-sync/google_services_json_b64
-          GOOGLE_WEB_CLIENT_ID: op://Nexion/couple-sync/google_web_client_id
+          ANDROID_KEYSTORE_BASE64: op://g6crowavb6svvgfgqs7p3yscsi/rn47nl5ayzg2cztuw4tmizbrvi/keystore_base64
+          ANDROID_KEYSTORE_PASSWORD: op://g6crowavb6svvgfgqs7p3yscsi/rn47nl5ayzg2cztuw4tmizbrvi/keystore_password
+          ANDROID_KEY_ALIAS: op://g6crowavb6svvgfgqs7p3yscsi/rn47nl5ayzg2cztuw4tmizbrvi/key_alias
+          ANDROID_KEY_PASSWORD: op://g6crowavb6svvgfgqs7p3yscsi/rn47nl5ayzg2cztuw4tmizbrvi/key_password
+          GOOGLE_SERVICES_JSON: op://g6crowavb6svvgfgqs7p3yscsi/rn47nl5ayzg2cztuw4tmizbrvi/google_services_json_b64
+          GOOGLE_WEB_CLIENT_ID: op://g6crowavb6svvgfgqs7p3yscsi/rn47nl5ayzg2cztuw4tmizbrvi/google_web_client_id
           # Firebase App Distribution (Android's TestFlight): service account + the Android app id.
-          FIREBASE_SERVICE_ACCOUNT_JSON: op://Nexion/couple-sync/firebase_service_account_json
-          ANDROID_APP_ID: op://Nexion/couple-sync/android_app_id
+          FIREBASE_SERVICE_ACCOUNT_JSON: op://g6crowavb6svvgfgqs7p3yscsi/rn47nl5ayzg2cztuw4tmizbrvi/firebase_service_account_json
+          ANDROID_APP_ID: op://g6crowavb6svvgfgqs7p3yscsi/rn47nl5ayzg2cztuw4tmizbrvi/android_app_id
 
       - name: Install dependencies
         run: npm ci

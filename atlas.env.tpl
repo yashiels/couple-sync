@@ -3,15 +3,15 @@
 # Source: the single "couple-sync" item in the Nexion vault (referenced by UUID) — the same item the
 # app and local dev use. Nothing here is a secret value; the refs are useless without vault access.
 
-POSTGRES_PASSWORD="op://Nexion/rn47nl5ayzg2cztuw4tmizbrvi/postgres_password"
-FIREBASE_PROJECT_ID="op://Nexion/rn47nl5ayzg2cztuw4tmizbrvi/firebase_project_id"
-FIREBASE_SERVICE_ACCOUNT_JSON="op://Nexion/rn47nl5ayzg2cztuw4tmizbrvi/firebase_service_account_json"
+POSTGRES_PASSWORD="op://g6crowavb6svvgfgqs7p3yscsi/rn47nl5ayzg2cztuw4tmizbrvi/postgres_password"
+FIREBASE_PROJECT_ID="op://g6crowavb6svvgfgqs7p3yscsi/rn47nl5ayzg2cztuw4tmizbrvi/firebase_project_id"
+FIREBASE_SERVICE_ACCOUNT_JSON="op://g6crowavb6svvgfgqs7p3yscsi/rn47nl5ayzg2cztuw4tmizbrvi/firebase_service_account_json"
 
 # Not a secret (mobile app sends no cookies; single origin just satisfies config.ts, which refuses '*').
 CORS_ORIGINS="https://couple-sync.yashiel.dev"
 
 # Optional — admin routes 503 until set.
-ADMIN_TOKEN="op://Nexion/rn47nl5ayzg2cztuw4tmizbrvi/admin_token"
+ADMIN_TOKEN="op://g6crowavb6svvgfgqs7p3yscsi/rn47nl5ayzg2cztuw4tmizbrvi/admin_token"
 
 # Cloudflare tunnel "atlas-couple-sync" (couple-sync.yashiel.dev -> http://api:3000).
-TUNNEL_TOKEN="op://Nexion/rn47nl5ayzg2cztuw4tmizbrvi/tunnel_token"
+TUNNEL_TOKEN="op://g6crowavb6svvgfgqs7p3yscsi/rn47nl5ayzg2cztuw4tmizbrvi/tunnel_token"

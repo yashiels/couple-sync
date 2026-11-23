@@ -4,5 +4,5 @@
 # Source: the single "couple-sync" item in the Nexion vault (referenced by UUID).
 # See .env.example for prose docs on each var.
 
-API_BASE_URL="op://Nexion/rn47nl5ayzg2cztuw4tmizbrvi/api_base_url"
-GOOGLE_WEB_CLIENT_ID="op://Nexion/rn47nl5ayzg2cztuw4tmizbrvi/google_web_client_id"
+API_BASE_URL="op://g6crowavb6svvgfgqs7p3yscsi/rn47nl5ayzg2cztuw4tmizbrvi/api_base_url"
+GOOGLE_WEB_CLIENT_ID="op://g6crowavb6svvgfgqs7p3yscsi/rn47nl5ayzg2cztuw4tmizbrvi/google_web_client_id"

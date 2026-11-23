@@ -11,14 +11,14 @@
 # compose builds DATABASE_URL from POSTGRES_PASSWORD itself.
 DATABASE_URL="postgres://postgres@localhost:5432/couple_sync"
 
-FIREBASE_PROJECT_ID="op://Nexion/rn47nl5ayzg2cztuw4tmizbrvi/firebase_project_id"
-FIREBASE_SERVICE_ACCOUNT_JSON="op://Nexion/rn47nl5ayzg2cztuw4tmizbrvi/firebase_service_account_json"
+FIREBASE_PROJECT_ID="op://g6crowavb6svvgfgqs7p3yscsi/rn47nl5ayzg2cztuw4tmizbrvi/firebase_project_id"
+FIREBASE_SERVICE_ACCOUNT_JSON="op://g6crowavb6svvgfgqs7p3yscsi/rn47nl5ayzg2cztuw4tmizbrvi/firebase_service_account_json"
 
 # Not a secret (mobile app sends no cookies; single origin just satisfies config.ts).
 CORS_ORIGINS="https://couple-sync.yashiel.dev"
 
 # Optional — admin routes 503 until set.
-ADMIN_TOKEN="op://Nexion/rn47nl5ayzg2cztuw4tmizbrvi/admin_token"
+ADMIN_TOKEN="op://g6crowavb6svvgfgqs7p3yscsi/rn47nl5ayzg2cztuw4tmizbrvi/admin_token"
 
 # Optional — defaults to 3000.
 # PORT="3000"

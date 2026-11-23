@@ -45,14 +45,14 @@ plain GitHub repo secrets as a fallback when that token is not set.
    even though the build is signed. (Export-compliance is auto-answered via
    `ios.infoPlist.ITSAppUsesNonExemptEncryption=false` — HTTPS/TLS only.)
 
-## b) New 1Password fields (vault **Nexion**, item **couple-sync**)
+## b) New 1Password fields (vault **Side Quests** `g6crowavb6svvgfgqs7p3yscsi`, item **couple-sync** `rn47nl5ayzg2cztuw4tmizbrvi`)
 
 Secrets are split by scope. **Account-wide Apple creds** (identical for every iOS app on this Apple
 account) live in the shared **`Agents`** vault, item **`apple-developer`**. **App-specific** creds
-live in **`Nexion`**, item **`couple-sync`**. Field names are the exact `op://` references the
+live in **`Side Quests`**, item **`couple-sync`**. Field names are the exact `op://` references the
 workflows read.
 
-**`op://Agents/apple-developer/…` (account-wide — reused by all iOS apps):**
+**`op://5qzrhul77b4wef4ocnu3pekw6u/g6b65qwwbpe7cs6czedplnijfa/…` (account-wide — reused by all iOS apps):**
 
 | Field name | Value |
 |---|---|
@@ -63,7 +63,7 @@ workflows read.
 | `ios_dist_cert_p12_base64` | Apple **Distribution** cert `.p12`, base64 (manual signing). |
 | `ios_dist_cert_password` | Export password for that `.p12`. |
 
-**`op://Nexion/couple-sync/…` (this app only):**
+**`op://g6crowavb6svvgfgqs7p3yscsi/rn47nl5ayzg2cztuw4tmizbrvi/…` (this app only):**
 
 | Field name | Value |
 |---|---|
@@ -89,7 +89,7 @@ The iOS workflow decodes it back to `AuthKey_<asc_api_key_id>.p8` at build time.
 1. In 1Password, open **Settings → Developer → Service Accounts → New Service Account** (or
    `op service-account create`).
 2. Name it (e.g. `couple-sync-ci`) and grant it **read-only** access to **both** the **`Agents`** vault
-   (account-wide Apple creds) and the **`Nexion`** vault (this app's Firebase + Android keystore).
+   (account-wide Apple creds) and the **`Side Quests`** vault (this app's Firebase + Android keystore).
    Grant no other vaults.
 3. Copy the generated token (shown once).
 4. In GitHub: **repo → Settings → Secrets and variables → Actions → New repository secret**, name it

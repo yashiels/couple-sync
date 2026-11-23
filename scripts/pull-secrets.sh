@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pull every local dev secret for couple-sync from 1Password (Nexion vault, item "couple-sync").
+# Pull every local dev secret for couple-sync from 1Password (Side Quests vault, item "couple-sync").
 # Idempotent — safe to re-run. Requires the `op` CLI signed in (service account or `op signin`).
 #
 #   bash scripts/pull-secrets.sh
@@ -14,7 +14,7 @@
 # After this, build with JDK 17:  JAVA_HOME=$(/usr/libexec/java_home -v 17) npm run android
 set -euo pipefail
 
-VAULT="Nexion"
+VAULT="g6crowavb6svvgfgqs7p3yscsi"
 ITEM="rn47nl5ayzg2cztuw4tmizbrvi" # "couple-sync" item, pinned by UUID
 # Suppress the macOS desktop-app data-protection dialog when using a service account (see one-password skill).
 export OP_LOAD_DESKTOP_APP_SETTINGS=false OP_BIOMETRIC_UNLOCK_ENABLED=false

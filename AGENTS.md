@@ -113,7 +113,7 @@ prebuild) and runs exactly the commands above. A locally-skipped test is a red p
 
 ## Security
 
-- **Secrets live in 1Password**, vault `Nexion`, item `couple-sync-env` (fields = env-var names).
+- **Secrets live in 1Password**, vault `g6crowavb6svvgfgqs7p3yscsi` (Side Quests), item `rn47nl5ayzg2cztuw4tmizbrvi` (couple-sync). Reference both by ID in `op://` refs, never by name.
   Resolve env files with `op inject -i backend/.env.tpl -o backend/.env` (and root `.env.tpl` → `.env`).
   Templates hold `op://` references, never values.
 - **Required backend env** (all fail-fast at boot): `DATABASE_URL`, `FIREBASE_PROJECT_ID`,
